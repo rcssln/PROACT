@@ -1,0 +1,12 @@
+PROVINCE,"CITY/ MUNICIPALITY",BARANGAY,TYPE,"SERVICE PROVIDER","DATE OF INTERRUPTION/ OUTAGE [m/d/Y]","TIME OF INTERRUPTION/ OUTAGE [24:00]","DATE RESTORED","TIME RESTORED",REMARKS
+"ILOCOS SUR",Tagudin,Municipal-Wide,,"Tagudin Water District ",2025-11-09,23:37,,,"Due to power interruption."
+PANGASINAN,Agno,none,,AWWS,2025-11-09,17:00,2025-11-11,10:00,Restored
+PANGASINAN,Bolinao,Municipal-Wide,,,2025-11-10,05:00,,,Restored
+PANGASINAN,Balungao,"San Aurelio 3rd",,,2025-11-09,17:30,2025-11-10,03:00,Restored
+PANGASINAN,Balungao,Mauban,,,2025-11-09,18:26,2025-11-10,19:47,Restored
+PANGASINAN,Balungao,"San Aurelio 1st",,,2025-11-09,18:26,2025-11-10,03:00,Restored
+PANGASINAN,Balungao,Poblacion,,,2025-11-09,18:26,2025-11-09,19:47,Restored
+PANGASINAN,Balungao,Pugaro,,,2025-11-09,18:15,2025-11-10,03:00,Restored
+PANGASINAN,Balungao,"Angayan Norte",,,2025-11-09,18:26,2025-11-09,19:47,Restored
+PANGASINAN,Infanta,"4 Barangays",,,2025-11-10,18:00,,,"-Barangay Patima, Cato, Nayom, Maya<br>-Low water supply as of Nov 14<br>"
+PANGASINAN,Sual,none,,,2025-11-10,,,,"-Not yet restored as of Nov 14<br>-some details if ongoing validation"

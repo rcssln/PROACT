@@ -1,0 +1,30 @@
+PROVINCE,"CITY/ MUNICIPALITY",BARANGAY,TELECOMPANY,"STATUS OF COMMUNICATION","DATE INTERRUPTION [m/d/Y]","TIME INTERRUPTION [24:00]","DATE RESTORATION [m/d/Y]","TIME RESTORATION [24:00]","2G SITE COUNT","2G WITH COVERAGE","2G % OF COVERAGE","3G SITE COUNT","3G WITH COVERAGE","3G % OF COVERAGE","4G SITE COUNT","4G WITH COVERAGE","4G % OF COVERAGE",REMARKS
+"ILOCOS NORTE",Adams,none,Smart,Non-operational,2025-11-09,,,,,,,,,,,,,
+"ILOCOS NORTE",Adams,none,Globe,Non-operational,2025-11-09,,,,,,,,,,,,,
+"ILOCOS NORTE",Currimao,none,Smart,Non-operational,2025-11-10,18:00,,,,,,,,,,,,
+"ILOCOS NORTE",Dumalneg,none,Smart,Non-operational,2025-11-09,18:00,,,,,,,,,,,,
+"ILOCOS SUR",Narvacan,Municipal-Wide,Dito,Operational,2025-11-09,10:00,2025-11-09,10:00,,,,,,,,,,"for validation"
+"ILOCOS SUR",Narvacan,Municipal-Wide,"Select an option",Operational,2025-11-09,10:00,2025-11-09,10:00,,,,,,,,,,"for validation"
+"ILOCOS SUR",Tagudin,none,"Select an option",Non-operational,2025-11-11,05:00,,,,,,,,,,,,"for validation"
+"ILOCOS SUR",Tagudin,none,"Select an option",Operational,2025-11-11,05:00,2025-11-10,17:00,,,,,,,,,,
+"ILOCOS SUR",Alilem,none,Smart,Operational,2025-11-09,,2025-11-11,01:30,,,,,,,,,,"50% restored"
+"ILOCOS SUR",Sinait,none,Smart,Non-operational,2025-11-09,,,,,,,,,,,,,"75% restored"
+"ILOCOS SUR",Santiago,none,Smart,Non-operational,2025-11-09,,,,,,,,,,,,,"75% restored"
+"ILOCOS SUR",Vigan,none,Smart,Operational,2025-11-10,,2025-11-11,,,,,,,,,,,"92.9% restored"
+"ILOCOS SUR",Cervantes,none,Globe,Non-operational,2025-11-09,23:00,,,,,,,,,,,,
+"ILOCOS SUR",Cervantes,none,Smart,Operational,2025-11-09,20:00,2025-11-12,,,,,,,,,,,
+"ILOCOS SUR",Lidlidda,none,Smart,Operational,2025-11-09,23:20,2025-11-10,14:00,,,,,,,,,,
+"ILOCOS SUR",Province-Wide,none,Globe,Operational,2025-11-11,09:00,2025-11-12,19:00,,,,,,,,,,
+"ILOCOS SUR","Santo Domingo",none,"Select an option",Operational,2025-11-11,07:15,2025-11-11,13:10,,,,,,,,,,
+PANGASINAN,Sual,none,Globe,Operational,2025-11-09,21:55,2025-11-13,14:00,,,,,,,,,,
+PANGASINAN,Agno,Municipal-Wide,"Select an option",Operational,2025-11-09,22:00,2025-11-11,10:00,,,,,,,,,,Globe<br>Smart<br>Pldt<br>Converge
+PANGASINAN,Bolinao,Estanza,Pldt,Non-operational,2025-11-10,05:00,,,,,,,,,,,,
+PANGASINAN,Bolinao,Concordia,Pldt,Operational,2025-11-10,05:00,2025-11-11,20:00,,,,,,,,,,
+PANGASINAN,"San Nicolas",Municipal-Wide,Globe,Operational,2025-11-10,03:00,2025-11-11,17:00,,,,,,,,,,
+PANGASINAN,"San Nicolas",Municipal-Wide,Globe,Operational,2025-11-10,03:00,2025-11-11,17:00,,,,,,,,,,
+PANGASINAN,Bani,Municipal-Wide,"Select an option",Non-operational,2025-11-10,06:00,,,,,,,,,,,,"-Converge, Pldt, and USATV<br>-ongoing validation<br>"
+PANGASINAN,Aguilar,Municipal-Wide,"Select an option",Operational,2025-11-09,18:30,2025-11-10,17:30,,,,,,,,,,"Communication lines are interrupted in some parts of the municipality. Internet service providers are working to restore services."
+PANGASINAN,Mangatarem,Municipal-Wide,"Select an option",Operational,2025-11-10,16:15,2025-11-11,05:00,,,,,,,,,,-Converge
+PANGASINAN,Mapandan,Municipal-Wide,"Select an option",Operational,2025-11-10,08:00,2025-11-10,16:30,,,,,,,,,,"-Ongoing validation"
+PANGASINAN,Manaoag,Municipal-Wide,"Select an option",Operational,2025-11-10,08:00,2025-11-10,19:00,,,,,,,,,,
+PANGASINAN,Bautista,Municipal-Wide,"Select an option",Non-operational,2025-11-10,05:00,,,,,,,,,,,,"-Globe/USATV/Smart/Converge<br>-Intermittent or unstable internet signal"

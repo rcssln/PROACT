@@ -1,0 +1,49 @@
+{
+  "province": "La Union",
+  "region": "Ilocos Region (Region I)",
+  "total_barangays": 576,
+  "lgus": [
+    {
+      "name": "City of San Fernando",
+      "type": "Component City",
+      "zip_code": "2500",
+      "barangays": [
+        "Abut", "Apaleng", "Bacsil", "Bangbangolan", "Bangcusay", "Barangay I", "Barangay II",
+        "Barangay III", "Barangay IV", "Bato", "Biday", "Birunget", "Bungro", "Cabaroan",
+        "Calabugao", "Camansi", "Canaoay", "Carlatan", "Catbangen", "Dallangayan Este",
+        "Dallangayan Oeste", "Ilocanos Este", "Ilocanos Sur", "Lingsat", "Madayegdeg",
+        "Naguilian Sur", "Pagdalagan", "Pagudpud", "Pao Norte", "Pao Sur", "Poro", "Sevilla"
+      ]
+    },
+    {
+      "name": "Agoo",
+      "type": "Municipality",
+      "zip_code": "2504",
+      "barangays": [
+        "Ambitacay", "Balawarte", "Capas", "Consolacion", "Macalva Central", "Macalva Norte",
+        "Macalva Sur", "Nazareno", "Purok", "San Agustin East", "San Agustin Norte",
+        "San Agustin Sur", "San Antonino", "San Antonio", "San Francisco", "San Isidro"
+      ]
+    },
+    {
+      "name": "San Juan",
+      "type": "Municipality",
+      "zip_code": "2514",
+      "barangays": [
+        "Allangigan", "Aludaid", "Bacsayan", "Balballosa", "Bambanay", "Baroro", "Bimmotobot",
+        "Cabaruan", "Caesutlan", "Calincamasan", "Casilagan", "Catbangan", "Dangdangla",
+        "Ili Norte", "Ili Sur", "Lingsat", "Lubing", "Naguituban", "Panicsican", "Taboc", "Urbiztondo"
+      ]
+    },
+    {
+      "name": "Bauang",
+      "type": "Municipality",
+      "zip_code": "2501",
+      "barangays": [
+        "Acao", "Baccuit Norte", "Baccuit Sur", "Bagbag", "Ballay", "Bawanta", "Boy-utan",
+        "Bucayab", "Cabalayangan", "Cabisilan", "Calumbaya", "Carmay", "Casilagan",
+        "Central East", "Central West", "Dili", "Disso-or", "Guerrero", "Nagrebcan", "Pottot"
+      ]
+    }
+  ]
+}
