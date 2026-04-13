@@ -166,12 +166,18 @@ CREATE TABLE public.events (
   end_date timestamp with time zone,
   event_type text,
   alert_status text,
+  alert_level text,
   color text,
   created_at timestamp with time zone DEFAULT now(),
   summary text,
   approval_status text DEFAULT 'Pending'::text,
   approved_pdf_url text,
   pinged_report_types jsonb DEFAULT '[]'::jsonb,
+  affected_provinces text[] DEFAULT '{}'::text[],
+  gdacs_id text,
+  is_deployed boolean DEFAULT false,
+  deployed_at timestamp with time zone,
+  deployed_snapshot jsonb,
   CONSTRAINT events_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.infrastructure_damage_reports (
@@ -294,6 +300,7 @@ CREATE TABLE public.roads_and_bridges (
   event_id uuid,
   situational_report_id uuid,
   type text DEFAULT 'Road'::text,
+  road_bridge_name text,
   CONSTRAINT roads_and_bridges_pkey PRIMARY KEY (id),
   CONSTRAINT roads_and_bridges_event_id_fkey FOREIGN KEY (event_id) REFERENCES public.events(id),
   CONSTRAINT roads_and_bridges_situational_report_id_fkey FOREIGN KEY (situational_report_id) REFERENCES public.situational_reports(id)
@@ -321,8 +328,15 @@ CREATE TABLE public.situational_reports (
   title text,
   created_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
   status text DEFAULT 'Draft'::text,
+  target_lgus text[] DEFAULT '{}'::text[],
+  province text,
+  created_by uuid,
+  rejection_remarks text,
+  approved_pdf_url text,
+  summary text,
   CONSTRAINT situational_reports_pkey PRIMARY KEY (id),
-  CONSTRAINT situational_reports_event_id_fkey FOREIGN KEY (event_id) REFERENCES public.events(id)
+  CONSTRAINT situational_reports_event_id_fkey FOREIGN KEY (event_id) REFERENCES public.events(id),
+  CONSTRAINT situational_reports_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.users(id)
 );
 CREATE TABLE public.users (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -337,6 +351,7 @@ CREATE TABLE public.users (
   password_hash text,
   account_type text,
   province text,
+  must_change_password boolean DEFAULT false,
   CONSTRAINT users_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.water_supply_reports (
@@ -375,4 +390,32 @@ CREATE TABLE public.work_suspension_reports (
   CONSTRAINT work_suspension_reports_pkey PRIMARY KEY (id),
   CONSTRAINT work_suspension_reports_event_id_fkey FOREIGN KEY (event_id) REFERENCES public.events(id),
   CONSTRAINT work_suspension_reports_situational_report_id_fkey FOREIGN KEY (situational_report_id) REFERENCES public.situational_reports(id)
+);
+
+CREATE TABLE public.event_deployments (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  event_id uuid NOT NULL,
+  city text NOT NULL,
+  province text,
+  deployed_by uuid,
+  strength_label text DEFAULT 'Standard'::text,
+  strength_value integer DEFAULT 1,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT event_deployments_pkey PRIMARY KEY (id),
+  CONSTRAINT event_deployments_event_id_city_key UNIQUE (event_id, city),
+  CONSTRAINT event_deployments_event_id_fkey FOREIGN KEY (event_id) REFERENCES public.events(id) ON DELETE CASCADE,
+  CONSTRAINT event_deployments_deployed_by_fkey FOREIGN KEY (deployed_by) REFERENCES public.users(id)
+);
+
+CREATE TABLE public.notifications (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  type text NOT NULL,
+  title text NOT NULL,
+  message text,
+  data jsonb DEFAULT '{}'::jsonb,
+  is_read boolean DEFAULT false,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT notifications_pkey PRIMARY KEY (id),
+  CONSTRAINT notifications_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE
 );

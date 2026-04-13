@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { useOutletContext } from 'react-router-dom'
 import {
-  Plus, Calendar, Pencil, Trash, PaperPlaneRight, Warning, CheckCircle, X, Info, CaretDown, CaretUp, ArrowsClockwise, Globe, ArrowRight, Hurricane, Waves, Waveform, CloudWarning, DotsThreeCircle } from '@phosphor-icons/react'
+  Plus, Calendar, Pencil, Trash, PaperPlaneRight, Warning, CheckCircle, X, Info, CaretDown, CaretUp, ArrowsClockwise, Globe, ArrowRight, Hurricane, Waves, Waveform, CloudWarning, Drop, WarningCircle } from '@phosphor-icons/react'
 import { useEvents } from '../contexts/EventContext'
 import { fetchGDACSEvents, fetchGDACSEventDetails, gdacsTypeLabel } from '../services/gdacsService'
 import LoadingSpinner from '../components/LoadingSpinner'
@@ -17,11 +17,11 @@ const PAGE_SIZES = [10, 25, 50]
 
 // Phosphor icons for event category cards
 const TyphoonIcon = () => <Hurricane size={32} weight="duotone" />
-const FloodIcon = () => <Waves size={32} weight="duotone" />
+const FloodIcon = () => <Drop size={32} weight="duotone" />
 const EarthquakeIcon = () => <Waveform size={32} weight="duotone" />
 const TsunamiIcon = () => <Waves size={32} weight="duotone" />
 const WeatherIcon = () => <CloudWarning size={32} weight="duotone" />
-const OtherIcon = () => <DotsThreeCircle size={32} weight="duotone" />
+const OtherIcon = () => <WarningCircle size={32} weight="duotone" />
 
 const EVENT_CATEGORIES = [
   { value: 'typhoon',    label: 'Typhoon',        Icon: TyphoonIcon },

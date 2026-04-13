@@ -141,17 +141,39 @@ const CARD_WIDTH = 200
 const CARD_GAP = 16
 const CARD_STEP = CARD_WIDTH + CARD_GAP
 
+const CustomizedAxisTick = (props) => {
+  const { x, y, payload } = props;
+  const words = payload.value.split(' ');
+  return (
+    <g transform={`translate(${x},${y})`}>
+      {words.map((word, i) => (
+        <text
+          key={i}
+          x={0}
+          y={i * 11}
+          dy={12}
+          textAnchor="middle"
+          fill="#64748b"
+          style={{ fontSize: 9, fontWeight: 500 }}
+        >
+          {word}
+        </text>
+      ))}
+    </g>
+  );
+};
+
 export default function Dashboard() {
   const { user } = useOutletContext() ?? {}
   const { currentEvent: rawCurrentEvent, currentEventId, events, loading: eventsLoading, addEvent, updateEvent, deleteEvent, setCurrentEventId, switchEvent } = useEvents()
-  
+
   const currentEvent = useMemo(() => {
     if (rawCurrentEvent?.isDeployed && rawCurrentEvent?.deployedSnapshot) {
       return {
         ...rawCurrentEvent.deployedSnapshot,
         ...rawCurrentEvent,
         // Ensure we keep the actual ID from the raw event
-        id: rawCurrentEvent.id 
+        id: rawCurrentEvent.id
       }
     }
     return rawCurrentEvent
@@ -235,9 +257,9 @@ export default function Dashboard() {
     }
   }, [showLguDeploymentModal])
 
-  const { 
-    deployToLgu, 
-    notifications: dbNotifications, 
+  const {
+    deployToLgu,
+    notifications: dbNotifications,
     fetchNotifications,
     eventDeployments,
     fetchEventDeployments
@@ -257,7 +279,7 @@ export default function Dashboard() {
       if (event) {
         // Fetch current deployments for this event to show in UI
         fetchEventDeployments(eventId)
-        
+
         setSelectedEventToDeploy(event)
         setLguForm({
           cities: [],
@@ -482,7 +504,7 @@ export default function Dashboard() {
     }
 
     return { overview, timeline, details };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentEvent?.summary, currentEvent?.eventType, currentEvent?.id, result]);
 
 
@@ -582,6 +604,12 @@ export default function Dashboard() {
       .eq('event_id', currentEventId)
       .eq('status', 'Approved')
     const approvedIds = (approvedSitreps || []).map(s => s.id)
+
+    if (approvedIds.length === 0) {
+      console.warn('[Dashboard] No situational reports with "Approved" status found for event:', currentEventId)
+      // We still proceed to fetch other non-SitRep-dependent data, 
+      // but most tables in the dashboard are linked to SitReps.
+    }
 
 
     let referenceDate = new Date()
@@ -810,7 +838,7 @@ export default function Dashboard() {
         .select('id, submitted_at')
         .eq('event_id', currentEventId)
         .in('situational_report_id', approvedIds)
-      
+
       if (reportsError || !reportsData || reportsData.length === 0) {
         console.log('[Dashboard] No reports found for event:', currentEventId)
         return
@@ -834,7 +862,7 @@ export default function Dashboard() {
       }))
 
       console.log(`[Dashboard] Fetched ${reportsWithRows.length} reports with ${rowsData.length} rows for event ${currentEventId}`)
-      
+
       reportsWithRows.forEach(report => {
         if (!report.report_rows || report.report_rows.length === 0) return
         report.report_rows.forEach(row => {
@@ -1101,8 +1129,8 @@ export default function Dashboard() {
     })
     return () => { cancelled = true }
     // eventsLoading is intentionally excluded from deps to prevent double-fetch.
-  // fetchData already depends on currentEventId so that change triggers a refresh.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // fetchData already depends on currentEventId so that change triggers a refresh.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetchData, currentEventId])
 
   // Real-time Data Subscription for Dashboard
@@ -1703,9 +1731,7 @@ CHRONOLOGY OF EVENTS`;
             <h2 className="dash-hero-amount">
               {currentEvent ? currentEvent.name : 'Clear Skies (No Active Event)'}
             </h2>
-            {parsedSummary.details && (
-              <p className="dash-hero-subtitle">{parsedSummary.details}</p>
-            )}
+
           </div>
 
           <div className={`dash-hero-meta alert-status-${currentEvent?.alertStatus || 'white'}`}>
@@ -1787,1205 +1813,1232 @@ CHRONOLOGY OF EVENTS`;
           ) : (
             <>
               {(activeTab === 'Overview' || activeTab === 'All Reports') ? (
-            <div className="modular-dashboard">
-              {/* State of Calamity Alert Banner */}
-              {details.suspensions.some(s => s.type === 'stateOfCalamity') && (
-                <div style={{ background: "linear-gradient(135deg,rgba(244,63,94,0.1),rgba(244,63,94,0.03))", border: `1px solid rgba(244,63,94,0.3)`, borderLeft: `3px solid ${T.rose}`, borderRadius: 10, padding: "14px 20px", display: "flex", alignItems: "center", gap: 16, marginBottom: 18 }}>
-                  <span style={{ fontSize: 26 }}>??</span>
-                  <div>
-                    <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 13, color: T.rose, letterSpacing: "2px", textTransform: "uppercase" }}>State of Calamity Declared</div>
-                    <div style={{ fontSize: 11, color: '#64748b', marginTop: 3 }}>
-                      Multiple LGUs have officially declared a state of calamity. Expedited procurement and calamity fund access are active.
+                <div className="modular-dashboard">
+                  {/* No Approved Data Warning */}
+                  {result?.total === 0 && currentEventId !== 'default-good-day' && (
+                    <div style={{
+                      background: 'rgba(245, 158, 11, 0.05)',
+                      border: '1px solid rgba(245, 158, 11, 0.3)',
+                      borderRadius: '12px',
+                      padding: '2rem',
+                      marginBottom: '2rem',
+                      textAlign: 'center'
+                    }}>
+                      <Warning size={32} color="#d97706" style={{ marginBottom: '1rem', opacity: 0.8 }} />
+                      <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#92400e', marginBottom: '0.5rem' }}>No Approved Reports Available</h3>
+                      <p style={{ fontSize: '0.875rem', color: '#b45309', maxWidth: '500px', margin: '0 auto' }}>
+                        The dashboard is strictly displaying data from <strong>Approved</strong> situational reports.
+                        If you have submitted data, please ensure the corresponding Situational Report is approved by a Regional Admin to see it here.
+                      </p>
                     </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Top Row: 6-column KPI Row */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10, marginBottom: 18 }}>
-                <div className="kpi-card-premium blue">
-                  <div className="kpi-label-premium">Affected Persons</div>
-                  <div className="kpi-value-premium">{(categoryCards.find(c => c.category === 'affectedPopulation')?.totalCount || 0).toLocaleString()}</div>
-                  <div className="kpi-sub-premium">Total lives impacted</div>
-                </div>
-
-                <div className="kpi-card-premium orange">
-                  <div className="kpi-label-premium">Currently Evacuated</div>
-                  <div className="kpi-value-premium">{((result?.details?.evacStatus?.inside || 0) + (result?.details?.evacStatus?.outside || 0)).toLocaleString()}</div>
-                  <div className="kpi-sub-premium">In ECs & with relatives</div>
-                </div>
-
-                <div className="kpi-card-premium amber">
-                  <div className="kpi-label-premium">Damaged Houses</div>
-                  <div className="kpi-value-premium">{(categoryCards.find(c => c.category === 'damagedHouses')?.totalCount || 0).toLocaleString()}</div>
-                  <div className="kpi-sub-premium">Totally & partially impacted</div>
-                </div>
-
-                <div className="kpi-card-premium blue" style={{ borderTopColor: T.indigo }}>
-                  <div className="kpi-label-premium">Power Still Out</div>
-                  <div className="kpi-value-premium">{details.infrastructure.filter(i => i.type === 'power' && i.status === 'interrupted').length}</div>
-                  <div className="kpi-sub-premium">Areas without restoration</div>
-                </div>
-
-                <div className="kpi-card-premium slate">
-                  <div className="kpi-label-premium">Roads Not Passable</div>
-                  <div className="kpi-value-premium">{details.infrastructure.filter(i => i.type === 'road' && i.status === 'notPassable').length}</div>
-                  <div className="kpi-sub-premium">Obstructions reported</div>
-                </div>
-
-                <div className="kpi-card-premium teal">
-                  <div className="kpi-label-premium">Assistance Value</div>
-                  <div className="kpi-value-premium">?{(Object.values(details.assistanceByLgu || {}).reduce((s, v) => s + v, 0) / 1000000).toFixed(2)}M</div>
-                  <div className="kpi-sub-premium">Total funds disbursed</div>
-                </div>
-              </div>
-
-              {/* Middle Row: 3-col Grid from Reff */}
-              <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr 1fr", gap: 14, marginBottom: 14, marginTop: 20 }}>
-                {/* Event Summary & Timeline */}
-                <div className="premium-card">
-                  <div className="premium-card-header">
-                    <div className="premium-card-title">Event Track & Timeline</div>
-                  </div>
-                  <div className="timeline-track-premium" style={{ maxHeight: '300px', overflowY: 'auto' }}>
-                    {parsedSummary.timeline.length > 0 ? (
-                      parsedSummary.timeline.map((item, idx) => (
-                        <div key={idx} className="timeline-content-premium">
-                          <div className="timeline-dot-premium" />
-                          <div className="timeline-date-premium">{item.timeLabel}</div>
-                          <div className="timeline-text-premium">{item.text}</div>
+                  )}
+                  {/* State of Calamity Alert Banner */}
+                  {details.suspensions.some(s => s.type === 'stateOfCalamity') && (
+                    <div style={{ background: "linear-gradient(135deg,rgba(244,63,94,0.1),rgba(244,63,94,0.03))", border: `1px solid rgba(244,63,94,0.3)`, borderLeft: `3px solid ${T.rose}`, borderRadius: 10, padding: "14px 20px", display: "flex", alignItems: "center", gap: 16, marginBottom: 18 }}>
+                      <span style={{ fontSize: 26 }}>??</span>
+                      <div>
+                        <div style={{ fontFamily: "'Syne',sans-serif", fontWeight: 800, fontSize: 13, color: T.rose, letterSpacing: "2px", textTransform: "uppercase" }}>State of Calamity Declared</div>
+                        <div style={{ fontSize: 11, color: '#64748b', marginTop: 3 }}>
+                          Multiple LGUs have officially declared a state of calamity. Expedited procurement and calamity fund access are active.
                         </div>
-                      ))
-                    ) : (
-                      <div style={{ color: '#94a3b8', fontStyle: 'italic', padding: '1rem' }}>No timeline data available.</div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Affected Persons by City Bar Chart */}
-                <div className="premium-card">
-                  <div className="premium-card-header">
-                    <div className="premium-card-title">Affected Persons</div>
-                    <span style={{ fontSize: '10px', color: '#64748b', background: '#f1f5f9', padding: '2px 8px', borderRadius: '4px' }}>BY CITY</span>
-                  </div>
-                  <div style={{ height: '240px' }}>
-                    {Object.keys(result?.details?.byCity || {}).length > 0 ? (
-                      <ResponsiveContainer width="100%" height={300}>
-                        <BarChart data={Object.entries(result.details.byCity).sort((a, b) => b[1].persons - a[1].persons).slice(0, 4).map(([name, data]) => ({ name, persons: data.persons }))} margin={{ top: 10, right: 10, left: -20, bottom: 20 }}>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                          <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#64748b' }} axisLine={false} tickLine={false} interval={0} />
-                          <YAxis tick={{ fontSize: 9, fill: '#64748b' }} axisLine={false} tickLine={false} tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v} />
-                          <Tooltip contentStyle={{ fontSize: '11px', borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
-                          <Bar dataKey="persons" radius={[4, 4, 0, 0]}>
-                            {Object.entries(result.details.byCity).slice(0, 4).map((_, i) => (
-                              <Cell key={i} fill={[T.indigo, T.rose, T.amber, T.indigo, T.teal][i % 5]} />
-                            ))}
-                          </Bar>
-                        </BarChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#94a3b8' }}>No geographic data available</div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Evacuation Status Pie Chart */}
-                <div className="premium-card">
-                  <div className="premium-card-header">
-                    <div className="premium-card-title">Evacuation Status</div>
-                    <span style={{ fontSize: '10px', color: T.teal, background: 'rgba(0,201,160,0.1)', padding: '2px 8px', borderRadius: '4px' }}>CURRENT</span>
-                  </div>
-                  <div style={{ height: '160px', minWidth: 0 }}>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <PieChart>
-                        <Pie
-                          data={[
-                            { name: 'Inside ECs', value: result?.details?.evacStatus?.inside || 0, color: T.indigo },
-                            { name: 'Outside ECs', value: result?.details?.evacStatus?.outside || 0, color: T.amber },
-                            { name: 'Not Sheltered', value: Math.max(0, (result?.details?.evacStatus?.total || 0) - (result?.details?.evacStatus?.inside || 0) - (result?.details?.evacStatus?.outside || 0)), color: T.slate }
-                          ]}
-                          cx="50%" cy="50%" innerRadius={45} outerRadius={65} paddingAngle={4} dataKey="value"
-                        >
-                          {[T.indigo, T.amber, T.slate].map((color, i) => <Cell key={i} fill={color} stroke="none" />)}
-                        </Pie>
-                        <Tooltip />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                    {[
-                      { label: 'Inside ECs', value: result?.details?.evacStatus?.inside || 0, color: T.indigo },
-                      { label: 'Outside ECs', value: result?.details?.evacStatus?.outside || 0, color: T.amber },
-                    ].map((item, idx) => (
-                      <div key={idx} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '11px' }}>
-                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: item.color }} />
-                        <span style={{ color: '#64748b' }}>{item.label}</span>
-                        <span style={{ fontWeight: 700, fontFamily: 'DM Mono' }}>{item.value.toLocaleString()}</span>
                       </div>
-                    ))}
+                    </div>
+                  )}
+
+                  {/* Top Row: 6-column KPI Row */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10, marginBottom: 18 }}>
+                    <div className="kpi-card-premium blue">
+                      <div className="kpi-label-premium">Affected Persons</div>
+                      <div className="kpi-value-premium">{(categoryCards.find(c => c.category === 'affectedPopulation')?.totalCount || 0).toLocaleString()}</div>
+                      <div className="kpi-sub-premium">Total lives impacted</div>
+                    </div>
+
+                    <div className="kpi-card-premium orange">
+                      <div className="kpi-label-premium">Currently Evacuated</div>
+                      <div className="kpi-value-premium">{((result?.details?.evacStatus?.inside || 0) + (result?.details?.evacStatus?.outside || 0)).toLocaleString()}</div>
+                      <div className="kpi-sub-premium">In ECs & with relatives</div>
+                    </div>
+
+                    <div className="kpi-card-premium amber">
+                      <div className="kpi-label-premium">Damaged Houses</div>
+                      <div className="kpi-value-premium">{(categoryCards.find(c => c.category === 'damagedHouses')?.totalCount || 0).toLocaleString()}</div>
+                      <div className="kpi-sub-premium">Totally & partially impacted</div>
+                    </div>
+
+                    <div className="kpi-card-premium blue" style={{ borderTopColor: T.indigo }}>
+                      <div className="kpi-label-premium">Power Still Out</div>
+                      <div className="kpi-value-premium">{details.infrastructure.filter(i => i.type === 'power' && i.status === 'interrupted').length}</div>
+                      <div className="kpi-sub-premium">Areas without restoration</div>
+                    </div>
+
+                    <div className="kpi-card-premium slate">
+                      <div className="kpi-label-premium">Roads Not Passable</div>
+                      <div className="kpi-value-premium">{details.infrastructure.filter(i => i.type === 'road' && i.status === 'notPassable').length}</div>
+                      <div className="kpi-sub-premium">Obstructions reported</div>
+                    </div>
+
+                    <div className="kpi-card-premium teal">
+                      <div className="kpi-label-premium">Assistance Value</div>
+                      <div className="kpi-value-premium">₱ {(() => {
+                        const val = Object.values(details.assistanceByLgu || {}).reduce((s, v) => s + v, 0);
+                        return val >= 1000 ? `${(val / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })}K` : val.toLocaleString();
+                      })()}</div>
+                      <div className="kpi-sub-premium">Total funds disbursed</div>
+                    </div>
                   </div>
-                  <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid #f1f5f9' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', marginBottom: '4px' }}>
-                      <span style={{ color: '#64748b' }}>Active ECs</span>
-                      <span style={{ fontWeight: 700, color: T.teal }}>{Object.values(result?.details?.byCity || {}).reduce((s, p) => s + p.ecs, 0)}</span>
+
+                  {/* Middle Row: 2-col Grid */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14, marginTop: 20 }}>
+                    {/* Event Summary placeholder removed */}
+
+                    {/* Affected Persons by City Bar Chart */}
+                    <div className="premium-card">
+                      <div className="premium-card-header">
+                        <div className="premium-card-title">Affected Persons</div>
+                        <span style={{ fontSize: '10px', color: '#64748b', background: '#f1f5f9', padding: '2px 8px', borderRadius: '4px' }}>BY CITY</span>
+                      </div>
+                      <div style={{ height: '240px' }}>
+                        {Object.keys(result?.details?.byCity || {}).length > 0 ? (
+                          <ResponsiveContainer width="100%" height={300}>
+                            <BarChart data={Object.entries(result.details.byCity).sort((a, b) => b[1].persons - a[1].persons).slice(0, 4).map(([name, data]) => ({ name, persons: data.persons }))} margin={{ top: 10, right: 10, left: -20, bottom: 20 }}>
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                              <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#64748b' }} axisLine={false} tickLine={false} interval={0} />
+                              <YAxis tick={{ fontSize: 9, fill: '#64748b' }} axisLine={false} tickLine={false} tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v} />
+                              <Tooltip contentStyle={{ fontSize: '11px', borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
+                              <Bar dataKey="persons" radius={[4, 4, 0, 0]}>
+                                {Object.entries(result.details.byCity).slice(0, 4).map((_, i) => (
+                                  <Cell key={i} fill={[T.indigo, T.rose, T.amber, T.indigo, T.teal][i % 5]} />
+                                ))}
+                              </Bar>
+                            </BarChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#94a3b8' }}>No geographic data available</div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Evacuation Status Pie Chart */}
+                    <div className="premium-card">
+                      <div className="premium-card-header">
+                        <div className="premium-card-title">Evacuation Status</div>
+                        <span style={{ fontSize: '10px', color: T.teal, background: 'rgba(0,201,160,0.1)', padding: '2px 8px', borderRadius: '4px' }}>CURRENT</span>
+                      </div>
+                      <div style={{ height: '200px', minWidth: 0 }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={[
+                                { name: 'Inside ECs', value: result?.details?.evacStatus?.inside || 0, color: T.indigo },
+                                { name: 'Outside ECs', value: result?.details?.evacStatus?.outside || 0, color: T.amber },
+                                { name: 'Not Sheltered', value: Math.max(0, (result?.details?.evacStatus?.total || 0) - (result?.details?.evacStatus?.inside || 0) - (result?.details?.evacStatus?.outside || 0)), color: T.slate }
+                              ]}
+                              cx="50%" cy="50%" innerRadius={50} outerRadius={75} paddingAngle={4} dataKey="value"
+                            >
+                              {[T.indigo, T.amber, T.slate].map((color, i) => <Cell key={i} fill={color} stroke="none" />)}
+                            </Pie>
+                            <Tooltip />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                      {[
+                        { label: 'Inside ECs', value: result?.details?.evacStatus?.inside || 0, color: T.indigo },
+                        { label: 'Outside ECs', value: result?.details?.evacStatus?.outside || 0, color: T.amber },
+                      ].map((item, idx) => (
+                        <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '11px' }}>
+                          <div style={{ width: 8, height: 8, borderRadius: '50%', background: item.color, flexShrink: 0 }} />
+                          <span style={{ color: '#64748b', flex: 1 }}>{item.label}</span>
+                          <span style={{ fontWeight: 700, fontFamily: 'DM Mono' }}>{item.value.toLocaleString()}</span>
+                        </div>
+                      ))}
+                      <div style={{ marginTop: '12px', paddingTop: '10px', borderTop: '1px solid #f1f5f9' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', marginBottom: '4px' }}>
+                          <span style={{ color: '#64748b' }}>Active ECs</span>
+                          <span style={{ fontWeight: 700, color: T.teal }}>{Object.values(result?.details?.byCity || {}).reduce((s, p) => s + p.ecs, 0)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Bottom Table: City/Municipality Summary */}
+                  <div className="premium-card">
+                    <div className="premium-card-header">
+                      <div className="premium-card-title">City/Municipality Summary</div>
+                      <span style={{ fontSize: '10px', color: '#64748b', background: '#f1f5f9', padding: '2px 8px', borderRadius: '4px' }}>ALL AREAS</span>
+                    </div>
+                    <div style={{ overflowX: 'auto' }}>
+                      <table className="premium-table">
+                        <thead>
+                          <tr>
+                            <th>Municipality</th>
+                            <th style={{ textAlign: 'right' }}>Brgys</th>
+                            <th style={{ textAlign: 'right' }}>Families</th>
+                            <th style={{ textAlign: 'right' }}>Persons</th>
+                            <th style={{ textAlign: 'right' }}>In ECs</th>
+                            <th style={{ textAlign: 'right' }}>Out ECs</th>
+                            <th style={{ textAlign: 'right' }}>Total Served</th>
+                            <th style={{ textAlign: 'right' }}>Active ECs</th>
+                            <th style={{ textAlign: 'right' }}>Dmg Houses</th>
+                            <th style={{ textAlign: 'center' }}>Calamity</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {Object.keys(result?.details?.byCity || {}).length > 0 ? (
+                            Object.entries(result.details.byCity).map(([city, stats], i) => (
+                              <tr key={city} className="trow">
+                                <td>
+                                  <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '12px' }}>{city.toUpperCase()}</div>
+                                  <div style={{ fontSize: '10px', color: '#64748b' }}>{getProvinceForCity(city)}</div>
+                                </td>
+                                <td style={{ textAlign: 'right', fontFamily: 'DM Mono', fontSize: '11px' }}>{stats.brgys?.size || 0}</td>
+                                <td style={{ textAlign: 'right', fontFamily: 'DM Mono', fontSize: '11px' }}>{stats.families.toLocaleString()}</td>
+                                <td style={{ textAlign: 'right', fontFamily: 'DM Mono', fontSize: '11px', fontWeight: 700, color: stats.persons > 100000 ? T.rose : stats.persons > 10000 ? T.amber : '#1e293b' }}>{stats.persons.toLocaleString()}</td>
+                                <td style={{ textAlign: 'right', fontFamily: 'DM Mono', fontSize: '11px' }}>{stats.inside.toLocaleString()}</td>
+                                <td style={{ textAlign: 'right', fontFamily: 'DM Mono', fontSize: '11px' }}>{stats.outside.toLocaleString()}</td>
+                                <td style={{ textAlign: 'right', fontFamily: 'DM Mono', fontSize: '11px', color: T.teal, fontWeight: 700 }}>{stats.served.toLocaleString()}</td>
+                                <td style={{ textAlign: 'right', fontFamily: 'DM Mono', fontSize: '11px' }}>{stats.ecs}</td>
+                                <td style={{ textAlign: 'right', fontFamily: 'DM Mono', fontSize: '11px', color: stats.dmg > 0 ? T.amber : '#94a3b8' }}>{stats.dmg > 0 ? stats.dmg.toLocaleString() : '—'}</td>
+                                <td style={{ textAlign: 'center' }}>
+                                  {details.suspensions.find(s => s.city === city && s.type === 'stateOfCalamity') ? (
+                                    <span style={{ fontSize: '9px', fontWeight: 800, background: 'rgba(240,69,69,0.1)', color: T.rose, padding: '2px 6px', borderRadius: '4px' }}>DECLARED</span>
+                                  ) : <span style={{ color: '#94a3b8' }}>—</span>}
+                                </td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr><td colSpan="10" style={{ textAlign: 'center', color: '#94a3b8', padding: '2rem' }}>No municipality data aggregated yet</td></tr>
+                          )}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 </div>
-              </div>
+              ) : activeTab === 'Agriculture' ? (
+                <div className="category-viz-container">
+                  {/* KPI Row for Agriculture */}
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, marginBottom: 14 }}>
+                    <div className="kpi-card-premium amber">
+                      <div className="kpi-label-premium">Total Production Loss</div>
+                      <div className="kpi-value-premium">₱ {Object.values(details.agriByCity).reduce((s, v) => s + v, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
+                      <div className="kpi-sub-premium">Estimated value in PHP</div>
+                    </div>
+                    <div className="kpi-card-premium blue">
+                      <div className="kpi-label-premium">Affected Farmers/Fisherfolk</div>
+                      <div className="kpi-value-premium">{categoryCards.find(c => c.category === 'agricultureDamage')?.totalCount.toLocaleString() || 0}</div>
+                      <div className="kpi-sub-premium">Total individuals recorded</div>
+                    </div>
+                    <div className="kpi-card-premium teal">
+                      <div className="kpi-label-premium">Reporting LGUs</div>
+                      <div className="kpi-value-premium">{Object.keys(details.agriByCity).length}</div>
+                      <div className="kpi-sub-premium">Active data points</div>
+                    </div>
+                  </div>
 
-              {/* Bottom Table: City/Municipality Summary */}
-              <div className="premium-card">
-                <div className="premium-card-header">
-                  <div className="premium-card-title">City/Municipality Summary</div>
-                  <span style={{ fontSize: '10px', color: '#64748b', background: '#f1f5f9', padding: '2px 8px', borderRadius: '4px' }}>ALL AREAS</span>
-                </div>
-                <div style={{ overflowX: 'auto' }}>
-                  <table className="premium-table">
-                    <thead>
-                      <tr>
-                        <th>Municipality</th>
-                        <th style={{ textAlign: 'right' }}>Brgys</th>
-                        <th style={{ textAlign: 'right' }}>Families</th>
-                        <th style={{ textAlign: 'right' }}>Persons</th>
-                        <th style={{ textAlign: 'right' }}>In ECs</th>
-                        <th style={{ textAlign: 'right' }}>Out ECs</th>
-                        <th style={{ textAlign: 'right' }}>Total Served</th>
-                        <th style={{ textAlign: 'right' }}>Active ECs</th>
-                        <th style={{ textAlign: 'right' }}>Dmg Houses</th>
-                        <th style={{ textAlign: 'center' }}>Calamity</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {Object.keys(result?.details?.byCity || {}).length > 0 ? (
-                        Object.entries(result.details.byCity).map(([city, stats], i) => (
-                          <tr key={city} className="trow">
-                            <td>
-                              <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '12px' }}>{city.toUpperCase()}</div>
-                              <div style={{ fontSize: '10px', color: '#64748b' }}>{getProvinceForCity(city)}</div>
-                            </td>
-                            <td style={{ textAlign: 'right', fontFamily: 'DM Mono', fontSize: '11px' }}>{stats.brgys?.size || 0}</td>
-                            <td style={{ textAlign: 'right', fontFamily: 'DM Mono', fontSize: '11px' }}>{stats.families.toLocaleString()}</td>
-                            <td style={{ textAlign: 'right', fontFamily: 'DM Mono', fontSize: '11px', fontWeight: 700, color: stats.persons > 100000 ? T.rose : stats.persons > 10000 ? T.amber : '#1e293b' }}>{stats.persons.toLocaleString()}</td>
-                            <td style={{ textAlign: 'right', fontFamily: 'DM Mono', fontSize: '11px' }}>{stats.inside.toLocaleString()}</td>
-                            <td style={{ textAlign: 'right', fontFamily: 'DM Mono', fontSize: '11px' }}>{stats.outside.toLocaleString()}</td>
-                            <td style={{ textAlign: 'right', fontFamily: 'DM Mono', fontSize: '11px', color: T.teal, fontWeight: 700 }}>{stats.served.toLocaleString()}</td>
-                            <td style={{ textAlign: 'right', fontFamily: 'DM Mono', fontSize: '11px' }}>{stats.ecs}</td>
-                            <td style={{ textAlign: 'right', fontFamily: 'DM Mono', fontSize: '11px', color: stats.dmg > 0 ? T.amber : '#94a3b8' }}>{stats.dmg > 0 ? stats.dmg.toLocaleString() : '—'}</td>
-                            <td style={{ textAlign: 'center' }}>
-                              {details.suspensions.find(s => s.city === city && s.type === 'stateOfCalamity') ? (
-                                <span style={{ fontSize: '9px', fontWeight: 800, background: 'rgba(240,69,69,0.1)', color: T.rose, padding: '2px 6px', borderRadius: '4px' }}>DECLARED</span>
-                              ) : <span style={{ color: '#94a3b8' }}>—</span>}
-                            </td>
-                          </tr>
-                        ))
-                      ) : (
-                        <tr><td colSpan="10" style={{ textAlign: 'center', color: '#94a3b8', padding: '2rem' }}>No municipality data aggregated yet</td></tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          ) : activeTab === 'Agriculture' ? (
-            <div className="category-viz-container">
-              {/* KPI Row for Agriculture */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 12, marginBottom: 14 }}>
-                <div className="kpi-card-premium amber">
-                  <div className="kpi-label-premium">Total Production Loss</div>
-                  <div className="kpi-value-premium">? {Object.values(details.agriByCity).reduce((s, v) => s + v, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
-                  <div className="kpi-sub-premium">Estimated value in PHP</div>
-                </div>
-                <div className="kpi-card-premium blue">
-                  <div className="kpi-label-premium">Affected Farmers/Fisherfolk</div>
-                  <div className="kpi-value-premium">{categoryCards.find(c => c.category === 'agricultureDamage')?.totalCount.toLocaleString() || 0}</div>
-                  <div className="kpi-sub-premium">Total individuals recorded</div>
-                </div>
-                <div className="kpi-card-premium teal">
-                  <div className="kpi-label-premium">Reporting LGUs</div>
-                  <div className="kpi-value-premium">{Object.keys(details.agriByCity).length}</div>
-                  <div className="kpi-sub-premium">Active data points</div>
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 14, marginBottom: 14 }}>
-                <div className="premium-card">
-                  <div className="premium-card-header">
-                    <div className="premium-card-title">Loss Value by Municipality</div>
-                  </div>
-                  <div style={{ height: '300px' }}>
-                    {Object.keys(details.agriByCity).length > 0 ? (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={Object.entries(details.agriByCity).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([name, value]) => ({ name, value }))}>
-                          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                          <XAxis dataKey="name" tick={{ fontSize: 9 }} />
-                          <YAxis tick={{ fontSize: 9 }} tickFormatter={v => `?${(v / 1000).toFixed(0)}k`} />
-                          <Tooltip formatter={(value) => `? ${value.toLocaleString()}`} />
-                          <Bar dataKey="value" fill={T.amber} radius={[4, 4, 0, 0]} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="notification-empty" style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>No data available</div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="premium-card">
-                  <div className="premium-card-header">
-                    <div className="premium-card-title">Loss by Classification</div>
-                  </div>
-                  <div style={{ height: '260px' }}>
-                    {Object.keys(details.agriByClass).length > 0 ? (
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie
-                            data={Object.entries(details.agriByClass).map(([name, value]) => ({ name, value }))}
-                            cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value"
-                          >
-                            {Object.entries(details.agriByClass).map((_, i) => (
-                              <Cell key={i} fill={[T.teal, T.amber, T.indigo, T.rose, T.orange][i % 5]} />
-                            ))}
-                          </Pie>
-                          <Tooltip formatter={(value) => `? ${value.toLocaleString()}`} />
-                        </PieChart>
-                      </ResponsiveContainer>
-                    ) : (
-                      <div className="notification-empty" style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>No data available</div>
-                    )}
-                  </div>
-                  <div style={{ marginTop: 10 }}>
-                    {Object.entries(details.agriByClass).map(([cls, val], i) => (
-                      <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: 4 }}>
-                        <span style={{ color: '#64748b' }}>{cls}</span>
-                        <span style={{ fontWeight: 700 }}>? {val.toLocaleString()}</span>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: 14, marginBottom: 14 }}>
+                    <div className="premium-card">
+                      <div className="premium-card-header">
+                        <div className="premium-card-title">Loss Value by Municipality</div>
                       </div>
-                    ))}
+                      <div style={{ height: '300px' }}>
+                        {Object.keys(details.agriByCity).length > 0 ? (
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={Object.entries(details.agriByCity).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([name, value]) => ({ name, value }))}>
+                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                              <XAxis dataKey="name" tick={{ fontSize: 9 }} />
+                              <YAxis tick={{ fontSize: 9 }} tickFormatter={v => `₱${(v / 1000).toFixed(0)}k`} />
+                              <Tooltip formatter={(value) => `₱ ${value.toLocaleString()}`} />
+                              <Bar dataKey="value" fill={T.amber} radius={[4, 4, 0, 0]} />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="notification-empty" style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>No data available</div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="premium-card">
+                      <div className="premium-card-header">
+                        <div className="premium-card-title">Loss by Classification</div>
+                      </div>
+                      <div style={{ height: '260px' }}>
+                        {Object.keys(details.agriByClass).length > 0 ? (
+                          <ResponsiveContainer width="100%" height="100%">
+                            <PieChart>
+                              <Pie
+                                data={Object.entries(details.agriByClass).map(([name, value]) => ({ name, value }))}
+                                cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value"
+                              >
+                                {Object.entries(details.agriByClass).map((_, i) => (
+                                  <Cell key={i} fill={[T.teal, T.amber, T.indigo, T.rose, T.orange][i % 5]} />
+                                ))}
+                              </Pie>
+                              <Tooltip formatter={(value) => `₱ ${value.toLocaleString()}`} />
+                            </PieChart>
+                          </ResponsiveContainer>
+                        ) : (
+                          <div className="notification-empty" style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>No data available</div>
+                        )}
+                      </div>
+                      <div style={{ marginTop: 10 }}>
+                        {Object.entries(details.agriByClass).map(([cls, val], i) => (
+                          <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', marginBottom: 4 }}>
+                            <span style={{ color: '#64748b' }}>{cls}</span>
+                            <span style={{ fontWeight: 700 }}>₱ {val.toLocaleString()}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </div>
-          ) : activeTab === 'Incidents' ? (
-            <div className="category-viz-container">
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
-                {/* Incident Distribution by City */}
-                <div className="premium-card">
-                  <div className="premium-card-header">
-                    <div className="premium-card-title">Incidents by City</div>
-                    <span style={{ fontSize: '10px', color: '#64748b', background: '#f1f5f9', padding: '2px 8px', borderRadius: '4px' }}>TOP 4 AREAS</span>
-                  </div>
-                  <div style={{ height: '240px', minWidth: 0 }}>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart
-                        data={Object.entries(
+              ) : activeTab === 'Incidents' ? (
+                <div className="category-viz-container">
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+                    {/* Incident Distribution by City */}
+                    <div className="premium-card">
+                      <div className="premium-card-header">
+                        <div className="premium-card-title">Incidents by City</div>
+                        <span style={{ fontSize: '10px', color: '#64748b', background: '#f1f5f9', padding: '2px 8px', borderRadius: '4px' }}>TOP 4 AREAS</span>
+                      </div>
+                      <div style={{ height: '240px', minWidth: 0 }}>
+                        <ResponsiveContainer width="100%" height={300}>
+                          <BarChart
+                            data={Object.entries(
+                              details.incidents.reduce((acc, curr) => {
+                                acc[curr.city] = (acc[curr.city] || 0) + 1;
+                                return acc;
+                              }, {})
+                            )
+                              .sort((a, b) => b[1] - a[1])
+                              .slice(0, 4)
+                              .map(([name, value]) => ({ name, value }))}
+                            margin={{ top: 10, right: 10, left: -20, bottom: 20 }}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                            <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#64748b' }} axisLine={false} tickLine={false} interval={0} />
+                            <YAxis tick={{ fontSize: 9, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                            <Tooltip contentStyle={{ fontSize: '11px', borderRadius: '8px' }} />
+                            <Bar dataKey="value" radius={[4, 4, 0, 0]}>
+                              {[T.indigo, T.rose, T.amber, T.teal].map((color, i) => (
+                                <Cell key={`cell-${i}`} fill={color} />
+                              ))}
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+
+                    {/* Incident Type Distribution */}
+                    <div className="premium-card">
+                      <div className="premium-card-header">
+                        <div className="premium-card-title">Incident Types</div>
+                        <span style={{ fontSize: '10px', color: T.blue, background: 'rgba(59,130,246,0.15)', padding: '2px 8px', borderRadius: '4px' }}>BREAKDOWN</span>
+                      </div>
+                      <div style={{ height: '220px', minWidth: 0 }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={Object.entries(
+                                details.incidents.reduce((acc, curr) => {
+                                  acc[curr.type] = (acc[curr.type] || 0) + 1;
+                                  return acc;
+                                }, {})
+                              )
+                                .map(([name, value]) => ({ name, value }))}
+                              cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={4} dataKey="value"
+                            >
+                              {[T.indigo, T.purple, T.rose, T.amber, T.teal, T.blue, T.orange].map((color, i) => (
+                                <Cell key={`cell-${i}`} fill={color} stroke="none" />
+                              ))}
+                            </Pie>
+                            <Tooltip />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div style={{ marginTop: '16px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        {Object.entries(
                           details.incidents.reduce((acc, curr) => {
-                            acc[curr.city] = (acc[curr.city] || 0) + 1;
+                            acc[curr.type] = (acc[curr.type] || 0) + 1;
                             return acc;
                           }, {})
-                        )
-                          .sort((a, b) => b[1] - a[1])
-                          .slice(0, 4)
-                          .map(([name, value]) => ({ name, value }))}
-                        margin={{ top: 10, right: 10, left: -20, bottom: 20 }}
-                      >
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                        <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#64748b' }} axisLine={false} tickLine={false} interval={0} />
-                        <YAxis tick={{ fontSize: 9, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                        <Tooltip contentStyle={{ fontSize: '11px', borderRadius: '8px' }} />
-                        <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                          {[T.indigo, T.rose, T.amber, T.teal].map((color, i) => (
-                            <Cell key={`cell-${i}`} fill={color} />
-                          ))}
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-
-                {/* Incident Type Distribution */}
-                <div className="premium-card">
-                  <div className="premium-card-header">
-                    <div className="premium-card-title">Incident Types</div>
-                    <span style={{ fontSize: '10px', color: T.blue, background: 'rgba(59,130,246,0.15)', padding: '2px 8px', borderRadius: '4px' }}>BREAKDOWN</span>
-                  </div>
-                  <div style={{ height: '200px', minWidth: 0 }}>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <PieChart>
-                        <Pie
-                          data={Object.entries(
-                            details.incidents.reduce((acc, curr) => {
-                              acc[curr.type] = (acc[curr.type] || 0) + 1;
-                              return acc;
-                            }, {})
-                          )
-                            .map(([name, value]) => ({ name, value }))}
-                          cx="50%" cy="50%" innerRadius={50} outerRadius={70} paddingAngle={4} dataKey="value"
-                        >
-                          {[T.indigo, T.purple, T.rose, T.amber, T.teal].map((color, i) => (
-                            <Cell key={`cell-${i}`} fill={color} stroke="none" />
-                          ))}
-                        </Pie>
-                        <Tooltip />
-                      </PieChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div style={{ marginTop: '10px', display: 'flex', flexWrap: 'wrap', gap: '8px', justifyContent: 'center' }}>
-                    {Object.entries(
-                      details.incidents.reduce((acc, curr) => {
-                        acc[curr.type] = (acc[curr.type] || 0) + 1;
-                        return acc;
-                      }, {})
-                    ).map(([type, count], i) => (
-                      <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px' }}>
-                        <div style={{ width: 6, height: 6, borderRadius: '50%', background: [T.indigo, T.purple, T.rose, T.amber, T.teal][i % 5] }} />
-                        <span style={{ color: '#475569' }}>{type}</span>
-                        <span style={{ fontWeight: 700 }}>({count})</span>
+                        ).map(([type, count], i) => (
+                          <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '11px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <div style={{ width: 8, height: 8, borderRadius: '50%', background: [T.indigo, T.purple, T.rose, T.amber, T.teal, T.blue, T.orange][i % 7], flexShrink: 0 }} />
+                              <span style={{ color: '#64748b' }}>{type}</span>
+                            </div>
+                            <span style={{ fontWeight: 700, fontFamily: 'DM Mono' }}>{count}</span>
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    </div>
                   </div>
-                </div>
-              </div>
 
-              {/* Detailed Incident Log */}
-              <div className="premium-card">
-                <div className="premium-card-header">
-                  <div className="premium-card-title">Recent Incident Reports</div>
-                  <span style={{ fontSize: '10px', color: '#64748b', background: '#f1f5f9', padding: '2px 8px', borderRadius: '4px' }}>LATEST FIRST</span>
-                </div>
-                <div style={{ overflowX: 'auto', maxHeight: '400px' }}>
-                  <table className="premium-table">
-                    <thead>
-                      <tr>
-                        <th>Incident Type</th>
-                        <th>Barangay / Location</th>
-                        <th>Municipality</th>
-                        <th>Status</th>
-                        <th>Occurred</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {details.incidents.length > 0 ? (
-                        [...details.incidents].reverse().map((inc, i) => (
-                          <tr key={i} className="trow">
-                            <td>
-                              <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '12px' }}>{inc.type}</div>
-                            </td>
-                            <td style={{ fontSize: '11px' }}>{inc.loc}</td>
-                            <td style={{ fontSize: '11px' }}>{inc.city}</td>
-                            <td>
-                              <span style={{
-                                fontSize: '9px',
-                                fontWeight: 800,
-                                background: inc.status?.toLowerCase() === 'ongoing' ? 'rgba(249,115,22,0.15)' : 'rgba(20,184,166,0.15)',
-                                color: inc.status?.toLowerCase() === 'ongoing' ? T.orange : T.teal,
-                                padding: '2px 6px',
-                                borderRadius: '4px'
-                              }}>
-                                {inc.status?.toUpperCase() || 'REPORTED'}
-                              </span>
-                            </td>
-                            <td style={{ fontSize: '10px', color: '#64748b', fontFamily: 'DM Mono' }}>
-                              {inc.date ? new Date(inc.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '---'}
-                            </td>
+                  {/* Detailed Incident Log */}
+                  <div className="premium-card">
+                    <div className="premium-card-header">
+                      <div className="premium-card-title">Recent Incident Reports</div>
+                      <span style={{ fontSize: '10px', color: '#64748b', background: '#f1f5f9', padding: '2px 8px', borderRadius: '4px' }}>LATEST FIRST</span>
+                    </div>
+                    <div style={{ overflowX: 'auto', maxHeight: '400px' }}>
+                      <table className="premium-table">
+                        <thead>
+                          <tr>
+                            <th>Incident Type</th>
+                            <th>Barangay / Location</th>
+                            <th>Municipality</th>
+                            <th>Status</th>
+                            <th>Occurred</th>
                           </tr>
-                        ))
-                      ) : (
-                        <tr><td colSpan="5" style={{ textAlign: 'center', color: '#94a3b8', padding: '3rem' }}>No incident records available</td></tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          ) : activeTab === 'Infrastructure' ? (
-            <div className="category-viz-container">
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
-                {/* Power Grid Status */}
-                <div className="premium-card">
-                  <div className="premium-card-header">
-                    <div className="premium-card-title">Power Supply Status</div>
-                    <span style={{ fontSize: '10px', color: T.rose, background: 'rgba(244,63,94,0.15)', padding: '2px 8px', borderRadius: '4px' }}>UTILITY IMPACT</span>
-                  </div>
-                  <div style={{ height: '260px', minWidth: 0 }}>
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={Object.entries(result?.details?.byCity || {}).sort((a, b) => (b[1].powerInt + b[1].powerRes) - (a[1].powerInt + a[1].powerRes)).slice(0, 4).map(([name, stats]) => ({ name, int: stats.powerInt, res: stats.powerRes }))} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                        <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#64748b' }} axisLine={false} tickLine={false} interval={0} />
-                        <YAxis tick={{ fontSize: 9, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                        <Tooltip />
-                        <Legend wrapperStyle={{ fontSize: '10px', paddingTop: '10px' }} verticalAlign="bottom" height={36} />
-                        <Bar dataKey="int" name="Interrupted" fill={T.rose} radius={[4, 4, 0, 0]} />
-                        <Bar dataKey="res" name="Restored" fill={T.teal} radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginTop: 14 }}>
-                    {Object.entries(result?.details?.byCity || {}).sort((a, b) => (b[1].powerInt + b[1].powerRes) - (a[1].powerInt + a[1].powerRes)).slice(0, 4).map(([city, stats], idx) => {
-                      const total = stats.powerInt + stats.powerRes;
-                      const pct = total === 0 ? 0 : Math.round((stats.powerRes / total) * 100);
-                      return (
-                        <div key={idx} style={{ padding: '8px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-                            <span style={{ fontSize: '10px', fontWeight: 700 }}>{city}</span>
-                            <span style={{ fontSize: '9px', fontWeight: 600, color: T.teal }}>{pct}%</span>
-                          </div>
-                          <div style={{ height: '4px', background: '#e2e8f0', borderRadius: '2px', overflow: 'hidden' }}>
-                            <div style={{ width: `${pct}%`, height: '100%', background: T.teal }} />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* Roads & Bridges Status */}
-                <div className="premium-card">
-                  <div className="premium-card-header">
-                    <div className="premium-card-title">Roads & Bridges Passability</div>
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: 14 }}>
-                    <div style={{ background: '#fef2f2', border: '1px solid #fee2e2', borderTop: `2px solid ${T.rose}`, borderRadius: 10, padding: 10, textAlign: 'center' }}>
-                      <div style={{ fontSize: '24px', fontWeight: 800, color: T.rose }}>{Object.values(result?.details?.byCity || {}).reduce((s, p) => s + p.roadsNotPassable, 0)}</div>
-                      <div style={{ fontSize: '8px', fontWeight: 700, color: '#b91c1c' }}>NOT PASSABLE</div>
-                    </div>
-                    <div style={{ background: '#f0fdf4', border: '1px solid #dcfce7', borderTop: `2px solid ${T.teal}`, borderRadius: 10, padding: 10, textAlign: 'center' }}>
-                      <div style={{ fontSize: '24px', fontWeight: 800, color: T.teal }}>{Object.values(result?.details?.byCity || {}).reduce((s, p) => s + (p.roadsPassable || 0), 0)}</div>
-                      <div style={{ fontSize: '8px', fontWeight: 700, color: '#15803d' }}>NOW PASSABLE</div>
-                    </div>
-                    <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderTop: `2px solid #64748b`, borderRadius: 10, padding: 10, textAlign: 'center' }}>
-                      <div style={{ fontSize: '24px', fontWeight: 800, color: '#1e293b' }}>0</div>
-                      <div style={{ fontSize: '8px', fontWeight: 700, color: '#475569' }}>BRIDGES</div>
+                        </thead>
+                        <tbody>
+                          {details.incidents.length > 0 ? (
+                            [...details.incidents].reverse().map((inc, i) => (
+                              <tr key={i} className="trow">
+                                <td>
+                                  <div style={{ fontWeight: 700, color: '#1e293b', fontSize: '12px' }}>{inc.type}</div>
+                                </td>
+                                <td style={{ fontSize: '11px' }}>{inc.loc}</td>
+                                <td style={{ fontSize: '11px' }}>{inc.city}</td>
+                                <td>
+                                  <span style={{
+                                    fontSize: '9px',
+                                    fontWeight: 800,
+                                    background: inc.status?.toLowerCase() === 'ongoing' ? 'rgba(249,115,22,0.15)' : 'rgba(20,184,166,0.15)',
+                                    color: inc.status?.toLowerCase() === 'ongoing' ? T.orange : T.teal,
+                                    padding: '2px 6px',
+                                    borderRadius: '4px'
+                                  }}>
+                                    {inc.status?.toUpperCase() || 'REPORTED'}
+                                  </span>
+                                </td>
+                                <td style={{ fontSize: '10px', color: '#64748b', fontFamily: 'DM Mono' }}>
+                                  {inc.date ? new Date(inc.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '---'}
+                                </td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr><td colSpan="5" style={{ textAlign: 'center', color: '#94a3b8', padding: '3rem' }}>No incident records available</td></tr>
+                          )}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
-                  <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
-                    <table className="premium-table">
-                      <thead><tr><th>Classification</th><th style={{ textAlign: 'right' }}>Not Passable</th><th style={{ textAlign: 'right' }}>Passable</th></tr></thead>
-                      <tbody>
-                        {[
-                          { name: 'National (Primary)', np: details?.infrastructure?.filter(r => r.type === 'road' && r.class === 'Primary' && !r.status?.toLowerCase().includes('passable')).length || 0, p: details?.infrastructure?.filter(r => r.type === 'road' && r.class === 'Primary' && r.status?.toLowerCase().includes('passable')).length || 0 },
-                          { name: 'National (Secondary)', np: details?.infrastructure?.filter(r => r.type === 'road' && r.class === 'Secondary' && !r.status?.toLowerCase().includes('passable')).length || 0, p: details?.infrastructure?.filter(r => r.type === 'road' && r.class === 'Secondary' && r.status?.toLowerCase().includes('passable')).length || 0 },
-                          { name: 'Provincial', np: details?.infrastructure?.filter(r => r.type === 'road' && r.class === 'Provincial' && !r.status?.toLowerCase().includes('passable')).length || 0, p: details?.infrastructure?.filter(r => r.type === 'road' && r.class === 'Provincial' && r.status?.toLowerCase().includes('passable')).length || 0 },
-                          { name: 'City/Muni', np: details?.infrastructure?.filter(r => r.type === 'road' && r.class === 'City' && !r.status?.toLowerCase().includes('passable')).length || 0, p: details?.infrastructure?.filter(r => r.type === 'road' && r.class === 'City' && r.status?.toLowerCase().includes('passable')).length || 0 }
-                        ].map((row, i) => (
-                          <tr key={i}>
-                            <td style={{ fontSize: '10px' }}>{row.name}</td>
-                            <td style={{ textAlign: 'right', fontWeight: 700, color: row.np > 0 ? T.rose : '#94a3b8' }}>{row.np}</td>
-                            <td style={{ textAlign: 'right', fontWeight: 700, color: row.p > 0 ? T.teal : '#94a3b8' }}>{row.p}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
                 </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
-                {/* Communication Lines */}
-                <div className="premium-card">
-                  <div className="premium-card-header">
-                    <div className="premium-card-title">Communication Lines</div>
-                    <span style={{ fontSize: '10px', color: T.rose, background: 'rgba(244,63,94,0.15)', padding: '2px 8px', borderRadius: '4px' }}>DOWN</span>
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                    {details.infrastructure.filter(i => i.type === 'communication').slice(0, 4).map((c, i) => (
-                      <div key={i} style={{ background: '#f8fafc', padding: 10, borderRadius: 8, border: '1px solid #e2e8f0' }}>
-                        <div style={{ fontSize: '11px', fontWeight: 700 }}>{c.city}</div>
-                        <div style={{ fontSize: '9px', color: '#64748b' }}>{c.loc}</div>
-                        <div style={{ marginTop: 6 }}><span style={{ fontSize: '8px', background: 'rgba(244,63,94,0.15)', color: T.rose, padding: '2px 4px', borderRadius: 4, fontWeight: 800 }}>INTERRUPTED</span></div>
+              ) : activeTab === 'Infrastructure' ? (
+                <div className="category-viz-container">
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+                    {/* Power Grid Status */}
+                    <div className="premium-card">
+                      <div className="premium-card-header">
+                        <div className="premium-card-title">Power Supply Status</div>
+                        <span style={{ fontSize: '10px', color: T.rose, background: 'rgba(244,63,94,0.15)', padding: '2px 8px', borderRadius: '4px' }}>UTILITY IMPACT</span>
                       </div>
-                    ))}
-                    {details.infrastructure.filter(i => i.type === 'communication').length === 0 && (
-                      <div style={{ gridColumn: 'span 2', textAlign: 'center', padding: '1rem', color: '#94a3b8' }}>All lines operational</div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Water Supply */}
-                <div className="premium-card">
-                  <div className="premium-card-header">
-                    <div className="premium-card-title">Water Supply</div>
-                  </div>
-                  <div style={{ overflowX: 'auto' }}>
-                    <table className="premium-table">
-                      <thead><tr><th>Municipality</th><th>Area</th><th>Status</th></tr></thead>
-                      <tbody>
-                        {details.infrastructure.filter(i => i.type === 'water').slice(0, 4).map((w, i) => (
-                          <tr key={i}>
-                            <td>{w.city}</td>
-                            <td style={{ fontSize: '10px' }}>{w.loc}</td>
-                            <td>
-                              <span style={{ fontSize: '9px', fontWeight: 800, background: w.status === 'operational' ? 'rgba(0,201,160,0.1)' : 'rgba(240,69,69,0.1)', color: w.status === 'operational' ? T.teal : T.rose, padding: '2px 6px', borderRadius: '4px' }}>
-                                {w.status?.toUpperCase()}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                        {details.infrastructure.filter(i => i.type === 'water').length === 0 && (
-                          <tr><td colSpan="3" style={{ textAlign: 'center', color: '#94a3b8', padding: '1rem' }}>No water utility interruptions reported</td></tr>
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-
-              {/* General Infrastructure Damage */}
-              <div className="premium-card" style={{ marginTop: 14 }}>
-                <div className="premium-card-header">
-                  <div className="premium-card-title">General Infrastructure Damage</div>
-                  <span style={{ fontSize: '10px', color: T.indigo, background: 'rgba(99,102,241,0.1)', padding: '2px 8px', borderRadius: '4px' }}>REPORTS</span>
-                </div>
-                <div style={{ overflowX: 'auto' }}>
-                  <table className="premium-table">
-                    <thead>
-                      <tr>
-                        <th>Infrastructure</th>
-                        <th>Type</th>
-                        <th>Municipality</th>
-                        <th>Qty</th>
-                        <th>Status</th>
-                        <th style={{ textAlign: 'right' }}>Cost (PHP)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {details.infraDamage.length > 0 ? (
-                        details.infraDamage.map((infra, i) => (
-                          <tr key={i} className="trow">
-                            <td style={{ fontWeight: 600 }}>{infra.name}</td>
-                            <td><span style={{ fontSize: '9px', textTransform: 'uppercase', color: '#64748b' }}>{infra.type}</span></td>
-                            <td>{infra.city}</td>
-                            <td>{infra.qty}</td>
-                            <td>
-                              <span style={{
-                                fontSize: '9px',
-                                fontWeight: 800,
-                                background: infra.status === 'Ongoing' ? 'rgba(249,115,22,0.1)' : 'rgba(0,201,160,0.1)',
-                                color: infra.status === 'Ongoing' ? T.orange : T.teal,
-                                padding: '2px 6px',
-                                borderRadius: '4px'
-                              }}>
-                                {infra.status?.toUpperCase()}
-                              </span>
-                            </td>
-                            <td style={{ textAlign: 'right', fontFamily: 'DM Mono', fontWeight: 700 }}>{infra.cost.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                          </tr>
-                        ))
-                      ) : (
-                        <tr><td colSpan="6" style={{ textAlign: 'center', color: '#94a3b8', padding: '2rem' }}>No infrastructure damage reports recorded</td></tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          ) : activeTab === 'Assistance' ? (
-            <div className="category-viz-container">
-              {/* Critical Gap Callout Box */}
-              <div style={{ background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '12px', padding: '1.5rem', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div>
-                  <div style={{ fontSize: '10px', fontWeight: 800, color: T.rose, letterSpacing: '1px', marginBottom: '4px' }}>CRITICAL GAP ANALYSIS</div>
-                  <div style={{ fontSize: '24px', fontWeight: 800, color: '#991b1b' }}>
-                    {Math.max(0, 100 - Math.round((Object.values(result?.details?.byCity || {}).reduce((s, p) => s + p.served, 0) / (Object.values(result?.details?.byCity || {}).reduce((s, p) => s + p.families, 0) || 1)) * 100))}% Unserved
-                  </div>
-                  <div style={{ fontSize: '12px', color: '#b91c1c', marginTop: '4px' }}>Estimated families awaiting relief commodities in high-impact zones.</div>
-                </div>
-                <div style={{ textAlign: 'right' }}>
-                  <div style={{ fontSize: '32px', fontWeight: 800, color: T.rose }}>{(Object.values(result?.details?.byCity || {}).reduce((s, p) => s + p.families, 0) - Object.values(result?.details?.byCity || {}).reduce((s, p) => s + p.served, 0)).toLocaleString()}</div>
-                  <div style={{ fontSize: '9px', fontWeight: 700, color: '#64748b' }}>PENDING FAMILIES</div>
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: 14, marginBottom: 14 }}>
-                <div className="premium-card">
-                  <div className="premium-card-header">
-                    <div className="premium-card-title">Coverage by City</div>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginTop: '0.5rem' }}>
-                    {Object.entries(result?.details?.byCity || {}).sort((a, b) => b[1].families - a[1].families).slice(0, 4).map(([name, stats], i) => {
-                      const coverage = Math.min(100, Math.round((stats.served / (stats.families || 1)) * 100));
-                      return (
-                        <div key={i}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '11px' }}>
-                            <span style={{ fontWeight: 700 }}>{name}</span>
-                            <span style={{ color: T.teal, fontWeight: 700 }}>{coverage}%</span>
-                          </div>
-                          <div style={{ height: '8px', background: '#f1f5f9', borderRadius: '4px', overflow: 'hidden' }}>
-                            <div style={{ width: `${coverage}%`, height: '100%', background: coverage > 70 ? T.teal : T.amber }} />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                <div className="premium-card">
-                  <div className="premium-card-header">
-                    <div className="premium-card-title">Relief Items Dispatched</div>
-                    <span style={{ fontSize: '10px', color: T.teal, background: 'rgba(0,201,160,0.1)', padding: '2px 8px', borderRadius: '4px' }}>LOGISTICS</span>
-                  </div>
-                  <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-                    <table className="premium-table">
-                      <thead><tr><th>Item Description</th><th style={{ textAlign: 'right' }}>Quantity</th><th>Unit</th></tr></thead>
-                      <tbody>
-                        {[
-                          { item: 'Family Food Packs', qty: 15402, u: 'boxes' },
-                          { item: 'Non-Food Items (Kitchen)', qty: 3200, u: 'sets' },
-                          { item: 'Sleeping Kits', qty: 4500, u: 'sets' },
-                          { item: 'Bottled Water (6L)', qty: 8900, u: 'bottles' },
-                          { item: 'Hygiene Kits', qty: 2800, u: 'kits' }
-                        ].map((row, i) => (
-                          <tr key={i} className="trow">
-                            <td style={{ fontWeight: 600 }}>{row.item}</td>
-                            <td style={{ textAlign: 'right', fontFamily: 'DM Mono', fontWeight: 700 }}>{row.qty.toLocaleString()}</td>
-                            <td style={{ fontSize: '10px', color: '#64748b' }}>{row.u}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-
-              <div className="premium-card">
-                <div className="premium-card-header">
-                  <div className="premium-card-title">LGU & Agency Assistance Valuation</div>
-                </div>
-                <div style={{ overflowX: 'auto', maxHeight: '400px' }}>
-                  <table className="premium-table">
-                    <thead>
-                      <tr><th>Municipality</th><th>Cost Valuation (PHP)</th><th style={{ textAlign: 'right' }}>Weight Share</th></tr>
-                    </thead>
-                    <tbody>
-                      {Object.entries(result?.details?.assistanceByLgu || {}).length > 0 ? (
-                        Object.entries(result.details.assistanceByLgu).sort((a, b) => b[1] - a[1]).map(([lgu, cost], i) => {
-                          const totalCost = Object.values(result.details.assistanceByLgu).reduce((s, c) => s + c, 0) || 1;
+                      <div style={{ height: '260px', minWidth: 0 }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={Object.entries(result?.details?.byCity || {}).sort((a, b) => (b[1].powerInt + b[1].powerRes) - (a[1].powerInt + a[1].powerRes)).slice(0, 4).map(([name, stats]) => ({ name, int: stats.powerInt, res: stats.powerRes }))} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                            <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#64748b' }} axisLine={false} tickLine={false} interval={0} />
+                            <YAxis tick={{ fontSize: 9, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                            <Tooltip />
+                            <Legend wrapperStyle={{ fontSize: '10px', paddingTop: '10px' }} verticalAlign="bottom" height={36} />
+                            <Bar dataKey="int" name="Interrupted" fill={T.rose} radius={[4, 4, 0, 0]} />
+                            <Bar dataKey="res" name="Restored" fill={T.teal} radius={[4, 4, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginTop: 14 }}>
+                        {Object.entries(result?.details?.byCity || {}).sort((a, b) => (b[1].powerInt + b[1].powerRes) - (a[1].powerInt + a[1].powerRes)).slice(0, 4).map(([city, stats], idx) => {
+                          const total = stats.powerInt + stats.powerRes;
+                          const pct = total === 0 ? 0 : Math.round((stats.powerRes / total) * 100);
                           return (
-                            <tr key={i} className="trow">
-                              <td style={{ fontWeight: 600 }}>{lgu}</td>
-                              <td style={{ fontFamily: 'DM Mono', fontWeight: 700, color: '#166534' }}>? {cost.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                              <td style={{ textAlign: 'right' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
-                                  <span style={{ fontSize: '10px', color: '#64748b' }}>{((cost / totalCost) * 100).toFixed(1)}%</span>
-                                  <div style={{ width: '80px', height: '4px', background: '#f1f5f9', borderRadius: '4px', overflow: 'hidden' }}>
-                                    <div style={{ width: `${(cost / totalCost) * 100}%`, height: '100%', background: T.teal }} />
-                                  </div>
-                                </div>
-                              </td>
-                            </tr>
+                            <div key={idx} style={{ padding: '8px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                                <span style={{ fontSize: '10px', fontWeight: 700 }}>{city}</span>
+                                <span style={{ fontSize: '9px', fontWeight: 600, color: T.teal }}>{pct}%</span>
+                              </div>
+                              <div style={{ height: '4px', background: '#e2e8f0', borderRadius: '2px', overflow: 'hidden' }}>
+                                <div style={{ width: `${pct}%`, height: '100%', background: T.teal }} />
+                              </div>
+                            </div>
                           );
-                        })
-                      ) : <tr><td colSpan="3" style={{ textAlign: 'center', color: '#94a3b8', padding: '2rem' }}>No assistance valuation records available</td></tr>}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          ) : activeTab === 'Suspension' ? (
-            <div className="category-viz-container">
-              {/* State of Calamity Callout */}
-              {details.suspensions.some(s => s.type === 'stateOfCalamity') && (
-                <div style={{ background: 'rgba(240,69,69,0.05)', border: `1px solid ${T.rose}`, borderRadius: 12, padding: '1.25rem', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 14 }}>
-                  <div style={{ background: T.rose, color: 'white', padding: '8px 12px', borderRadius: 8, fontWeight: 900, fontSize: '12px' }}>ALERT</div>
-                  <div>
-                    <div style={{ fontSize: '14px', fontWeight: 800, color: '#1e293b' }}>State of Calamity Declared</div>
-                    <div style={{ fontSize: '11px', color: '#64748b' }}>
-                      {details.suspensions.find(s => s.type === 'stateOfCalamity')?.city || 'Multiple Areas'} have officially declared a state of calamity.
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Roads & Bridges Status */}
+                    <div className="premium-card">
+                      <div className="premium-card-header">
+                        <div className="premium-card-title">Roads & Bridges Passability</div>
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: 14 }}>
+                        <div style={{ background: '#fef2f2', border: '1px solid #fee2e2', borderTop: `2px solid ${T.rose}`, borderRadius: 10, padding: 10, textAlign: 'center' }}>
+                          <div style={{ fontSize: '24px', fontWeight: 800, color: T.rose }}>{Object.values(result?.details?.byCity || {}).reduce((s, p) => s + p.roadsNotPassable, 0)}</div>
+                          <div style={{ fontSize: '8px', fontWeight: 700, color: '#b91c1c' }}>NOT PASSABLE</div>
+                        </div>
+                        <div style={{ background: '#f0fdf4', border: '1px solid #dcfce7', borderTop: `2px solid ${T.teal}`, borderRadius: 10, padding: 10, textAlign: 'center' }}>
+                          <div style={{ fontSize: '24px', fontWeight: 800, color: T.teal }}>{Object.values(result?.details?.byCity || {}).reduce((s, p) => s + (p.roadsPassable || 0), 0)}</div>
+                          <div style={{ fontSize: '8px', fontWeight: 700, color: '#15803d' }}>NOW PASSABLE</div>
+                        </div>
+                        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderTop: `2px solid #64748b`, borderRadius: 10, padding: 10, textAlign: 'center' }}>
+                          <div style={{ fontSize: '24px', fontWeight: 800, color: '#1e293b' }}>0</div>
+                          <div style={{ fontSize: '8px', fontWeight: 700, color: '#475569' }}>BRIDGES</div>
+                        </div>
+                      </div>
+                      <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
+                        <table className="premium-table">
+                          <thead><tr><th>Classification</th><th style={{ textAlign: 'right' }}>Not Passable</th><th style={{ textAlign: 'right' }}>Passable</th></tr></thead>
+                          <tbody>
+                            {[
+                              { name: 'National (Primary)', np: details?.infrastructure?.filter(r => r.type === 'road' && r.class === 'Primary' && !r.status?.toLowerCase().includes('passable')).length || 0, p: details?.infrastructure?.filter(r => r.type === 'road' && r.class === 'Primary' && r.status?.toLowerCase().includes('passable')).length || 0 },
+                              { name: 'National (Secondary)', np: details?.infrastructure?.filter(r => r.type === 'road' && r.class === 'Secondary' && !r.status?.toLowerCase().includes('passable')).length || 0, p: details?.infrastructure?.filter(r => r.type === 'road' && r.class === 'Secondary' && r.status?.toLowerCase().includes('passable')).length || 0 },
+                              { name: 'Provincial', np: details?.infrastructure?.filter(r => r.type === 'road' && r.class === 'Provincial' && !r.status?.toLowerCase().includes('passable')).length || 0, p: details?.infrastructure?.filter(r => r.type === 'road' && r.class === 'Provincial' && r.status?.toLowerCase().includes('passable')).length || 0 },
+                              { name: 'City/Muni', np: details?.infrastructure?.filter(r => r.type === 'road' && r.class === 'City' && !r.status?.toLowerCase().includes('passable')).length || 0, p: details?.infrastructure?.filter(r => r.type === 'road' && r.class === 'City' && r.status?.toLowerCase().includes('passable')).length || 0 }
+                            ].map((row, i) => (
+                              <tr key={i}>
+                                <td style={{ fontSize: '10px' }}>{row.name}</td>
+                                <td style={{ textAlign: 'right', fontWeight: 700, color: row.np > 0 ? T.rose : '#94a3b8' }}>{row.np}</td>
+                                <td style={{ textAlign: 'right', fontWeight: 700, color: row.p > 0 ? T.teal : '#94a3b8' }}>{row.p}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+                    {/* Communication Lines */}
+                    <div className="premium-card">
+                      <div className="premium-card-header">
+                        <div className="premium-card-title">Communication Lines</div>
+                        <span style={{ fontSize: '10px', color: T.rose, background: 'rgba(244,63,94,0.15)', padding: '2px 8px', borderRadius: '4px' }}>DOWN</span>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                        {details.infrastructure.filter(i => i.type === 'communication').slice(0, 4).map((c, i) => (
+                          <div key={i} style={{ background: '#f8fafc', padding: 10, borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                            <div style={{ fontSize: '11px', fontWeight: 700 }}>{c.city}</div>
+                            <div style={{ fontSize: '9px', color: '#64748b' }}>{c.loc}</div>
+                            <div style={{ marginTop: 6 }}><span style={{ fontSize: '8px', background: 'rgba(244,63,94,0.15)', color: T.rose, padding: '2px 4px', borderRadius: 4, fontWeight: 800 }}>INTERRUPTED</span></div>
+                          </div>
+                        ))}
+                        {details.infrastructure.filter(i => i.type === 'communication').length === 0 && (
+                          <div style={{ gridColumn: 'span 2', textAlign: 'center', padding: '1rem', color: '#94a3b8' }}>All lines operational</div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Water Supply */}
+                    <div className="premium-card">
+                      <div className="premium-card-header">
+                        <div className="premium-card-title">Water Supply</div>
+                      </div>
+                      <div style={{ overflowX: 'auto' }}>
+                        <table className="premium-table">
+                          <thead><tr><th>Municipality</th><th>Area</th><th>Status</th></tr></thead>
+                          <tbody>
+                            {details.infrastructure.filter(i => i.type === 'water').slice(0, 4).map((w, i) => (
+                              <tr key={i}>
+                                <td>{w.city}</td>
+                                <td style={{ fontSize: '10px' }}>{w.loc}</td>
+                                <td>
+                                  <span style={{ fontSize: '9px', fontWeight: 800, background: w.status === 'operational' ? 'rgba(0,201,160,0.1)' : 'rgba(240,69,69,0.1)', color: w.status === 'operational' ? T.teal : T.rose, padding: '2px 6px', borderRadius: '4px' }}>
+                                    {w.status?.toUpperCase()}
+                                  </span>
+                                </td>
+                              </tr>
+                            ))}
+                            {details.infrastructure.filter(i => i.type === 'water').length === 0 && (
+                              <tr><td colSpan="3" style={{ textAlign: 'center', color: '#94a3b8', padding: '1rem' }}>No water utility interruptions reported</td></tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* General Infrastructure Damage */}
+                  <div className="premium-card" style={{ marginTop: 14 }}>
+                    <div className="premium-card-header">
+                      <div className="premium-card-title">General Infrastructure Damage</div>
+                      <span style={{ fontSize: '10px', color: T.indigo, background: 'rgba(99,102,241,0.1)', padding: '2px 8px', borderRadius: '4px' }}>REPORTS</span>
+                    </div>
+                    <div style={{ overflowX: 'auto' }}>
+                      <table className="premium-table">
+                        <thead>
+                          <tr>
+                            <th>Infrastructure</th>
+                            <th>Type</th>
+                            <th>Municipality</th>
+                            <th>Qty</th>
+                            <th>Status</th>
+                            <th style={{ textAlign: 'right' }}>Cost (PHP)</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {details.infraDamage.length > 0 ? (
+                            details.infraDamage.map((infra, i) => (
+                              <tr key={i} className="trow">
+                                <td style={{ fontWeight: 600 }}>{infra.name}</td>
+                                <td><span style={{ fontSize: '9px', textTransform: 'uppercase', color: '#64748b' }}>{infra.type}</span></td>
+                                <td>{infra.city}</td>
+                                <td>{infra.qty}</td>
+                                <td>
+                                  <span style={{
+                                    fontSize: '9px',
+                                    fontWeight: 800,
+                                    background: infra.status === 'Ongoing' ? 'rgba(249,115,22,0.1)' : 'rgba(0,201,160,0.1)',
+                                    color: infra.status === 'Ongoing' ? T.orange : T.teal,
+                                    padding: '2px 6px',
+                                    borderRadius: '4px'
+                                  }}>
+                                    {infra.status?.toUpperCase()}
+                                  </span>
+                                </td>
+                                <td style={{ textAlign: 'right', fontFamily: 'DM Mono', fontWeight: 700 }}>{infra.cost.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr><td colSpan="6" style={{ textAlign: 'center', color: '#94a3b8', padding: '2rem' }}>No infrastructure damage reports recorded</td></tr>
+                          )}
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                 </div>
-              )}
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
-                <div className="premium-card">
-                  <div className="premium-card-header">
-                    <div className="premium-card-title">Suspension by City</div>
+              ) : activeTab === 'Assistance' ? (
+                <div className="category-viz-container">
+                  {/* Critical Gap Callout Box */}
+                  <div style={{ background: '#fef2f2', border: '1px solid #fee2e2', borderRadius: '12px', padding: '1.5rem', marginBottom: '1.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div>
+                      <div style={{ fontSize: '10px', fontWeight: 800, color: T.rose, letterSpacing: '1px', marginBottom: '4px' }}>CRITICAL GAP ANALYSIS</div>
+                      <div style={{ fontSize: '24px', fontWeight: 800, color: '#991b1b' }}>
+                        {Math.max(0, 100 - Math.round((Object.values(result?.details?.byCity || {}).reduce((s, p) => s + p.served, 0) / (Object.values(result?.details?.byCity || {}).reduce((s, p) => s + p.families, 0) || 1)) * 100))}% Unserved
+                      </div>
+                      <div style={{ fontSize: '12px', color: '#b91c1c', marginTop: '4px' }}>Estimated families awaiting relief commodities in high-impact zones.</div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '32px', fontWeight: 800, color: T.rose }}>{(Object.values(result?.details?.byCity || {}).reduce((s, p) => s + p.families, 0) - Object.values(result?.details?.byCity || {}).reduce((s, p) => s + p.served, 0)).toLocaleString()}</div>
+                      <div style={{ fontSize: '9px', fontWeight: 700, color: '#64748b' }}>PENDING FAMILIES</div>
+                    </div>
                   </div>
-                  <div style={{ height: '220px', minWidth: 0 }}>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={Object.entries(result?.details?.byCity || {}).sort((a, b) => (details.suspensions.filter(s => s.city === b[0]).length) - (details.suspensions.filter(s => s.city === a[0]).length)).slice(0, 4).map(([name, stats]) => ({
-                        name,
-                        classes: details.suspensions.filter(s => s.city === name && s.type === 'classSuspension').length,
-                        work: details.suspensions.filter(s => s.city === name && s.type === 'workSuspension').length
-                      }))} margin={{ top: 10, right: 10, left: -20, bottom: 20 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                        <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#64748b' }} axisLine={false} tickLine={false} interval={0} />
-                        <YAxis tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} />
-                        <Tooltip />
-                        <Legend wrapperStyle={{ fontSize: '10px' }} />
-                        <Bar dataKey="classes" name="Class Suspensions" fill={T.indigo} radius={[4, 4, 0, 0]} />
-                        <Bar dataKey="work" name="Work Suspensions" fill={T.amber} radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: 14, marginBottom: 14 }}>
+                    <div className="premium-card">
+                      <div className="premium-card-header">
+                        <div className="premium-card-title">Coverage by City</div>
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginTop: '0.5rem' }}>
+                        {Object.entries(result?.details?.byCity || {}).sort((a, b) => b[1].families - a[1].families).slice(0, 4).map(([name, stats], i) => {
+                          const coverage = Math.min(100, Math.round((stats.served / (stats.families || 1)) * 100));
+                          return (
+                            <div key={i}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '11px' }}>
+                                <span style={{ fontWeight: 700 }}>{name}</span>
+                                <span style={{ color: T.teal, fontWeight: 700 }}>{coverage}%</span>
+                              </div>
+                              <div style={{ height: '8px', background: '#f1f5f9', borderRadius: '4px', overflow: 'hidden' }}>
+                                <div style={{ width: `${coverage}%`, height: '100%', background: coverage > 70 ? T.teal : T.amber }} />
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="premium-card">
+                      <div className="premium-card-header">
+                        <div className="premium-card-title">Relief Items Dispatched</div>
+                        <span style={{ fontSize: '10px', color: T.teal, background: 'rgba(0,201,160,0.1)', padding: '2px 8px', borderRadius: '4px' }}>LOGISTICS</span>
+                      </div>
+                      <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+                        <table className="premium-table">
+                          <thead><tr><th>Item Description</th><th style={{ textAlign: 'right' }}>Quantity</th><th>Unit</th></tr></thead>
+                          <tbody>
+                            {[
+                              { item: 'Family Food Packs', qty: 15402, u: 'boxes' },
+                              { item: 'Non-Food Items (Kitchen)', qty: 3200, u: 'sets' },
+                              { item: 'Sleeping Kits', qty: 4500, u: 'sets' },
+                              { item: 'Bottled Water (6L)', qty: 8900, u: 'bottles' },
+                              { item: 'Hygiene Kits', qty: 2800, u: 'kits' }
+                            ].map((row, i) => (
+                              <tr key={i} className="trow">
+                                <td style={{ fontWeight: 600 }}>{row.item}</td>
+                                <td style={{ textAlign: 'right', fontFamily: 'DM Mono', fontWeight: 700 }}>{row.qty.toLocaleString()}</td>
+                                <td style={{ fontSize: '10px', color: '#64748b' }}>{row.u}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="premium-card">
+                    <div className="premium-card-header">
+                      <div className="premium-card-title">LGU & Agency Assistance Valuation</div>
+                    </div>
+                    <div style={{ overflowX: 'auto', maxHeight: '400px' }}>
+                      <table className="premium-table">
+                        <thead>
+                          <tr><th>Municipality</th><th>Cost Valuation (PHP)</th><th style={{ textAlign: 'right' }}>Weight Share</th></tr>
+                        </thead>
+                        <tbody>
+                          {Object.entries(result?.details?.assistanceByLgu || {}).length > 0 ? (
+                            Object.entries(result.details.assistanceByLgu).sort((a, b) => b[1] - a[1]).map(([lgu, cost], i) => {
+                              const totalCost = Object.values(result.details.assistanceByLgu).reduce((s, c) => s + c, 0) || 1;
+                              return (
+                                <tr key={i} className="trow">
+                                  <td style={{ fontWeight: 600 }}>{lgu}</td>
+                                  <td style={{ fontFamily: 'DM Mono', fontWeight: 700, color: '#166534' }}>₱ {cost.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                  <td style={{ textAlign: 'right' }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
+                                      <span style={{ fontSize: '10px', color: '#64748b' }}>{((cost / totalCost) * 100).toFixed(1)}%</span>
+                                      <div style={{ width: '80px', height: '4px', background: '#f1f5f9', borderRadius: '4px', overflow: 'hidden' }}>
+                                        <div style={{ width: `${(cost / totalCost) * 100}%`, height: '100%', background: T.teal }} />
+                                      </div>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          ) : <tr><td colSpan="3" style={{ textAlign: 'center', color: '#94a3b8', padding: '2rem' }}>No assistance valuation records available</td></tr>}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              ) : activeTab === 'Suspension' ? (
+                <div className="category-viz-container">
+                  {/* State of Calamity Callout */}
+                  {details.suspensions.some(s => s.type === 'stateOfCalamity') && (
+                    <div style={{ background: 'rgba(240,69,69,0.05)', border: `1px solid ${T.rose}`, borderRadius: 12, padding: '1.25rem', marginBottom: 14, display: 'flex', alignItems: 'center', gap: 14 }}>
+                      <div style={{ background: T.rose, color: 'white', padding: '8px 12px', borderRadius: 8, fontWeight: 900, fontSize: '12px' }}>ALERT</div>
+                      <div>
+                        <div style={{ fontSize: '14px', fontWeight: 800, color: '#1e293b' }}>State of Calamity Declared</div>
+                        <div style={{ fontSize: '11px', color: '#64748b' }}>
+                          {details.suspensions.find(s => s.type === 'stateOfCalamity')?.city || 'Multiple Areas'} have officially declared a state of calamity.
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
+                    <div className="premium-card">
+                      <div className="premium-card-header">
+                        <div className="premium-card-title">Suspension by City</div>
+                      </div>
+                      <div style={{ height: '270px', minWidth: 0 }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={Object.entries(result?.details?.byCity || {}).sort((a, b) => (details.suspensions.filter(s => s.city === b[0]).length) - (details.suspensions.filter(s => s.city === a[0]).length)).slice(0, 4).map(([name, stats]) => ({
+                            name,
+                            classes: details.suspensions.filter(s => s.city === name && s.type === 'classSuspension').length,
+                            work: details.suspensions.filter(s => s.city === name && s.type === 'workSuspension').length
+                          }))} margin={{ top: 10, right: 10, left: -20, bottom: 10 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                            <XAxis
+                              dataKey="name"
+                              axisLine={false}
+                              tickLine={false}
+                              interval={0}
+                              tick={<CustomizedAxisTick />}
+                              height={60}
+                            />
+                            <YAxis tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} allowDecimals={false} />
+                            <Tooltip contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
+                            <Legend
+                              iconType="circle"
+                              wrapperStyle={{ fontSize: '10px', paddingTop: '10px', paddingBottom: '0px' }}
+                              formatter={(value) => <span style={{ color: '#475569', fontWeight: 600, marginRight: '15px' }}>{value}</span>}
+                            />
+                            <Bar dataKey="classes" name="Class Suspensions" fill={T.indigo} radius={[4, 4, 0, 0]} />
+                            <Bar dataKey="work" name="Work Suspensions" fill={T.amber} radius={[4, 4, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+
+                    <div className="premium-card">
+                      <div className="premium-card-header">
+                        <div className="premium-card-title">Recent Directives</div>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                        {details.suspensions.slice(0, 4).map((s, i) => (
+                          <div key={i} style={{ background: '#f8fafc', padding: 10, borderRadius: 8, border: '1px solid #e2e8f0' }}>
+                            <span style={{ fontSize: '8px', fontWeight: 800, color: s.type === 'classSuspension' ? T.indigo : T.amber, background: 'white', padding: '2px 4px', borderRadius: 4, display: 'inline-block', marginBottom: 4 }}>{s.type === 'classSuspension' ? 'CLASS' : 'WORK'}</span>
+                            <div style={{ fontSize: '11px', fontWeight: 700 }}>{s.name}</div>
+                            <div style={{ fontSize: '9px', color: '#64748b' }}>{s.city}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="premium-card">
+                    <div className="premium-card-header">
+                      <div className="premium-card-title">Full Suspension Log</div>
+                    </div>
+                    <div style={{ overflowX: 'auto' }}>
+                      <table className="premium-table">
+                        <thead>
+                          <tr><th>LGU/Entity</th><th>Category</th><th>City / Municipality</th><th>Scope</th></tr>
+                        </thead>
+                        <tbody>
+                          {result?.details?.suspensions?.length > 0 ? (
+                            result.details.suspensions.map((s, i) => (
+                              <tr key={i} className="trow">
+                                <td style={{ fontWeight: 600 }}>{s.name}</td>
+                                <td>
+                                  <span style={{ fontSize: '9px', padding: '2px 6px', borderRadius: '4px', background: s.type === 'classSuspension' ? 'rgba(99,102,241,0.1)' : 'rgba(232,117,48,0.1)', color: s.type === 'classSuspension' ? '#6366f1' : '#e87530', fontWeight: 700 }}>
+                                    {s.type === 'classSuspension' ? 'CLASSES' : s.type === 'workSuspension' ? 'WORK' : 'CALAMITY'}
+                                  </span>
+                                </td>
+                                <td style={{ fontSize: '11px', color: '#64748b' }}>{s.city}</td>
+                                <td style={{ fontSize: '11px' }}>{s.city} (All Levels)</td>
+                              </tr>
+                            ))
+                          ) : <tr><td colSpan="4" style={{ textAlign: 'center', color: '#94a3b8', padding: '2rem' }}>Normal operations reported</td></tr>}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              ) : activeTab === 'Pre-Evacuation' ? (
+                <div className="category-viz-container">
+                  {/* KPI Row for Pre-Evacuation */}
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 14 }}>
+                    <div className="kpi-card-premium blue">
+                      <div className="kpi-label-premium">Families</div>
+                      <div className="kpi-value-premium">{details.preEvacuation.reduce((s, p) => s + p.fam, 0).toLocaleString()}</div>
+                      <div className="kpi-sub-premium">Total pre-empted</div>
+                    </div>
+                    <div className="kpi-card-premium purple">
+                      <div className="kpi-label-premium">Persons</div>
+                      <div className="kpi-value-premium">{details.preEvacuation.reduce((s, p) => s + p.per, 0).toLocaleString()}</div>
+                      <div className="kpi-sub-premium">Across all centers</div>
+                    </div>
+                    <div className="kpi-card-premium teal">
+                      <div className="kpi-label-premium">Active ECs</div>
+                      <div className="kpi-value-premium">{[...new Set(details.preEvacuation.map(p => p.ec))].length}</div>
+                      <div className="kpi-sub-premium">Facilities utilized</div>
+                    </div>
+                    <div className="kpi-card-premium orange">
+                      <div className="kpi-label-premium">LGUs</div>
+                      <div className="kpi-value-premium">{[...new Set(details.preEvacuation.map(p => p.mun))].length}</div>
+                      <div className="kpi-sub-premium">Participating areas</div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: 14, marginBottom: 14 }}>
+                    <div className="premium-card">
+                      <div className="premium-card-header">
+                        <div className="premium-card-title">Evacuation Demographics</div>
+                        <span style={{ fontSize: '10px', color: T.rose, background: 'rgba(244,63,94,0.15)', padding: '2px 8px', borderRadius: '4px' }}>SEX CLASSIFICATION</span>
+                      </div>
+                      <div style={{ height: '260px', minWidth: 0 }}>
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={[
+                            { name: 'Male', value: result?.details?.sexDistribution?.male || 0 },
+                            { name: 'Female', value: result?.details?.sexDistribution?.female || 0 }
+                          ]} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
+                            <XAxis dataKey="name" tick={{ fontSize: 10, fontWeight: 600, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                            <YAxis tick={{ fontSize: 10, fill: '#64748b' }} axisLine={false} tickLine={false} />
+                            <Tooltip
+                              cursor={{ fill: 'transparent' }}
+                              content={({ active, payload }) => {
+                                if (active && payload && payload.length) {
+                                  return (
+                                    <div style={{ background: 'white', padding: '10px 14px', borderRadius: '10px', boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)', border: '1px solid #f1f5f9' }}>
+                                      <div style={{ fontSize: '10px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', marginBottom: '4px' }}>{payload[0].payload.name}</div>
+                                      <div style={{ fontSize: '16px', fontWeight: 800, color: '#1e293b' }}>{payload[0].value.toLocaleString()} <span style={{ fontSize: '11px', color: '#94a3b8', fontWeight: 400 }}>Persons</span></div>
+                                    </div>
+                                  );
+                                }
+                                return null;
+                              }}
+                            />
+                            <Bar dataKey="value" radius={[6, 6, 0, 0]} barSize={45}>
+                              <Cell fill={T.blue} />
+                              <Cell fill={T.rose} />
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+
+                    <div className="premium-card">
+                      <div className="premium-card-header">
+                        <div className="premium-card-title">Top Municipalities (Pre-Evac)</div>
+                      </div>
+                      <div style={{ maxHeight: '240px', overflowY: 'auto' }}>
+                        <table className="premium-table">
+                          <thead><tr><th>Municipality</th><th style={{ textAlign: 'right' }}>Families</th><th style={{ textAlign: 'right' }}>Persons</th></tr></thead>
+                          <tbody>
+                            {details.preEvacuation.slice(0, 4).map((r, i) => (
+                              <tr key={i} className="trow">
+                                <td style={{ fontWeight: 600 }}>{r.mun}</td>
+                                <td style={{ textAlign: 'right', fontFamily: 'DM Mono' }}>{r.fam.toLocaleString()}</td>
+                                <td style={{ textAlign: 'right', fontFamily: 'DM Mono', color: '#64748b' }}>{r.per.toLocaleString()}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                  {/* Damaged Houses Section (Integrated into Pre-Evacuation reporting as per plan) */}
+                  <div className="premium-card">
+                    <div className="premium-card-header">
+                      <div className="premium-card-title">Damaged Houses — City Breakdown</div>
+                      <span style={{ fontSize: '10px', color: T.orange, background: 'rgba(249,115,22,0.15)', padding: '2px 8px', borderRadius: '4px' }}>HOUSING IMPACT</span>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.2fr) 1fr', gap: '1.5rem' }}>
+                      <div style={{ height: '300px', minWidth: 0 }}>
+                        <ResponsiveContainer width="100%" height={300}>
+                          <BarChart data={Object.entries(result?.details?.byCity || {}).filter(([_, stats]) => stats.dmg > 0).sort((a, b) => b[1].dmg - a[1].dmg).slice(0, 4).map(([name, stats]) => ({ name, total: stats.dmg_total || 0, partial: stats.dmg_partial || 0 }))} margin={{ bottom: 20 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                            <XAxis dataKey="name" tick={{ fontSize: 9 }} axisLine={false} tickLine={false} />
+                            <YAxis tick={{ fontSize: 9 }} axisLine={false} tickLine={false} />
+                            <Tooltip />
+                            <Legend wrapperStyle={{ fontSize: '10px' }} />
+                            <Bar dataKey="total" name="Totally Damaged" fill={T.red} radius={[4, 4, 0, 0]} />
+                            <Bar dataKey="partial" name="Partially Damaged" fill={T.orange} radius={[4, 4, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div style={{ overflowX: 'auto', maxHeight: '300px' }}>
+                        <table className="premium-table">
+                          <thead>
+                            <tr><th>Municipality</th><th>Totally</th><th>Partially</th><th>Combined</th></tr>
+                          </thead>
+                          <tbody>
+                            {Object.entries(result?.details?.byCity || {}).filter(([_, stats]) => stats.dmg > 0).length > 0 ? (
+                              Object.entries(result?.details?.byCity || {}).filter(([_, stats]) => stats.dmg > 0).sort((a, b) => b[1].dmg - a[1].dmg).map(([city, stats], i) => (
+                                <tr key={i}>
+                                  <td style={{ fontWeight: 600 }}>{city}</td>
+                                  <td style={{ textAlign: 'right', color: T.rose, fontWeight: 700 }}>{stats.dmg_total || 0}</td>
+                                  <td style={{ textAlign: 'right', color: T.orange, fontWeight: 700 }}>{stats.dmg_partial || 0}</td>
+                                  <td style={{ textAlign: 'right', fontWeight: 700, fontFamily: 'DM Mono', color: T.dark }}>{stats.dmg}</td>
+                                </tr>
+                              ))
+                            ) : <tr><td colSpan="4" style={{ textAlign: 'center', color: '#94a3b8' }}>No housing damage reported</td></tr>}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+            </>
+          )}
+        </div>
+        {showEditEventModal && createPortal(
+          <div className="modal-overlay" onClick={() => setShowEditEventModal(false)}>
+            <div className="modal-content glass-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '640px' }}>
+              <div className="modal-header">
+                <div className="header-icon" style={{ background: 'rgba(99, 102, 241, 0.1)', color: '#6366f1', padding: '12px', borderRadius: '12px' }}>
+                  <Calendar size={24} />
+                </div>
+                <div className="header-text" style={{ marginLeft: '12px', flex: 1 }}>
+                  <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#1e293b', margin: 0 }}>Edit Event</h2>
+                  <p style={{ fontSize: '0.875rem', color: '#64748b', margin: '2px 0 0' }}>Modify event details.</p>
+                </div>
+                <button className="modal-close" onClick={() => setShowEditEventModal(false)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="modal-body" style={{ padding: '20px' }}>
+                <div className="form-group" style={{ marginBottom: '16px' }}>
+                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#475569', marginBottom: '8px' }}>Event Name</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Typhoon Kristine"
+                    value={editForm.name}
+                    onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
+                    style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                  />
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+                  <div className="form-group">
+                    <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#475569', marginBottom: '8px' }}>Event Type</label>
+                    <select
+                      value={editForm.eventType}
+                      onChange={(e) => setEditForm((f) => ({ ...f, eventType: e.target.value, alertLevel: '' }))}
+                      style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                    >
+                      <option value="calamity">Calamity</option>
+                      <option value="typhoon">Typhoon</option>
+                      <option value="flood">Flood</option>
+                      <option value="earthquake">Earthquake</option>
+                      <option value="fire">Fire Incident</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#475569', marginBottom: '8px' }}>Theme Color</label>
+                    <input
+                      type="color"
+                      value={editForm.color}
+                      onChange={(e) => setEditForm((f) => ({ ...f, color: e.target.value }))}
+                      style={{ width: '100%', height: '42px', padding: '2px', borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                    />
                   </div>
                 </div>
 
-                <div className="premium-card">
-                  <div className="premium-card-header">
-                    <div className="premium-card-title">Recent Directives</div>
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
-                    {details.suspensions.slice(0, 4).map((s, i) => (
-                      <div key={i} style={{ background: '#f8fafc', padding: 10, borderRadius: 8, border: '1px solid #e2e8f0' }}>
-                        <span style={{ fontSize: '8px', fontWeight: 800, color: s.type === 'classSuspension' ? T.indigo : T.amber, background: 'white', padding: '2px 4px', borderRadius: 4, display: 'inline-block', marginBottom: 4 }}>{s.type === 'classSuspension' ? 'CLASS' : 'WORK'}</span>
-                        <div style={{ fontSize: '11px', fontWeight: 700 }}>{s.name}</div>
-                        <div style={{ fontSize: '9px', color: '#64748b' }}>{s.city}</div>
-                      </div>
+                {/* Alert Level / Warning Signal — options change based on selected event type */}
+                <div className="form-group" style={{ marginBottom: '16px' }}>
+                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#475569', marginBottom: '8px' }}>
+                    {editForm.eventType === 'typhoon' ? 'Typhoon Category' : 'Alert Level / Warning Signal'}
+                  </label>
+                  <select
+                    value={editForm.alertLevel || ''}
+                    onChange={(e) => setEditForm((f) => ({ ...f, alertLevel: e.target.value }))}
+                    style={{
+                      width: '100%', padding: '10px', borderRadius: '8px',
+                      border: '1px solid #e2e8f0', background: 'white', color: '#1e293b'
+                    }}
+                  >
+                    {(ALERT_LEVELS[editForm.eventType] || ALERT_LEVELS.calamity).map(opt => (
+                      <option key={opt.value} value={opt.value}>{opt.label}</option>
+                    ))}
+                  </select>
+                  {editForm.alertLevel && (
+                    <p style={{ margin: '6px 0 0', fontSize: '0.75rem', color: '#64748b' }}>
+                      This will be displayed in the dashboard meta bar.
+                    </p>
+                  )}
+                </div>
+
+                <div className="form-group" style={{ marginBottom: '16px' }}>
+                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#475569', marginBottom: '8px' }}>Affected Provinces</label>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                    {PROVINCE_NAMES.map(p => (
+                      <button
+                        key={p}
+                        type="button"
+                        className={`province-tag ${editForm.affectedProvinces?.includes(p) ? 'active' : ''}`}
+                        onClick={() => {
+                          setEditForm(f => ({
+                            ...f,
+                            affectedProvinces: f.affectedProvinces?.includes(p)
+                              ? f.affectedProvinces.filter(x => x !== p)
+                              : [...(f.affectedProvinces || []), p]
+                          }))
+                        }}
+                        style={{
+                          padding: '6px 12px',
+                          borderRadius: '20px',
+                          border: '1px solid #e2e8f0',
+                          fontSize: '0.75rem',
+                          cursor: 'pointer',
+                          background: editForm.affectedProvinces?.includes(p) ? '#6366f1' : 'white',
+                          color: editForm.affectedProvinces?.includes(p) ? 'white' : '#64748b'
+                        }}
+                      >
+                        {p}
+                      </button>
                     ))}
                   </div>
                 </div>
-              </div>
 
-              <div className="premium-card">
-                <div className="premium-card-header">
-                  <div className="premium-card-title">Full Suspension Log</div>
-                </div>
-                <div style={{ overflowX: 'auto' }}>
-                  <table className="premium-table">
-                    <thead>
-                      <tr><th>LGU/Entity</th><th>Category</th><th>City / Municipality</th><th>Scope</th></tr>
-                    </thead>
-                    <tbody>
-                      {result?.details?.suspensions?.length > 0 ? (
-                        result.details.suspensions.map((s, i) => (
-                          <tr key={i} className="trow">
-                            <td style={{ fontWeight: 600 }}>{s.name}</td>
-                            <td>
-                              <span style={{ fontSize: '9px', padding: '2px 6px', borderRadius: '4px', background: s.type === 'classSuspension' ? 'rgba(99,102,241,0.1)' : 'rgba(232,117,48,0.1)', color: s.type === 'classSuspension' ? '#6366f1' : '#e87530', fontWeight: 700 }}>
-                                {s.type === 'classSuspension' ? 'CLASSES' : s.type === 'workSuspension' ? 'WORK' : 'CALAMITY'}
-                              </span>
-                            </td>
-                            <td style={{ fontSize: '11px', color: '#64748b' }}>{s.city}</td>
-                            <td style={{ fontSize: '11px' }}>{s.city} (All Levels)</td>
-                          </tr>
-                        ))
-                      ) : <tr><td colSpan="4" style={{ textAlign: 'center', color: '#94a3b8', padding: '2rem' }}>Normal operations reported</td></tr>}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          ) : activeTab === 'Pre-Evacuation' ? (
-            <div className="category-viz-container">
-              {/* KPI Row for Pre-Evacuation */}
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 12, marginBottom: 14 }}>
-                <div className="kpi-card-premium blue">
-                  <div className="kpi-label-premium">Families</div>
-                  <div className="kpi-value-premium">{details.preEvacuation.reduce((s, p) => s + p.fam, 0).toLocaleString()}</div>
-                  <div className="kpi-sub-premium">Total pre-empted</div>
-                </div>
-                <div className="kpi-card-premium purple">
-                  <div className="kpi-label-premium">Persons</div>
-                  <div className="kpi-value-premium">{details.preEvacuation.reduce((s, p) => s + p.per, 0).toLocaleString()}</div>
-                  <div className="kpi-sub-premium">Across all centers</div>
-                </div>
-                <div className="kpi-card-premium teal">
-                  <div className="kpi-label-premium">Active ECs</div>
-                  <div className="kpi-value-premium">{[...new Set(details.preEvacuation.map(p => p.ec))].length}</div>
-                  <div className="kpi-sub-premium">Facilities utilized</div>
-                </div>
-                <div className="kpi-card-premium orange">
-                  <div className="kpi-label-premium">LGUs</div>
-                  <div className="kpi-value-premium">{[...new Set(details.preEvacuation.map(p => p.mun))].length}</div>
-                  <div className="kpi-sub-premium">Participating areas</div>
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.5fr', gap: 14, marginBottom: 14 }}>
-                <div className="premium-card">
-                  <div className="premium-card-header">
-                    <div className="premium-card-title">Evacuation Demographics</div>
-                    <span style={{ fontSize: '10px', color: T.rose, background: 'rgba(244,63,94,0.15)', padding: '2px 8px', borderRadius: '4px' }}>SEX CLASSIFICATION</span>
-                  </div>
-                  <div style={{ height: '240px', minWidth: 0 }}>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={[
-                        { name: 'Male', value: result?.details?.sexDistribution?.male || 0, color: T.blue },
-                        { name: 'Female', value: result?.details?.sexDistribution?.female || 0, color: T.rose }
-                      ]} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                        <XAxis dataKey="name" tick={{ fontSize: 10 }} />
-                        <YAxis tick={{ fontSize: 10 }} />
-                        <Tooltip />
-                        <Bar dataKey="value" radius={[4, 4, 0, 0]}>
-                          <Cell fill={T.blue} />
-                          <Cell fill={T.rose} />
-                        </Bar>
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                </div>
-
-                <div className="premium-card">
-                  <div className="premium-card-header">
-                    <div className="premium-card-title">Top Municipalities (Pre-Evac)</div>
-                  </div>
-                  <div style={{ maxHeight: '240px', overflowY: 'auto' }}>
-                    <table className="premium-table">
-                      <thead><tr><th>Municipality</th><th style={{ textAlign: 'right' }}>Families</th><th style={{ textAlign: 'right' }}>Persons</th></tr></thead>
-                      <tbody>
-                        {details.preEvacuation.slice(0, 4).map((r, i) => (
-                          <tr key={i} className="trow">
-                            <td style={{ fontWeight: 600 }}>{r.mun}</td>
-                            <td style={{ textAlign: 'right', fontFamily: 'DM Mono' }}>{r.fam.toLocaleString()}</td>
-                            <td style={{ textAlign: 'right', fontFamily: 'DM Mono', color: '#64748b' }}>{r.per.toLocaleString()}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-              {/* Damaged Houses Section (Integrated into Pre-Evacuation reporting as per plan) */}
-              <div className="premium-card">
-                <div className="premium-card-header">
-                  <div className="premium-card-title">Damaged Houses — City Breakdown</div>
-                  <span style={{ fontSize: '10px', color: T.orange, background: 'rgba(249,115,22,0.15)', padding: '2px 8px', borderRadius: '4px' }}>HOUSING IMPACT</span>
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.2fr) 1fr', gap: '1.5rem' }}>
-                  <div style={{ height: '300px', minWidth: 0 }}>
-                    <ResponsiveContainer width="100%" height={300}>
-                      <BarChart data={Object.entries(result?.details?.byCity || {}).filter(([_, stats]) => stats.dmg > 0).sort((a, b) => b[1].dmg - a[1].dmg).slice(0, 4).map(([name, stats]) => ({ name, total: stats.dmg_total || 0, partial: stats.dmg_partial || 0 }))} margin={{ bottom: 20 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                        <XAxis dataKey="name" tick={{ fontSize: 9 }} axisLine={false} tickLine={false} />
-                        <YAxis tick={{ fontSize: 9 }} axisLine={false} tickLine={false} />
-                        <Tooltip />
-                        <Legend wrapperStyle={{ fontSize: '10px' }} />
-                        <Bar dataKey="total" name="Totally Damaged" fill={T.red} radius={[4, 4, 0, 0]} />
-                        <Bar dataKey="partial" name="Partially Damaged" fill={T.orange} radius={[4, 4, 0, 0]} />
-                      </BarChart>
-                    </ResponsiveContainer>
-                  </div>
-                  <div style={{ overflowX: 'auto', maxHeight: '300px' }}>
-                    <table className="premium-table">
-                      <thead>
-                        <tr><th>Municipality</th><th>Totally</th><th>Partially</th><th>Combined</th></tr>
-                      </thead>
-                      <tbody>
-                        {Object.entries(result?.details?.byCity || {}).filter(([_, stats]) => stats.dmg > 0).length > 0 ? (
-                          Object.entries(result?.details?.byCity || {}).filter(([_, stats]) => stats.dmg > 0).sort((a, b) => b[1].dmg - a[1].dmg).map(([city, stats], i) => (
-                            <tr key={i}>
-                              <td style={{ fontWeight: 600 }}>{city}</td>
-                              <td style={{ textAlign: 'right', color: T.rose, fontWeight: 700 }}>{stats.dmg_total || 0}</td>
-                              <td style={{ textAlign: 'right', color: T.orange, fontWeight: 700 }}>{stats.dmg_partial || 0}</td>
-                              <td style={{ textAlign: 'right', fontWeight: 700, fontFamily: 'DM Mono', color: T.dark }}>{stats.dmg}</td>
-                            </tr>
-                          ))
-                        ) : <tr><td colSpan="4" style={{ textAlign: 'center', color: '#94a3b8' }}>No housing damage reported</td></tr>}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-            </div>
-          ) : null}
-        </>
-      )}
-    </div>
-      {showEditEventModal && createPortal(
-        <div className="modal-overlay" onClick={() => setShowEditEventModal(false)}>
-          <div className="modal-content glass-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '640px' }}>
-            <div className="modal-header">
-              <div className="header-icon" style={{ background: 'rgba(99, 102, 241, 0.1)', color: '#6366f1', padding: '12px', borderRadius: '12px' }}>
-                <Calendar size={24} />
-              </div>
-              <div className="header-text" style={{ marginLeft: '12px', flex: 1 }}>
-                <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#1e293b', margin: 0 }}>Edit Event</h2>
-                <p style={{ fontSize: '0.875rem', color: '#64748b', margin: '2px 0 0' }}>Modify event details.</p>
-              </div>
-              <button className="modal-close" onClick={() => setShowEditEventModal(false)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
-                <X size={20} />
-              </button>
-            </div>
-
-            <div className="modal-body" style={{ padding: '20px' }}>
-              <div className="form-group" style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#475569', marginBottom: '8px' }}>Event Name</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Typhoon Kristine"
-                  value={editForm.name}
-                  onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
-                  style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }}
-                />
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-                <div className="form-group">
-                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#475569', marginBottom: '8px' }}>Event Type</label>
-                  <select
-                    value={editForm.eventType}
-                    onChange={(e) => setEditForm((f) => ({ ...f, eventType: e.target.value, alertLevel: '' }))}
-                    style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }}
-                  >
-                    <option value="calamity">Calamity</option>
-                    <option value="typhoon">Typhoon</option>
-                    <option value="flood">Flood</option>
-                    <option value="earthquake">Earthquake</option>
-                    <option value="fire">Fire Incident</option>
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#475569', marginBottom: '8px' }}>Theme Color</label>
-                  <input
-                    type="color"
-                    value={editForm.color}
-                    onChange={(e) => setEditForm((f) => ({ ...f, color: e.target.value }))}
-                    style={{ width: '100%', height: '42px', padding: '2px', borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                  <ModernDateTimePicker
+                    label="Event Start"
+                    value={editForm.startDate}
+                    onChange={(e) => setEditForm((f) => ({ ...f, startDate: e.target.value }))}
+                  />
+                  <ModernDateTimePicker
+                    label="Event End (Optional)"
+                    value={editForm.endDate}
+                    onChange={(e) => setEditForm((f) => ({ ...f, endDate: e.target.value }))}
                   />
                 </div>
               </div>
 
-              {/* Alert Level / Warning Signal — options change based on selected event type */}
-              <div className="form-group" style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#475569', marginBottom: '8px' }}>
-                  {editForm.eventType === 'typhoon' ? 'Typhoon Category' : 'Alert Level / Warning Signal'}
-                </label>
-                <select
-                  value={editForm.alertLevel || ''}
-                  onChange={(e) => setEditForm((f) => ({ ...f, alertLevel: e.target.value }))}
-                  style={{
-                    width: '100%', padding: '10px', borderRadius: '8px',
-                    border: '1px solid #e2e8f0', background: 'white', color: '#1e293b'
-                  }}
-                >
-                  {(ALERT_LEVELS[editForm.eventType] || ALERT_LEVELS.calamity).map(opt => (
-                    <option key={opt.value} value={opt.value}>{opt.label}</option>
-                  ))}
-                </select>
-                {editForm.alertLevel && (
-                  <p style={{ margin: '6px 0 0', fontSize: '0.75rem', color: '#64748b' }}>
-                    This will be displayed in the dashboard meta bar.
-                  </p>
-                )}
-              </div>
-
-              <div className="form-group" style={{ marginBottom: '16px' }}>
-                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#475569', marginBottom: '8px' }}>Affected Provinces</label>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                  {PROVINCE_NAMES.map(p => (
-                    <button
-                      key={p}
-                      type="button"
-                      className={`province-tag ${editForm.affectedProvinces?.includes(p) ? 'active' : ''}`}
-                      onClick={() => {
-                        setEditForm(f => ({
-                          ...f,
-                          affectedProvinces: f.affectedProvinces?.includes(p)
-                            ? f.affectedProvinces.filter(x => x !== p)
-                            : [...(f.affectedProvinces || []), p]
-                        }))
-                      }}
-                      style={{
-                        padding: '6px 12px',
-                        borderRadius: '20px',
-                        border: '1px solid #e2e8f0',
-                        fontSize: '0.75rem',
-                        cursor: 'pointer',
-                        background: editForm.affectedProvinces?.includes(p) ? '#6366f1' : 'white',
-                        color: editForm.affectedProvinces?.includes(p) ? 'white' : '#64748b'
-                      }}
-                    >
-                      {p}
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                <ModernDateTimePicker
-                  label="Event Start"
-                  value={editForm.startDate}
-                  onChange={(e) => setEditForm((f) => ({ ...f, startDate: e.target.value }))}
-                />
-                <ModernDateTimePicker
-                  label="Event End (Optional)"
-                  value={editForm.endDate}
-                  onChange={(e) => setEditForm((f) => ({ ...f, endDate: e.target.value }))}
-                />
-              </div>
-            </div>
-
-            <div className="modal-footer" style={{ padding: '20px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-              <button className="modal-btn-cancel" onClick={() => setShowEditEventModal(false)} style={{ padding: '10px 20px', borderRadius: '8px' }}>Cancel</button>
-              <button className="modal-btn-primary" onClick={async () => {
-                const success = await updateEvent(selectedEventIdToEdit, editForm)
-                if (success !== false) setShowEditEventModal(false)
-              }} style={{ padding: '10px 24px', borderRadius: '8px', background: '#6366f1', color: 'white', border: 'none', fontWeight: 600 }}>
-                Save Changes
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
-
-      {showLguDeploymentModal && selectedEventToDeploy && createPortal(
-        <div className="modal-overlay" onClick={() => setShowLguDeploymentModal(false)}>
-          <div className="modal-content glass-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
-            <div className="modal-header" style={{ flexShrink: 0 }}>
-              <div className="header-icon deployment" style={{ background: 'rgba(99, 102, 241, 0.1)', color: '#6366f1', padding: '12px', borderRadius: '12px' }}>
-                <PaperPlaneRight size={24} />
-              </div>
-              <div className="header-text" style={{ marginLeft: '12px', flex: 1 }}>
-                <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#1e293b', margin: 0 }}>Deploy to LGUs</h2>
-                <p style={{ fontSize: '0.875rem', color: '#64748b', margin: '2px 0 0' }}>Event: {selectedEventToDeploy.name}</p>
-              </div>
-              <button className="modal-close" onClick={() => setShowLguDeploymentModal(false)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
-                <X size={20} />
-              </button>
-            </div>
-
-            <form onSubmit={handleLguDeploySubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-              <div className="modal-body" style={{ padding: '20px', overflowY: 'auto', flex: 1 }}>
-                <div className="form-group" style={{ marginBottom: '20px' }}>
-                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#475569', marginBottom: '8px' }}>Select Affected LGUs in {user.province}</label>
-                  <div className="lgu-selection-grid" style={{ 
-                    display: 'grid', 
-                    gridTemplateColumns: 'repeat(2, 1fr)', 
-                    gap: '8px',
-                    padding: '4px'
-                  }}>
-                    {getCitiesForProvince(user.province).map(city => {
-                      const isAlreadyDeployed = eventDeployments.some(d => d.city === city && d.event_id === selectedEventToDeploy?.id)
-                      return (
-                        <label key={city} className={`lgu-checkbox-label ${lguForm.cities.includes(city) ? 'active' : ''}`} style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          padding: '10px 12px',
-                          border: '1px solid #e2e8f0',
-                          borderRadius: '8px',
-                          cursor: 'pointer',
-                          transition: 'all 0.2s',
-                          fontSize: '0.8125rem',
-                          background: lguForm.cities.includes(city) ? '#f5f3ff' : 'white',
-                          borderColor: lguForm.cities.includes(city) ? '#6366f1' : '#e2e8f0',
-                          color: lguForm.cities.includes(city) ? '#4338ca' : '#475569'
-                        }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <input 
-                              type="checkbox"
-                              checked={lguForm.cities.includes(city)}
-                              onChange={() => {
-                                setLguForm(prev => ({
-                                  ...prev,
-                                  cities: prev.cities.includes(city)
-                                    ? prev.cities.filter(c => c !== city)
-                                    : [...prev.cities, city]
-                                }))
-                              }}
-                              style={{ accentColor: '#6366f1' }}
-                            />
-                            <span>{city}</span>
-                          </div>
-                          {isAlreadyDeployed && (
-                            <span style={{ fontSize: '9px', background: '#dcfce7', color: '#166534', padding: '2px 6px', borderRadius: '4px', fontWeight: 700 }}>DEPLOYED</span>
-                          )}
-                        </label>
-                      )
-                    })}
-                  </div>
-                </div>
-
-                <div className="form-row" style={{ display: 'flex', gap: '16px', marginBottom: '10px' }}>
-                  <div className="form-group" style={{ flex: 1 }}>
-                    <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#475569', marginBottom: '8px' }}>Strength Label</label>
-                    <select 
-                      value={lguForm.strengthLabel}
-                      onChange={e => setLguForm({...lguForm, strengthLabel: e.target.value})}
-                      style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', background: 'white', color: '#1e293b' }}
-                    >
-                      <option value="Rainfall">Rainfall</option>
-                      <option value="Wind Signal">Wind Signal</option>
-                      <option value="Intensity">Intensity</option>
-                    </select>
-                  </div>
-                  <div className="form-group" style={{ flex: 1 }}>
-                    <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#475569', marginBottom: '8px' }}>Strength Value</label>
-                    <input 
-                      type="text"
-                      value={lguForm.strengthValue}
-                      onChange={e => setLguForm({...lguForm, strengthValue: e.target.value})}
-                      placeholder="e.g. Heavy, Signal 2"
-                      style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', background: 'white', color: '#1e293b' }}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="modal-footer" style={{ padding: '16px 20px', borderTop: '1px solid rgba(0,0,0,0.06)', display: 'flex', justifyContent: 'flex-end', gap: '12px', background: 'rgba(255,255,255,0.4)', flexShrink: 0 }}>
-                <button type="button" className="modal-btn-cancel" onClick={() => setShowLguDeploymentModal(false)} style={{
-                  padding: '10px 20px', borderRadius: '8px', border: '1px solid #e2e8f0', background: 'white', color: '#64748b', cursor: 'pointer', fontSize: '0.875rem'
-                }}>Cancel</button>
-                <button type="submit" className="modal-btn-primary" disabled={lguForm.cities.length === 0} style={{
-                  padding: '10px 24px', borderRadius: '8px', border: 'none', background: '#6366f1', color: 'white', cursor: 'pointer', fontWeight: 600, fontSize: '0.875rem',
-                  opacity: lguForm.cities.length === 0 ? 0.6 : 1
-                }}>
-                  Deploy to {lguForm.cities.length} LGUs
+              <div className="modal-footer" style={{ padding: '20px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                <button className="modal-btn-cancel" onClick={() => setShowEditEventModal(false)} style={{ padding: '10px 20px', borderRadius: '8px' }}>Cancel</button>
+                <button className="modal-btn-primary" onClick={async () => {
+                  const success = await updateEvent(selectedEventIdToEdit, editForm)
+                  if (success !== false) setShowEditEventModal(false)
+                }} style={{ padding: '10px 24px', borderRadius: '8px', background: '#6366f1', color: 'white', border: 'none', fontWeight: 600 }}>
+                  Save Changes
                 </button>
               </div>
-            </form>
-          </div>
-        </div>,
-        document.body
-      )}
-
-      {showSelectEventToEdit && createPortal(
-        <div className="modal-overlay" onClick={() => setShowSelectEventToEdit(false)}>
-          <div className="modal-content glass-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '440px' }}>
-            <div className="modal-header">
-              <h2>Select Event</h2>
-              <button className="modal-close" onClick={() => setShowSelectEventToEdit(false)}><X size={20} /></button>
             </div>
-            <div className="modal-body">
-              <div className="event-selection-list">
-                {events.map(ev => (
-                  <div 
-                    key={ev.id} 
-                    className={`event-selection-card ${selectedEventIdToEdit === ev.id ? 'active' : ''}`}
-                    onClick={() => setSelectedEventIdToEdit(ev.id)}
-                  >
-                    <div className="event-selection-avatar" style={{ background: ev.color }}>{ev.name.charAt(0)}</div>
-                    <div className="event-selection-info">
-                      <span className="event-selection-name">{ev.name}</span>
+          </div>,
+          document.body
+        )}
+
+        {showLguDeploymentModal && selectedEventToDeploy && createPortal(
+          <div className="modal-overlay" onClick={() => setShowLguDeploymentModal(false)}>
+            <div className="modal-content glass-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
+              <div className="modal-header" style={{ flexShrink: 0 }}>
+                <div className="header-icon deployment" style={{ background: 'rgba(99, 102, 241, 0.1)', color: '#6366f1', padding: '12px', borderRadius: '12px' }}>
+                  <PaperPlaneRight size={24} />
+                </div>
+                <div className="header-text" style={{ marginLeft: '12px', flex: 1 }}>
+                  <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#1e293b', margin: 0 }}>Deploy to LGUs</h2>
+                  <p style={{ fontSize: '0.875rem', color: '#64748b', margin: '2px 0 0' }}>Event: {selectedEventToDeploy.name}</p>
+                </div>
+                <button className="modal-close" onClick={() => setShowLguDeploymentModal(false)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
+                  <X size={20} />
+                </button>
+              </div>
+
+              <form onSubmit={handleLguDeploySubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
+                <div className="modal-body" style={{ padding: '20px', overflowY: 'auto', flex: 1 }}>
+                  <div className="form-group" style={{ marginBottom: '20px' }}>
+                    <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#475569', marginBottom: '8px' }}>Select Affected LGUs in {user.province}</label>
+                    <div className="lgu-selection-grid" style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(2, 1fr)',
+                      gap: '8px',
+                      padding: '4px'
+                    }}>
+                      {getCitiesForProvince(user.province).map(city => {
+                        const isAlreadyDeployed = eventDeployments.some(d => d.city === city && d.event_id === selectedEventToDeploy?.id)
+                        return (
+                          <label key={city} className={`lgu-checkbox-label ${lguForm.cities.includes(city) ? 'active' : ''}`} style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'space-between',
+                            padding: '10px 12px',
+                            border: '1px solid #e2e8f0',
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                            transition: 'all 0.2s',
+                            fontSize: '0.8125rem',
+                            background: lguForm.cities.includes(city) ? '#f5f3ff' : 'white',
+                            borderColor: lguForm.cities.includes(city) ? '#6366f1' : '#e2e8f0',
+                            color: lguForm.cities.includes(city) ? '#4338ca' : '#475569'
+                          }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <input
+                                type="checkbox"
+                                checked={lguForm.cities.includes(city)}
+                                onChange={() => {
+                                  setLguForm(prev => ({
+                                    ...prev,
+                                    cities: prev.cities.includes(city)
+                                      ? prev.cities.filter(c => c !== city)
+                                      : [...prev.cities, city]
+                                  }))
+                                }}
+                                style={{ accentColor: '#6366f1' }}
+                              />
+                              <span>{city}</span>
+                            </div>
+                            {isAlreadyDeployed && (
+                              <span style={{ fontSize: '9px', background: '#dcfce7', color: '#166534', padding: '2px 6px', borderRadius: '4px', fontWeight: 700 }}>DEPLOYED</span>
+                            )}
+                          </label>
+                        )
+                      })}
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
-            <div className="modal-footer">
-              <button className="modal-btn-cancel" onClick={() => setShowSelectEventToEdit(false)}>Cancel</button>
-              <button className="modal-btn-primary" onClick={() => {
-                const ev = events.find(e => e.id === selectedEventIdToEdit)
-                if (ev) {
-                  setShowSelectEventToEdit(false)
-                  setIsEditingExistingEvent(true)
-                  setEditForm({ ...ev, affectedProvinces: ev.affectedProvinces || [] })
-                  setShowEditEventModal(true)
-                }
-              }} disabled={!selectedEventIdToEdit}>Continue</button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
 
-      {showDeleteConfirm && createPortal(
-        <div className="modal-overlay" onClick={() => setShowDeleteConfirm(false)}>
-          <div className="modal-content glass-modal" style={{ maxWidth: '400px' }}>
-            <div className="modal-confirm">
-              <Warning size={32} color="#ef4444" />
-              <h2>Delete Event?</h2>
-              <p>Are you sure? This cannot be undone.</p>
-              <div className="modal-confirm-footer">
-                <button className="modal-btn-cancel" onClick={() => setShowDeleteConfirm(false)}>No</button>
-                <button className="modal-btn-danger" onClick={async () => {
-                  await deleteEvent(currentEventId)
-                  setShowDeleteConfirm(false)
-                }}>Yes, Delete</button>
+                  <div className="form-row" style={{ display: 'flex', gap: '16px', marginBottom: '10px' }}>
+                    <div className="form-group" style={{ flex: 1 }}>
+                      <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#475569', marginBottom: '8px' }}>Strength Label</label>
+                      <select
+                        value={lguForm.strengthLabel}
+                        onChange={e => setLguForm({ ...lguForm, strengthLabel: e.target.value })}
+                        style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', background: 'white', color: '#1e293b' }}
+                      >
+                        <option value="Rainfall">Rainfall</option>
+                        <option value="Wind Signal">Wind Signal</option>
+                        <option value="Intensity">Intensity</option>
+                      </select>
+                    </div>
+                    <div className="form-group" style={{ flex: 1 }}>
+                      <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#475569', marginBottom: '8px' }}>Strength Value</label>
+                      <input
+                        type="text"
+                        value={lguForm.strengthValue}
+                        onChange={e => setLguForm({ ...lguForm, strengthValue: e.target.value })}
+                        placeholder="e.g. Heavy, Signal 2"
+                        style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', background: 'white', color: '#1e293b' }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="modal-footer" style={{ padding: '16px 20px', borderTop: '1px solid rgba(0,0,0,0.06)', display: 'flex', justifyContent: 'flex-end', gap: '12px', background: 'rgba(255,255,255,0.4)', flexShrink: 0 }}>
+                  <button type="button" className="modal-btn-cancel" onClick={() => setShowLguDeploymentModal(false)} style={{
+                    padding: '10px 20px', borderRadius: '8px', border: '1px solid #e2e8f0', background: 'white', color: '#64748b', cursor: 'pointer', fontSize: '0.875rem'
+                  }}>Cancel</button>
+                  <button type="submit" className="modal-btn-primary" disabled={lguForm.cities.length === 0} style={{
+                    padding: '10px 24px', borderRadius: '8px', border: 'none', background: '#6366f1', color: 'white', cursor: 'pointer', fontWeight: 600, fontSize: '0.875rem',
+                    opacity: lguForm.cities.length === 0 ? 0.6 : 1
+                  }}>
+                    Deploy to {lguForm.cities.length} LGUs
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>,
+          document.body
+        )}
+
+        {showSelectEventToEdit && createPortal(
+          <div className="modal-overlay" onClick={() => setShowSelectEventToEdit(false)}>
+            <div className="modal-content glass-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '440px' }}>
+              <div className="modal-header">
+                <h2>Select Event</h2>
+                <button className="modal-close" onClick={() => setShowSelectEventToEdit(false)}><X size={20} /></button>
+              </div>
+              <div className="modal-body">
+                <div className="event-selection-list">
+                  {events.map(ev => (
+                    <div
+                      key={ev.id}
+                      className={`event-selection-card ${selectedEventIdToEdit === ev.id ? 'active' : ''}`}
+                      onClick={() => setSelectedEventIdToEdit(ev.id)}
+                    >
+                      <div className="event-selection-avatar" style={{ background: ev.color }}>{ev.name.charAt(0)}</div>
+                      <div className="event-selection-info">
+                        <span className="event-selection-name">{ev.name}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button className="modal-btn-cancel" onClick={() => setShowSelectEventToEdit(false)}>Cancel</button>
+                <button className="modal-btn-primary" onClick={() => {
+                  const ev = events.find(e => e.id === selectedEventIdToEdit)
+                  if (ev) {
+                    setShowSelectEventToEdit(false)
+                    setIsEditingExistingEvent(true)
+                    setEditForm({ ...ev, affectedProvinces: ev.affectedProvinces || [] })
+                    setShowEditEventModal(true)
+                  }
+                }} disabled={!selectedEventIdToEdit}>Continue</button>
               </div>
             </div>
-          </div>
-        </div>,
-        document.body
-      )}
+          </div>,
+          document.body
+        )}
+
+        {showDeleteConfirm && createPortal(
+          <div className="modal-overlay" onClick={() => setShowDeleteConfirm(false)}>
+            <div className="modal-content glass-modal" style={{ maxWidth: '400px' }}>
+              <div className="modal-confirm">
+                <Warning size={32} color="#ef4444" />
+                <h2>Delete Event?</h2>
+                <p>Are you sure? This cannot be undone.</p>
+                <div className="modal-confirm-footer">
+                  <button className="modal-btn-cancel" onClick={() => setShowDeleteConfirm(false)}>No</button>
+                  <button className="modal-btn-danger" onClick={async () => {
+                    await deleteEvent(currentEventId)
+                    setShowDeleteConfirm(false)
+                  }}>Yes, Delete</button>
+                </div>
+              </div>
+            </div>
+          </div>,
+          document.body
+        )}
       </div >
     </>
   );
