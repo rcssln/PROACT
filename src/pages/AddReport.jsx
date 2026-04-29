@@ -14,6 +14,8 @@ import { generateRelatedIncidentsPdf } from '../lib/generateRelatedIncidentsPdf'
 import { generateConsolidatedCsv } from '../lib/generateConsolidatedCsv'
 import { generateAISummary, generateSummary } from '../openai/summaryService'
 import { createPortal } from 'react-dom'
+import HeaderFooterModal from '../components/HeaderFooterModal'
+import ConfirmationModal from '../components/ConfirmationModal'
 import '../styles/pages/PageStyles.css'
 import '../styles/pages/AddReport.css'
 import '../styles/components/DownloadModals.css'
@@ -341,59 +343,52 @@ const CAT_ID_TO_PING_KEY = {
 // Category Selection Modal Component
 function CategorySelectionModal({ onClose, onSelect, pingedReportTypes = [], submittedCategories = new Set() }) {
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content glass-modal category-selection-modal" onClick={e => e.stopPropagation()}>
-        <div className="modal-header">
-          <div style={{ display: 'flex', flexDirection: 'column' }}>
-            <h2>Select Report Category</h2>
-            <p style={{ fontSize: '12px', color: '#64748b', margin: '4px 0 0 0' }}>Choose the type of data you wish to report</p>
-          </div>
-          <button type="button" className="modal-close" onClick={onClose}><X size={20} /></button>
-        </div>
-        <div className="modal-body">
-          <div className="category-grid">
-            {REPORT_CATEGORIES.map(cat => {
-              const pingKey = CAT_ID_TO_PING_KEY[cat.id]
-              const isPinged = pingedReportTypes.includes(pingKey)
-              const isSubmitted = submittedCategories.has(cat.id)
-              const showPing = isPinged && !isSubmitted
+    <HeaderFooterModal
+      isOpen={true}
+      onClose={onClose}
+      title="Select Report Category"
+      subtitle="Choose the type of data you wish to report"
+      maxWidth="1100px"
+      footer={<Button variant="subtle" onClick={onClose}>Cancel</Button>}
+    >
+      <div className="category-grid">
+        {REPORT_CATEGORIES.map(cat => {
+          const pingKey = CAT_ID_TO_PING_KEY[cat.id]
+          const isPinged = pingedReportTypes.includes(pingKey)
+          const isSubmitted = submittedCategories.has(cat.id)
+          const showPing = isPinged && !isSubmitted
 
-              return (
-                <div
-                  key={cat.id}
-                  className="category-choice-card"
-                  onClick={() => onSelect(cat.id)}
-                  style={{ position: 'relative' }}
-                >
-                  {showPing && (
-                    <div style={{
-                      position: 'absolute',
-                      top: '16px',
-                      right: '16px',
-                      width: '10px',
-                      height: '10px',
-                      backgroundColor: '#ef4444',
-                      borderRadius: '50%',
-                      boxShadow: '0 0 0 2px #ffffff'
-                    }} title="Mandatory report is pending submission" />
-                  )}
-                  <div className="category-choice-icon" style={{ backgroundColor: `${cat.color}15`, color: cat.color }}>
-                    {cat.icon}
-                  </div>
-                  <div className="category-choice-info">
-                    <span className="category-choice-title">{cat.title}</span>
-                    <p className="category-choice-desc">{cat.description}</p>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </div>
-        <div className="modal-footer">
-          <button type="button" className="modal-btn-cancel" onClick={onClose}>Cancel</button>
-        </div>
+          return (
+            <div
+              key={cat.id}
+              className="category-choice-card"
+              onClick={() => onSelect(cat.id)}
+              style={{ position: 'relative' }}
+            >
+              {showPing && (
+                <div style={{
+                  position: 'absolute',
+                  top: '16px',
+                  right: '16px',
+                  width: '10px',
+                  height: '10px',
+                  backgroundColor: '#ef4444',
+                  borderRadius: '50%',
+                  boxShadow: '0 0 0 2px #ffffff'
+                }} title="Mandatory report is pending submission" />
+              )}
+              <div className="category-choice-icon" style={{ backgroundColor: `${cat.color}15`, color: cat.color }}>
+                {cat.icon}
+              </div>
+              <div className="category-choice-info">
+                <span className="category-choice-title">{cat.title}</span>
+                <p className="category-choice-desc">{cat.description}</p>
+              </div>
+            </div>
+          )
+        })}
       </div>
-    </div>
+    </HeaderFooterModal>
   )
 }
 
@@ -1887,13 +1882,13 @@ export default function AddReport() {
             <tr>
               {!isLGU && <th className="col-city">City</th>}
               <th className="col-barangay">Barangay</th>
-              <th>Status</th>
-              <th>Type</th>
-              <th>Service Provider</th>
-              <th>Date/Time of Interruption/Outage</th>
-              <th>Date/Time Restored</th>
-              <th className="col-remarks">Remarks</th>
-              <th className="col-actions">Actions</th>
+              <th style={{ textAlign: 'center' }}>Status</th>
+              <th style={{ textAlign: 'center' }}>Type</th>
+              <th style={{ textAlign: 'center' }}>Service Provider</th>
+              <th style={{ textAlign: 'center' }}>Date/Time of Interruption/Outage</th>
+              <th style={{ textAlign: 'center' }}>Date/Time Restored</th>
+              <th className="col-remarks" style={{ textAlign: 'center' }}>Remarks</th>
+              <th className="col-actions" style={{ textAlign: 'center' }}>Actions</th>
             </tr>
           )
         case 'water':
@@ -1901,27 +1896,27 @@ export default function AddReport() {
             <tr>
               {!isLGU && <th className="col-city">City</th>}
               <th className="col-barangay">Barangay</th>
-              <th>Status</th>
-              <th>Type</th>
-              <th>Service Provider</th>
-              <th>Date/Time of Interruption</th>
-              <th>Date/Time Restored</th>
-              <th className="col-remarks">Remarks</th>
-              <th className="col-actions">Actions</th>
+              <th style={{ textAlign: 'center' }}>Status</th>
+              <th style={{ textAlign: 'center' }}>Type</th>
+              <th style={{ textAlign: 'center' }}>Service Provider</th>
+              <th style={{ textAlign: 'center' }}>Date/Time of Interruption</th>
+              <th style={{ textAlign: 'center' }}>Date/Time Restored</th>
+              <th className="col-remarks" style={{ textAlign: 'center' }}>Remarks</th>
+              <th className="col-actions" style={{ textAlign: 'center' }}>Actions</th>
             </tr>
           )
         case 'roads':
           return (
             <tr>
               {!isLGU && <th className="col-city">City</th>}
-              <th>Road Section/Bridge</th>
+              <th style={{ textAlign: 'center' }}>Road Section/Bridge</th>
               <th className="col-barangay">Barangay</th>
-              <th>Classification</th>
-              <th>Status</th>
-              <th>Date/Time Not Passable</th>
-              <th>Date/Time Passable</th>
-              <th className="col-remarks">Remarks</th>
-              <th className="col-actions">Actions</th>
+              <th style={{ textAlign: 'center' }}>Classification</th>
+              <th style={{ textAlign: 'center' }}>Status</th>
+              <th style={{ textAlign: 'center' }}>Date/Time Not Passable</th>
+              <th style={{ textAlign: 'center' }}>Date/Time Passable</th>
+              <th className="col-remarks" style={{ textAlign: 'center' }}>Remarks</th>
+              <th className="col-actions" style={{ textAlign: 'center' }}>Actions</th>
             </tr>
           )
         case 'incidents':
@@ -1929,13 +1924,13 @@ export default function AddReport() {
             <tr>
               {!isLGU && <th className="col-city">City</th>}
               <th className="col-barangay">Barangay</th>
-              <th>Type of Incident</th>
-              <th>Date/Time of Occurrence</th>
-              <th>Description</th>
-              <th>Actions Taken</th>
-              <th>Status</th>
-              <th className="col-remarks">Remarks</th>
-              <th className="col-actions">Actions</th>
+              <th style={{ textAlign: 'center' }}>Type of Incident</th>
+              <th style={{ textAlign: 'center' }}>Date/Time of Occurrence</th>
+              <th style={{ textAlign: 'center' }}>Description</th>
+              <th style={{ textAlign: 'center' }}>Actions Taken</th>
+              <th style={{ textAlign: 'center' }}>Status</th>
+              <th className="col-remarks" style={{ textAlign: 'center' }}>Remarks</th>
+              <th className="col-actions" style={{ textAlign: 'center' }}>Actions</th>
             </tr>
           )
         case 'houses':
@@ -1943,12 +1938,12 @@ export default function AddReport() {
             <tr>
               {!isLGU && <th className="col-city">City</th>}
               <th className="col-barangay">Barangay</th>
-              <th>Totally Damaged</th>
-              <th>Partially Damaged</th>
-              <th>Grand Total</th>
-              <th>Amount (PHP)</th>
-              <th className="col-remarks">Remarks</th>
-              <th className="col-actions">Actions</th>
+              <th style={{ textAlign: 'center' }}>Totally Damaged</th>
+              <th style={{ textAlign: 'center' }}>Partially Damaged</th>
+              <th style={{ textAlign: 'center' }}>Grand Total</th>
+              <th style={{ textAlign: 'center' }}>Amount (PHP)</th>
+              <th className="col-remarks" style={{ textAlign: 'center' }}>Remarks</th>
+              <th className="col-actions" style={{ textAlign: 'center' }}>Actions</th>
             </tr>
           )
         case 'class':
@@ -1957,12 +1952,12 @@ export default function AddReport() {
             <tr>
               {!isLGU && <th className="col-city">City</th>}
               <th className="col-barangay">Barangay</th>
-              {activeCategoryModal === 'class' && <th>Education Level</th>}
-              <th>Type of Suspension</th>
-              <th>Date/Time of Suspension</th>
-              <th>Date/Time Resumed</th>
-              <th className="col-remarks">Remarks</th>
-              <th className="col-actions">Actions</th>
+              {activeCategoryModal === 'class' && <th style={{ textAlign: 'center' }}>Education Level</th>}
+              <th style={{ textAlign: 'center' }}>Type of Suspension</th>
+              <th style={{ textAlign: 'center' }}>Date/Time of Suspension</th>
+              <th style={{ textAlign: 'center' }}>Date/Time Resumed</th>
+              <th className="col-remarks" style={{ textAlign: 'center' }}>Remarks</th>
+              <th className="col-actions" style={{ textAlign: 'center' }}>Actions</th>
             </tr>
           )
         case 'calamity':
@@ -1970,12 +1965,12 @@ export default function AddReport() {
             <tr>
               {!isLGU && <th className="col-city">City</th>}
               <th className="col-barangay">Barangay</th>
-              <th>Type of Calamity</th>
-              <th>Count SOC</th>
-              <th>Resolution No.</th>
-              <th>Date of Resolution</th>
-              <th className="col-remarks">Remarks</th>
-              <th className="col-actions">Actions</th>
+              <th style={{ textAlign: 'center' }}>Type of Calamity</th>
+              <th style={{ textAlign: 'center' }}>Count SOC</th>
+              <th style={{ textAlign: 'center' }}>Resolution No.</th>
+              <th style={{ textAlign: 'center' }}>Date of Resolution</th>
+              <th className="col-remarks" style={{ textAlign: 'center' }}>Remarks</th>
+              <th className="col-actions" style={{ textAlign: 'center' }}>Actions</th>
             </tr>
           )
         case 'preemptive':
@@ -1983,12 +1978,12 @@ export default function AddReport() {
             <tr>
               {!isLGU && <th className="col-city">City</th>}
               <th className="col-barangay">Barangay</th>
-              <th>Families</th>
-              <th>Male Count</th>
-              <th>Female Count</th>
-              <th>Total Persons</th>
-              <th className="col-remarks">Remarks</th>
-              <th className="col-actions">Actions</th>
+              <th style={{ textAlign: 'center' }}>Families</th>
+              <th style={{ textAlign: 'center' }}>Male Count</th>
+              <th style={{ textAlign: 'center' }}>Female Count</th>
+              <th style={{ textAlign: 'center' }}>Total Persons</th>
+              <th className="col-remarks" style={{ textAlign: 'center' }}>Remarks</th>
+              <th className="col-actions" style={{ textAlign: 'center' }}>Actions</th>
             </tr>
           )
         case 'assistance':
@@ -1996,17 +1991,17 @@ export default function AddReport() {
             <tr>
               {!isLGU && <th className="col-city">City</th>}
               <th className="col-barangay">Barangay</th>
-              <th>No. Families Affected</th>
-              <th>Families Req. Asst.</th>
-              <th>Needs</th>
-              <th>F/NFIs Qty/Unit</th>
-              <th>Cost/Unit</th>
-              <th>Amount</th>
-              <th>Source</th>
-              <th>Fam. Assisted</th>
-              <th>% Assisted</th>
-              <th className="col-remarks">Remarks</th>
-              <th className="col-actions">Actions</th>
+              <th style={{ textAlign: 'center' }}>No. Families Affected</th>
+              <th style={{ textAlign: 'center' }}>Families Req. Asst.</th>
+              <th style={{ textAlign: 'center' }}>Needs</th>
+              <th style={{ textAlign: 'center' }}>F/NFIs Qty/Unit</th>
+              <th style={{ textAlign: 'center' }}>Cost/Unit</th>
+              <th style={{ textAlign: 'center' }}>Amount</th>
+              <th style={{ textAlign: 'center' }}>Source</th>
+              <th style={{ textAlign: 'center' }}>Fam. Assisted</th>
+              <th style={{ textAlign: 'center' }}>% Assisted</th>
+              <th className="col-remarks" style={{ textAlign: 'center' }}>Remarks</th>
+              <th className="col-actions" style={{ textAlign: 'center' }}>Actions</th>
             </tr>
           )
         case 'communication':
@@ -2014,15 +2009,15 @@ export default function AddReport() {
             <tr>
               {!isLGU && <th className="col-city">City</th>}
               <th className="col-barangay">Barangay</th>
-              <th>Telecompany</th>
-              <th>Status</th>
-              <th>Date/Time Interrupted</th>
-              <th>Date/Time Restored</th>
-              <th className="col-comm-tech">2G (Op/Tot)</th>
-              <th className="col-comm-tech">3G (Op/Tot)</th>
-              <th className="col-comm-tech">4G (Op/Tot)</th>
-              <th className="col-remarks">Remarks</th>
-              <th className="col-actions">Actions</th>
+              <th style={{ textAlign: 'center' }}>Telecompany</th>
+              <th style={{ textAlign: 'center' }}>Status</th>
+              <th style={{ textAlign: 'center' }}>Date/Time Interrupted</th>
+              <th style={{ textAlign: 'center' }}>Date/Time Restored</th>
+              <th className="col-comm-tech" style={{ textAlign: 'center' }}>2G (Op/Tot)</th>
+              <th className="col-comm-tech" style={{ textAlign: 'center' }}>3G (Op/Tot)</th>
+              <th className="col-comm-tech" style={{ textAlign: 'center' }}>4G (Op/Tot)</th>
+              <th className="col-remarks" style={{ textAlign: 'center' }}>Remarks</th>
+              <th className="col-actions" style={{ textAlign: 'center' }}>Actions</th>
             </tr>
           )
         case 'assistance_lgus':
@@ -2030,15 +2025,15 @@ export default function AddReport() {
             <tr>
               {!isLGU && <th className="col-city">City</th>}
               <th className="col-barangay">Barangay</th>
-              <th>Source</th>
-              <th>Relief Type</th>
-              <th>Qty</th>
-              <th>Unit</th>
-              <th>Cost/Unit</th>
-              <th>Amount</th>
-              <th>Status</th>
-              <th className="col-remarks">Remarks</th>
-              <th className="col-actions">Actions</th>
+              <th style={{ textAlign: 'center' }}>Source</th>
+              <th style={{ textAlign: 'center' }}>Relief Type</th>
+              <th style={{ textAlign: 'center' }}>Qty</th>
+              <th style={{ textAlign: 'center' }}>Unit</th>
+              <th style={{ textAlign: 'center' }}>Cost/Unit</th>
+              <th style={{ textAlign: 'center' }}>Amount</th>
+              <th style={{ textAlign: 'center' }}>Status</th>
+              <th className="col-remarks" style={{ textAlign: 'center' }}>Remarks</th>
+              <th className="col-actions" style={{ textAlign: 'center' }}>Actions</th>
             </tr>
           )
         case 'agriculture':
@@ -2046,18 +2041,18 @@ export default function AddReport() {
             <tr>
               {!isLGU && <th className="col-city">City</th>}
               <th className="col-barangay">Barangay</th>
-              <th>Classification</th>
-              <th>Commodity/Type</th>
-              <th>Farmers Affected</th>
-              <th>Area Totally (ha)</th>
-              <th>Area Partially (ha)</th>
-              <th>Area Total (ha)</th>
-              <th>Infra Totally</th>
-              <th>Infra Partially</th>
-              <th>Volume Loss (MT)</th>
-              <th>Value Loss (PHP)</th>
-              <th className="col-remarks">Remarks</th>
-              <th className="col-actions">Actions</th>
+              <th style={{ textAlign: 'center' }}>Classification</th>
+              <th style={{ textAlign: 'center' }}>Commodity/Type</th>
+              <th style={{ textAlign: 'center' }}>Farmers Affected</th>
+              <th style={{ textAlign: 'center' }}>Area Totally (ha)</th>
+              <th style={{ textAlign: 'center' }}>Area Partially (ha)</th>
+              <th style={{ textAlign: 'center' }}>Area Total (ha)</th>
+              <th style={{ textAlign: 'center' }}>Infra Totally</th>
+              <th style={{ textAlign: 'center' }}>Infra Partially</th>
+              <th style={{ textAlign: 'center' }}>Volume Loss (MT)</th>
+              <th style={{ textAlign: 'center' }}>Value Loss (PHP)</th>
+              <th className="col-remarks" style={{ textAlign: 'center' }}>Remarks</th>
+              <th className="col-actions" style={{ textAlign: 'center' }}>Actions</th>
             </tr>
           )
         case 'infrastructure':
@@ -2065,15 +2060,15 @@ export default function AddReport() {
             <tr>
               {!isLGU && <th className="col-city">City</th>}
               <th className="col-barangay">Barangay</th>
-              <th>Infra Type</th>
-              <th>Infra Classification</th>
-              <th>Infrastructure Name</th>
-              <th>Num Damaged</th>
-              <th>Qty/Unit</th>
-              <th>Cost (PHP)</th>
-              <th>Status</th>
-              <th className="col-remarks">Remarks</th>
-              <th className="col-actions">Actions</th>
+              <th style={{ textAlign: 'center' }}>Infra Type</th>
+              <th style={{ textAlign: 'center' }}>Infra Classification</th>
+              <th style={{ textAlign: 'center' }}>Infrastructure Name</th>
+              <th style={{ textAlign: 'center' }}>Num Damaged</th>
+              <th style={{ textAlign: 'center' }}>Qty/Unit</th>
+              <th style={{ textAlign: 'center' }}>Cost (PHP)</th>
+              <th style={{ textAlign: 'center' }}>Status</th>
+              <th className="col-remarks" style={{ textAlign: 'center' }}>Remarks</th>
+              <th className="col-actions" style={{ textAlign: 'center' }}>Actions</th>
             </tr>
           )
         default:
@@ -2331,9 +2326,9 @@ export default function AddReport() {
               <td><input type="number" min="0" value={row.noFamiliesRequiringAssistance} onChange={(e) => handleRowChange(index, 'noFamiliesRequiringAssistance', e.target.value)} placeholder="0" /></td>
               <td><input type="text" value={row.needs} onChange={(e) => handleRowChange(index, 'needs', e.target.value)} placeholder="Food, etc" /></td>
               <td>
-                <div style={{ display: 'flex', gap: '4px' }}>
-                  <input type="number" min="0" value={row.fnfiQty} onChange={(e) => handleRowChange(index, 'fnfiQty', e.target.value)} placeholder="Qty" style={{ width: '50px' }} />
-                  <input type="text" value={row.fnfiUnit} onChange={(e) => handleRowChange(index, 'fnfiUnit', e.target.value)} placeholder="Unit" style={{ width: '50px' }} />
+                <div style={{ display: 'flex', gap: '2px' }}>
+                  <input type="number" min="0" value={row.fnfiQty} onChange={(e) => handleRowChange(index, 'fnfiQty', e.target.value)} placeholder="Qty" style={{ width: '45px' }} />
+                  <input type="text" value={row.fnfiUnit} onChange={(e) => handleRowChange(index, 'fnfiUnit', e.target.value)} placeholder="Unit" style={{ width: '45px' }} />
                 </div>
               </td>
               <td><input type="number" min="0" value={row.fnfiCostPerUnit} onChange={(e) => handleRowChange(index, 'fnfiCostPerUnit', e.target.value)} placeholder="0" /></td>
@@ -2497,9 +2492,9 @@ export default function AddReport() {
               <td><input type="text" value={row.infrastructureName} onChange={(e) => handleRowChange(index, 'infrastructureName', e.target.value)} placeholder="Name of Infra" /></td>
               <td><input type="number" min="0" value={row.numberDamaged} onChange={(e) => handleRowChange(index, 'numberDamaged', e.target.value)} placeholder="0" /></td>
               <td>
-                <div style={{ display: 'flex', gap: '4px' }}>
-                  <input type="number" min="0" value={row.quantity} onChange={(e) => handleRowChange(index, 'quantity', e.target.value)} placeholder="Qty" style={{ width: '50px' }} />
-                  <input type="text" value={row.unit} onChange={(e) => handleRowChange(index, 'unit', e.target.value)} placeholder="Unit" style={{ width: '50px' }} />
+                <div style={{ display: 'flex', gap: '2px' }}>
+                  <input type="number" min="0" value={row.quantity} onChange={(e) => handleRowChange(index, 'quantity', e.target.value)} placeholder="Qty" style={{ width: '45px' }} />
+                  <input type="text" value={row.unit} onChange={(e) => handleRowChange(index, 'unit', e.target.value)} placeholder="Unit" style={{ width: '45px' }} />
                 </div>
               </td>
               <td><input type="number" min="0" step="0.01" value={row.cost} onChange={(e) => handleRowChange(index, 'cost', e.target.value)} placeholder="0.00" /></td>
@@ -2523,28 +2518,41 @@ export default function AddReport() {
             </div>
           </td>
           <td className="col-actions">
-            <button type="button" className="btn-icon" onClick={() => removeRow(index)} disabled={rows.length <= 1}>
+            <Button 
+              variant="ghost" 
+              color="danger" 
+              onClick={() => removeRow(index)} 
+              disabled={rows.length <= 1}
+              size="sm"
+            >
               <Trash size={16} />
-            </button>
+            </Button>
           </td>
         </tr>
       ))
     }
 
+    const activeCat = REPORT_CATEGORIES.find(c => c.id === activeCategoryModal)
+    
     return (
-      <div className="report-table-card">
-        <div className="report-table-header">
-          <h3>{editingItemId ? 'Edit' : 'Add'} {REPORT_CATEGORIES.find(c => c.id === activeCategoryModal)?.title} Report Data</h3>
-          <button type="button" className="add-report-btn-toolbar" onClick={addRow} style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem' }}>
-            <Plus size={16} />
-            Add Row
-          </button>
-        </div>
-        <div className="report-table-wrapper" style={{ maxHeight: '500px' }}>
-          <table className="report-table">
+      <div className="report-table-card modern-report-container">
+        <div className="consolidated-report-table-wrapper">
+          <table className="consolidated-report-table">
             <thead>{tableHeader()}</thead>
             <tbody>{tableRows()}</tbody>
           </table>
+          <div className="table-footer-actions">
+            <Button 
+              variant="subtle" 
+              color="primary" 
+              size="sm" 
+              onClick={addRow}
+              leftIcon={<Plus size={16} />}
+              className="add-row-bottom-btn"
+            >
+              Add New Row
+            </Button>
+          </div>
         </div>
       </div>
     )
@@ -2575,18 +2583,18 @@ export default function AddReport() {
   }
 
   return (
-    <div className="page add-report-page">
-      <div className="add-report-card">
-        <div className="add-report-toolbar">
+    <div className="page consolidated-report-page">
+      <div className="consolidated-report-card">
+        <div className="consolidated-report-toolbar">
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            <h1 className="add-report-title">
+            <h1 className="consolidated-report-title">
               {view === 'events' ? 'Select Event for Reporting' :
                 view === 'versions' ? (selectedEvent?.name || 'Report Versions') :
                   (currentSituationalReport?.title || 'Report Entries')}
             </h1>
           </div>
 
-          <div className="add-report-toolbar-controls">
+          <div className="consolidated-report-toolbar-controls">
             <SearchInput
               placeholder={view === 'events' ? "Search events..." : "Search reports..."}
               value={searchTerm}
@@ -2601,46 +2609,51 @@ export default function AddReport() {
               <>
                 {view === 'entries' && (
                   <>
-                    {!isLGU && (
-                      <button
-                        type="button"
-                        className="btn-secondary"
+                    {currentSituationalReport && !isLGU && (
+                      <Button
+                        variant="solid"
+                        color="warning"
                         onClick={() => handleOpenEditSitRepModal(currentSituationalReport)}
                         title="Edit Report Details"
-                        style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+                        style={{ height: '42px', padding: '0 16px' }}
+                        leftIcon={<PencilSimple size={16} />}
                       >
-                        <PencilSimple size={16} />
                         Edit Report
-                      </button>
+                      </Button>
                     )}
-                    <button 
-                      type="button" 
-                      className="btn-secondary" 
+                    <Button 
+                      variant="solid"
+                      color="success"
                       onClick={() => handleDownloadClick(currentSituationalReport)}
                       disabled={processingExportId === currentSituationalReport?.id}
-                      style={{ display: 'flex', alignItems: 'center', gap: '8px' }}
+                      style={{ height: '42px', padding: '0 16px' }}
+                      leftIcon={processingExportId === currentSituationalReport?.id ? <LoadingSpinner size={14} /> : <Download size={16} />}
                     >
-                      {processingExportId === currentSituationalReport?.id ? <ArrowsClockwise size={16} className="animate-spin" weight="bold" /> : <Download size={16} />}
                       Download Report
-                    </button>
+                    </Button>
                   </>
                 )}
 
                 {/* Only non-LGUs can create new Situation Reports. Everyone can add entries to an existing report. */}
                 {(view === 'entries' || (view === 'versions' && !isLGU)) && (
-                  <button type="button" className="btn-primary add-report-btn-add" onClick={() => {
-                    if (view === 'versions') {
-                      setNewSitRepTitle(`Situational Report No. ${situationalReports.length + 1}`)
-                      setPingedCategories(Object.keys(CATEGORY_LABELS))
-                      setTargetLgus([])
-                      setShowNewSitRepModal(true)
-                    } else {
-                      setShowCategoryModal(true)
-                    }
-                  }}>
-                    <Plus size={18} />
+                  <Button 
+                    variant="solid" 
+                    color="primary" 
+                    onClick={() => {
+                      if (view === 'versions') {
+                        setNewSitRepTitle(`Situational Report No. ${situationalReports.length + 1}`)
+                        setPingedCategories(Object.keys(CATEGORY_LABELS))
+                        setTargetLgus([])
+                        setShowNewSitRepModal(true)
+                      } else {
+                        setShowCategoryModal(true)
+                      }
+                    }} 
+                    leftIcon={<Plus size={18} />}
+                    style={{ height: '42px', padding: '0 24px' }}
+                  >
                     {view === 'versions' ? 'Make Report' : 'Add Entry'}
-                  </button>
+                  </Button>
                 )}
               </>
             )}
@@ -2682,14 +2695,14 @@ export default function AddReport() {
 
         {view === 'events' ? (
           <div className="add-report-event-view">
-            <div className="submitted-reports-wrapper">
-              <table className="report-table report-table-display add-report-display-table">
+            <div className="consolidated-report-table-wrapper">
+              <table className="consolidated-report-table report-table-display add-report-display-table">
                 <thead>
                   <tr>
-                    <th>Event Name</th>
-                    <th>Event Type</th>
-                    <th>Alert Status</th>
-                    <th>Reference Date</th>
+                    <th style={{ textAlign: 'center' }}>Event Name</th>
+                    <th style={{ textAlign: 'center' }}>Event Type</th>
+                    <th style={{ textAlign: 'center' }}>Alert Status</th>
+                    <th style={{ textAlign: 'center' }}>Reference Date</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2732,52 +2745,51 @@ export default function AddReport() {
               </table>
             </div>
 
-            <div className="add-report-pagination">
-              <button
-                type="button"
-                className="add-report-pagination-btn"
+            <div className="consolidated-report-pagination">
+              <Button
+                variant="subtle"
                 disabled={currentPage <= 1}
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
               >
                 &lt; Previous
-              </button>
-              <div className="add-report-pagination-numbers">
+              </Button>
+              <div className="consolidated-report-pagination-numbers">
                 {Array.from({ length: totalEventPages }, (_, i) => i + 1)
                   .filter((p) => p === 1 || p === totalEventPages || (p >= currentPage - 2 && p <= currentPage + 2))
                   .map((p, i, arr) => (
                     <span key={p}>
-                      {i > 0 && arr[i - 1] !== p - 1 && <span className="add-report-pagination-ellipsis">...</span>}
-                      <button
-                        type="button"
-                        className={`add-report-pagination-num ${currentPage === p ? 'active' : ''}`}
+                      {i > 0 && arr[i - 1] !== p - 1 && <span className="consolidated-report-pagination-ellipsis">...</span>}
+                      <Button
+                        variant={currentPage === p ? 'solid' : 'ghost'}
+                        size="sm"
+                        style={{ minWidth: '36px', height: '36px', padding: 0 }}
                         onClick={() => setCurrentPage(p)}
                       >
                         {String(p).padStart(2, '0')}
-                      </button>
+                      </Button>
                     </span>
                   ))}
               </div>
-              <button
-                type="button"
-                className="add-report-pagination-btn"
+              <Button
+                variant="subtle"
                 disabled={currentPage >= totalEventPages}
                 onClick={() => setCurrentPage((p) => Math.min(totalEventPages, p + 1))}
               >
                 Next &gt;
-              </button>
+              </Button>
             </div>
           </div>
         ) : view === 'versions' ? (
           <div className="add-report-event-view">
-            <div className="submitted-reports-wrapper">
-              <table className="report-table report-table-display add-report-display-table">
+            <div className="consolidated-report-table-wrapper">
+              <table className="consolidated-report-table report-table-display add-report-display-table">
                 <thead>
                   <tr>
-                    <th>Report Number</th>
-                    <th>Report Title</th>
-                    <th>Date Created</th>
-                    <th>Status</th>
-                    {(isLGU || user?.account_type === 'LGU Admin' || user?.account_type === 'Provincial' || user?.account_type === 'Provincial Admin' || user?.account_type === 'Regional' || user?.account_type === 'Regional Admin' || user?.account_type === 'Super Admin') && <th>Action</th>}
+                    <th style={{ textAlign: 'center' }}>Report Number</th>
+                    <th style={{ textAlign: 'center' }}>Report Title</th>
+                    <th style={{ textAlign: 'center' }}>Date Created</th>
+                    <th style={{ textAlign: 'center' }}>Status</th>
+                    <th className="col-action">ACTIONS</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2811,63 +2823,52 @@ export default function AddReport() {
                             {sr.status || 'Draft'}
                           </span>
                         </td>
-                          <td onClick={(e) => e.stopPropagation()} style={{ width: '220px' }}>
-                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                              <button
-                                type="button"
-                                className="add-report-btn-action"
+                          <td className="col-action" onClick={(e) => e.stopPropagation()} style={{ width: '220px' }}>
+                            <div style={{ display: 'flex', gap: '8px', alignItems: 'center', justifyContent: 'center' }}>
+                              <Button
+                                variant="outline"
+                                size="sm"
                                 onClick={() => {
                                   setCurrentSituationalReport(sr)
                                   setView('entries')
                                   setCurrentPage(1)
                                 }}
+                                icon={<FileText size={14} />}
                               >
-                                <FileText size={14} />
                                 {(isLGU || user?.account_type === 'LGU Admin') ? 'View Details' : 'Manage Entries'}
-                              </button>
+                              </Button>
                               
                               {(user?.account_type === 'Provincial' || user?.account_type === 'Provincial Admin') && (!sr.status || ['draft', 'sent'].includes(sr.status.toLowerCase())) && (
-                                <button
-                                  type="button"
-                                  className="add-report-btn-action send-btn"
+                                <Button
+                                  variant="solid"
+                                  size="sm"
                                   onClick={() => handleUploadPdfClick(sr)}
                                   title="Send Report"
+                                  icon={<PaperPlaneRight size={14} />}
                                 >
-                                  <PaperPlaneRight size={14} />
                                   Send
-                                </button>
+                                </Button>
                               )}
                               {(user?.account_type === 'Provincial' || user?.account_type === 'Provincial Admin') && sr.status?.toLowerCase() === 'pending approval' && (
-                                <button
-                                  type="button"
-                                  className="add-report-btn-action upload-btn"
+                                <Button
+                                  variant="outline"
+                                  size="sm"
                                   onClick={() => handleUploadPdfClick(sr)}
                                   title="Re-upload Signed PDF"
+                                  icon={<Upload size={14} />}
                                 >
-                                  <Upload size={14} />
                                   Re-upload
-                                </button>
-                              )}
-                              {isProvincialApprover && sr.status?.toLowerCase() === 'pending approval' && (
-                                <button
-                                  type="button"
-                                  className="add-report-btn-action approve-btn"
-                                  onClick={() => handleOpenReviewModal(sr)}
-                                  title="Review Situational Report"
-                                >
-                                  <Eye size={14} />
-                                  Review
-                                </button>
+                                </Button>
                               )}
                               {(user?.account_type === 'Regional' || user?.account_type === 'Regional Admin' || user?.account_type === 'Super Admin') && (
                                 <Button
-                                  type="button"
-                                  className="add-report-btn-action pdf-btn"
+                                  variant="outline"
+                                  size="sm"
                                   onClick={() => handleDownloadClick(sr)}
                                   title="Download Report"
                                   isLoading={processingExportId === sr.id}
+                                  icon={<Download size={14} />}
                                 >
-                                  <Download size={14} />
                                   Download
                                 </Button>
                               )}
@@ -2890,16 +2891,16 @@ export default function AddReport() {
           <LoadingSpinner label="Loading report data..." />
         ) : submittedReports.length > 0 || view === 'entries' ? (
           <>
-            <div className="submitted-reports-wrapper">
-              <table className="report-table report-table-display add-report-display-table">
+            <div className="consolidated-report-table-wrapper">
+              <table className="consolidated-report-table report-table-display add-report-display-table">
                 <thead>
                   <tr>
                     <th style={{ width: '180px' }}>LOCATION</th>
                     <th style={{ width: '140px' }}>CLASSIFICATION</th>
-                    <th>SUMMARY / DETAILS</th>
+                    <th style={{ textAlign: 'center' }}>SUMMARY / DETAILS</th>
                     <th style={{ width: '120px' }}>STATUS</th>
                     <th style={{ width: '180px' }}>REMARKS</th>
-                    <th className="col-actions">ACTIONS</th>
+                    <th className="col-action">ACTIONS</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2936,24 +2937,26 @@ export default function AddReport() {
                         <td style={{ fontSize: '11px', color: '#64748b', maxWidth: '180px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                           {item.remarks || '-'}
                         </td>
-                        <td className="col-actions">
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <button
-                              type="button"
-                              className="add-report-btn-action"
+                        <td className="col-action">
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
+                            <Button
+                              variant="solid"
+                              color="primary"
+                              size="sm"
                               onClick={() => handleEditReport(item)}
+                              icon={<FilePlus size={14} />}
                             >
-                              <FilePlus size={14} />
                               Edit Entry
-                            </button>
-                            <button
-                              type="button"
-                              className="btn-icon delete"
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              color="danger"
                               onClick={() => handleConfirmDelete(item)}
                               title="Delete Report"
                             >
                               <Trash size={14} />
-                            </button>
+                            </Button>
                           </div>
                         </td>
                       </tr>
@@ -2969,39 +2972,38 @@ export default function AddReport() {
               </table>
             </div>
 
-            <div className="add-report-pagination">
-              <button
-                type="button"
-                className="add-report-pagination-btn"
+            <div className="consolidated-report-pagination">
+              <Button
+                variant="subtle"
                 disabled={currentPage <= 1}
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
               >
                 &lt; Previous
-              </button>
-              <div className="add-report-pagination-numbers">
+              </Button>
+              <div className="consolidated-report-pagination-numbers">
                 {Array.from({ length: totalPages }, (_, i) => i + 1)
                   .filter((p) => p === 1 || p === totalPages || (p >= currentPage - 2 && p <= currentPage + 2))
                   .map((p, i, arr) => (
                     <span key={p}>
-                      {i > 0 && arr[i - 1] !== p - 1 && <span className="add-report-pagination-ellipsis">...</span>}
-                      <button
-                        type="button"
-                        className={`add-report-pagination-num ${currentPage === p ? 'active' : ''}`}
+                      {i > 0 && arr[i - 1] !== p - 1 && <span className="consolidated-report-pagination-ellipsis">...</span>}
+                      <Button
+                        variant={currentPage === p ? 'solid' : 'ghost'}
+                        size="sm"
+                        style={{ minWidth: '36px', height: '36px', padding: 0 }}
                         onClick={() => setCurrentPage(p)}
                       >
                         {String(p).padStart(2, '0')}
-                      </button>
+                      </Button>
                     </span>
                   ))}
               </div>
-              <button
-                type="button"
-                className="add-report-pagination-btn"
+              <Button
+                variant="subtle"
                 disabled={currentPage >= totalPages}
                 onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
               >
                 Next &gt;
-              </button>
+              </Button>
             </div>
           </>
         ) : !error ? (
@@ -3020,1057 +3022,992 @@ export default function AddReport() {
         />
       )}
 
-      {detailsModal && (
-        <div className="modal-overlay" onClick={() => setDetailsModal(null)}>
-          <div className="modal-content glass-modal details-modal" style={{ maxWidth: '600px' }} onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <div style={{ color: REPORT_CATEGORIES.find(c => c.id === detailsModal.category)?.color }}>
-                  {REPORT_CATEGORIES.find(c => c.id === detailsModal.category)?.icon}
-                </div>
-                <h2>{detailsModal.categoryLabel} Details</h2>
-              </div>
-              <button type="button" className="modal-close" onClick={() => setDetailsModal(null)}><X size={20} /></button>
+      <HeaderFooterModal
+        isOpen={!!detailsModal}
+        onClose={() => setDetailsModal(null)}
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ color: REPORT_CATEGORIES.find(c => c.id === detailsModal?.category)?.color }}>
+              {REPORT_CATEGORIES.find(c => c.id === detailsModal?.category)?.icon}
             </div>
-            <div className="modal-body">
-              <div className="details-grid">
-                <div className="detail-item">
-                  <span className="detail-label">Location</span>
-                  <span className="detail-value">{detailsModal.city ? `${detailsModal.city}, ` : ''}{detailsModal.subject}</span>
-                </div>
-                <div className="detail-item">
-                  <span className="detail-label">Status</span>
-                  <span className={`status-pill status-${String(detailsModal.status || 'resolved').toLowerCase().replace(/\s+/g, '-')}`}>
-                    {detailsModal.status || 'Resolved'}
-                  </span>
-                </div>
-                {Object.entries(detailsModal).map(([key, val]) => {
-                  if (['id', 'category', 'categoryLabel', 'subject', 'timestamp', 'status', 'city', 'barangay', 'event_id', 'report_id', 'created_at', 'submitted_at', 'tableName'].includes(key)) return null
-                  if (val === null || val === undefined || val === '') return null
-
-                  const label = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
-                  return (
-                    <div className="detail-item" key={key}>
-                      <span className="detail-label">{label}</span>
-                      <span className="detail-value">{String(val)}</span>
-                    </div>
-                  )
-                })}
-              </div>
-              {detailsModal.remarks && (
-                <div style={{ marginTop: '1.5rem', padding: '1rem', background: '#f8fafc', borderRadius: '8px' }}>
-                  <span className="detail-label" style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Remarks</span>
-                  <p style={{ margin: 0, fontSize: '13px', color: '#334155', lineHeight: 1.5 }}>{detailsModal.remarks}</p>
-                </div>
-              )}
-            </div>
-            <div className="modal-footer">
-              <button type="button" className="modal-btn-primary" onClick={() => setDetailsModal(null)}>Close</button>
-            </div>
+            <span>{detailsModal?.categoryLabel} Details</span>
           </div>
-        </div>
-      )}
+        }
+        maxWidth="950px"
+        footer={<Button variant="solid" onClick={() => setDetailsModal(null)}>Close</Button>}
+      >
+        {detailsModal && (
+          <div className="details-grid">
+            <div className="detail-item">
+              <span className="detail-label">Location</span>
+              <span className="detail-value">{detailsModal.city ? `${detailsModal.city}, ` : ''}{detailsModal.subject}</span>
+            </div>
+            <div className="detail-item">
+              <span className="detail-label">Status</span>
+              <span className={`status-pill status-${String(detailsModal.status || 'resolved').toLowerCase().replace(/\s+/g, '-')}`}>
+                {detailsModal.status || 'Resolved'}
+              </span>
+            </div>
+            {Object.entries(detailsModal).map(([key, val]) => {
+              if (['id', 'category', 'categoryLabel', 'subject', 'timestamp', 'status', 'city', 'barangay', 'event_id', 'report_id', 'created_at', 'submitted_at', 'tableName'].includes(key)) return null
+              if (val === null || val === undefined || val === '') return null
 
-      {activeCategoryModal === 'evacuation' && (
-        <div className="modal-overlay" onClick={handleCloseActiveModal}>
-          <div
-            className="modal-content glass-modal add-report-modal"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="modal-header">
-              <h2>Affected Population Report</h2>
-              <button
-                type="button"
-                className="modal-close"
-                onClick={handleCloseActiveModal}
-                aria-label="Close"
+              const label = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+              return (
+                <div className="detail-item" key={key}>
+                  <span className="detail-label">{label}</span>
+                  <span className="detail-value">{String(val)}</span>
+                </div>
+              )
+            })}
+            {detailsModal.remarks && (
+              <div style={{ marginTop: '1.5rem', padding: '1rem', background: '#f8fafc', borderRadius: '8px', gridColumn: '1 / -1' }}>
+                <span className="detail-label" style={{ display: 'block', marginBottom: '4px', fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase' }}>Remarks</span>
+                <p style={{ margin: 0, fontSize: '13px', color: '#334155', lineHeight: 1.5 }}>{detailsModal.remarks}</p>
+              </div>
+            )}
+          </div>
+        )}
+      </HeaderFooterModal>
+
+      <HeaderFooterModal
+        isOpen={activeCategoryModal === 'evacuation'}
+        onClose={handleCloseActiveModal}
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ color: '#3b82f6' }}>
+              <Users size={24} />
+            </div>
+            <span>Affected Population Report</span>
+          </div>
+        }
+        maxWidth="98%"
+        footer={
+          <>
+            <Button variant="subtle" onClick={handleCloseActiveModal}>Cancel</Button>
+            <Button
+              variant="solid"
+              color="primary"
+              onClick={handleSubmit}
+              isLoading={submitting}
+              leftIcon={<FilePlus size={16} />}
+            >
+              Submit Report
+            </Button>
+          </>
+        }
+      >
+        <div className="report-table-card modern-report-container">
+
+          <div className="consolidated-report-table-wrapper">
+            <table className="consolidated-report-table">
+              <thead>
+                <tr className="report-table-header-row-1">
+                  <th colSpan={isLGU ? 3 : 4} className="col-group col-barangay" style={{ textAlign: 'center' }}>
+                    NO. OF AFFECTED
+                  </th>
+                  <th colSpan={2} className="col-group" style={{ textAlign: 'center' }}>
+                    NO. OF ECS
+                  </th>
+                  <th colSpan={4} className="col-group" style={{ textAlign: 'center' }}>
+                    INSIDE EVACUATION CENTERS
+                  </th>
+                  <th colSpan={4} className="col-group" style={{ textAlign: 'center' }}>
+                    OUTSIDE EVACUATION CENTERS
+                  </th>
+                  <th rowSpan={2}>Remarks</th>
+                  <th rowSpan={2} className="col-actions">Actions</th>
+                </tr>
+                <tr className="report-table-header-row-2">
+                  {!isLGU && <th className="col-city">City</th>}
+                  <th className="col-barangay">Barangay</th>
+                  <th style={{ textAlign: 'center' }}>Families</th>
+                  <th style={{ textAlign: 'center' }}>Persons</th>
+                  <th style={{ textAlign: 'center' }}>CUM</th>
+                  <th style={{ textAlign: 'center' }}>NOW</th>
+                  <th style={{ textAlign: 'center' }}>Fam. CUM</th>
+                  <th style={{ textAlign: 'center' }}>Fam. NOW</th>
+                  <th style={{ textAlign: 'center' }}>Per. CUM</th>
+                  <th style={{ textAlign: 'center' }}>Per. NOW</th>
+                  <th style={{ textAlign: 'center' }}>Fam. CUM</th>
+                  <th style={{ textAlign: 'center' }}>Fam. NOW</th>
+                  <th style={{ textAlign: 'center' }}>Per. CUM</th>
+                  <th style={{ textAlign: 'center' }}>Per. NOW</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row, rowIndex) => (
+                  <tr key={rowIndex} className="report-table-data-row">
+                    {!isLGU && (
+                      <td className="col-city">
+                        <SearchableSelect
+                          value={row.city}
+                          options={LGU_NAMES}
+                          onChange={(e) => {
+                            handleRowChange(rowIndex, 'city', e.target.value)
+                            handleRowChange(rowIndex, 'barangay', '')
+                          }}
+                          placeholder="Select city..."
+                          disabled={isLGU}
+                        />
+                      </td>
+                    )}
+                    <td className="col-barangay">
+                      <SearchableSelect
+                        value={row.barangay}
+                        options={getBarangaysForCity(row.city)}
+                        onChange={(e) =>
+                          handleRowChange(rowIndex, 'barangay', e.target.value)
+                        }
+                        placeholder="Select barangay..."
+                        disabled={!row.city}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="0"
+                        value={row.affectedFamilies}
+                        onChange={(e) =>
+                          handleRowChange(
+                            rowIndex,
+                            'affectedFamilies',
+                            e.target.value
+                          )
+                        }
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="0"
+                        value={row.affectedPersons}
+                        onChange={(e) =>
+                          handleRowChange(
+                            rowIndex,
+                            'affectedPersons',
+                            e.target.value
+                          )
+                        }
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="0"
+                        value={row.ecsCum}
+                        onChange={(e) =>
+                          handleRowChange(rowIndex, 'ecsCum', e.target.value)
+                        }
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="0"
+                        value={row.ecsNow}
+                        onChange={(e) =>
+                          handleRowChange(rowIndex, 'ecsNow', e.target.value)
+                        }
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="0"
+                        value={row.insideFamiliesCum}
+                        onChange={(e) =>
+                          handleRowChange(
+                            rowIndex,
+                            'insideFamiliesCum',
+                            e.target.value
+                          )
+                        }
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="0"
+                        value={row.insideFamiliesNow}
+                        onChange={(e) =>
+                          handleRowChange(
+                            rowIndex,
+                            'insideFamiliesNow',
+                            e.target.value
+                          )
+                        }
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="0"
+                        value={row.insidePersonsCum}
+                        onChange={(e) =>
+                          handleRowChange(
+                            rowIndex,
+                            'insidePersonsCum',
+                            e.target.value
+                          )
+                        }
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="0"
+                        value={row.insidePersonsNow}
+                        onChange={(e) =>
+                          handleRowChange(
+                            rowIndex,
+                            'insidePersonsNow',
+                            e.target.value
+                          )
+                        }
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="0"
+                        value={row.outsideFamiliesCum}
+                        onChange={(e) =>
+                          handleRowChange(
+                            rowIndex,
+                            'outsideFamiliesCum',
+                            e.target.value
+                          )
+                        }
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="0"
+                        value={row.outsideFamiliesNow}
+                        onChange={(e) =>
+                          handleRowChange(
+                            rowIndex,
+                            'outsideFamiliesNow',
+                            e.target.value
+                          )
+                        }
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="0"
+                        value={row.outsidePersonsCum}
+                        onChange={(e) =>
+                          handleRowChange(
+                            rowIndex,
+                            'outsidePersonsCum',
+                            e.target.value
+                          )
+                        }
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="0"
+                        value={row.outsidePersonsNow}
+                        onChange={(e) =>
+                          handleRowChange(
+                            rowIndex,
+                            'outsidePersonsNow',
+                            e.target.value
+                          )
+                        }
+                      />
+                    </td>
+                    <td>
+                      <div
+                        className="remarks-trigger"
+                        onClick={() => openTextEditorModal(rowIndex, 'remarks', row.remarks, 'Edit Remarks')}
+                        title={row.remarks || 'Add remarks...'}
+                      >
+                        {row.remarks || <span className="placeholder">Add remarks...</span>}
+                      </div>
+                    </td>
+                    <td className="col-actions">
+                      <Button
+                        variant="ghost"
+                        color="danger"
+                        size="sm"
+                        onClick={() => removeRow(rowIndex)}
+                        title="Remove row"
+                        disabled={rows.length === 1}
+                      >
+                        <Trash size={16} />
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="table-footer-actions">
+              <Button 
+                variant="subtle" 
+                color="primary" 
+                size="sm" 
+                onClick={addRow}
+                leftIcon={<Plus size={16} />}
+                className="add-row-bottom-btn"
               >
-                <X size={20} />
-              </button>
+                Add New Row
+              </Button>
             </div>
-
-            <form onSubmit={handleSubmit} className="add-report-form modal-form">
-              <div className="modal-body">
-                <div className="report-table-card">
-                  <div className="report-table-header">
-                    <h3>Evacuation Report Data</h3>
-                    <button type="button" className="btn-secondary" onClick={addRow}>
-                      <Plus size={14} />
-                      Add Row
-                    </button>
-                  </div>
-
-                  <div className="report-table-wrapper">
-                    <table className="report-table">
-                      <thead>
-                        <tr className="report-table-header-row-1">
-                          <th colSpan={isLGU ? 3 : 4} className="col-group col-barangay">
-                            NO. OF AFFECTED
-                          </th>
-                          <th colSpan={2} className="col-group">
-                            NO. OF ECS
-                          </th>
-                          <th colSpan={4} className="col-group">
-                            INSIDE EVACUATION CENTERS
-                          </th>
-                          <th colSpan={4} className="col-group">
-                            OUTSIDE EVACUATION CENTERS
-                          </th>
-                          <th rowSpan={2}>Remarks</th>
-                          <th rowSpan={2} className="col-actions">Actions</th>
-                        </tr>
-                        <tr className="report-table-header-row-2">
-                          {!isLGU && <th className="col-city">City</th>}
-                          <th className="col-barangay">Barangay</th>
-                          <th>Families</th>
-                          <th>Persons</th>
-                          <th>CUM</th>
-                          <th>NOW</th>
-                          <th>Fam. CUM</th>
-                          <th>Fam. NOW</th>
-                          <th>Per. CUM</th>
-                          <th>Per. NOW</th>
-                          <th>Fam. CUM</th>
-                          <th>Fam. NOW</th>
-                          <th>Per. CUM</th>
-                          <th>Per. NOW</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {rows.map((row, rowIndex) => (
-                          <tr key={rowIndex} className="report-table-data-row">
-                            {!isLGU && (
-                              <td className="col-city">
-                                <SearchableSelect
-                                  value={row.city}
-                                  options={LGU_NAMES}
-                                  onChange={(e) => {
-                                    handleRowChange(rowIndex, 'city', e.target.value)
-                                    handleRowChange(rowIndex, 'barangay', '')
-                                  }}
-                                  placeholder="Select city..."
-                                  disabled={isLGU}
-                                />
-                              </td>
-                            )}
-                            <td className="col-barangay">
-                              <SearchableSelect
-                                value={row.barangay}
-                                options={getBarangaysForCity(row.city)}
-                                onChange={(e) =>
-                                  handleRowChange(rowIndex, 'barangay', e.target.value)
-                                }
-                                placeholder="Select barangay..."
-                                disabled={!row.city}
-                              />
-                            </td>
-                            <td>
-                              <input
-                                type="number"
-                                min="0"
-                                placeholder="0"
-                                value={row.affectedFamilies}
-                                onChange={(e) =>
-                                  handleRowChange(
-                                    rowIndex,
-                                    'affectedFamilies',
-                                    e.target.value
-                                  )
-                                }
-                              />
-                            </td>
-                            <td>
-                              <input
-                                type="number"
-                                min="0"
-                                placeholder="0"
-                                value={row.affectedPersons}
-                                onChange={(e) =>
-                                  handleRowChange(
-                                    rowIndex,
-                                    'affectedPersons',
-                                    e.target.value
-                                  )
-                                }
-                              />
-                            </td>
-                            <td>
-                              <input
-                                type="number"
-                                min="0"
-                                placeholder="0"
-                                value={row.ecsCum}
-                                onChange={(e) =>
-                                  handleRowChange(rowIndex, 'ecsCum', e.target.value)
-                                }
-                              />
-                            </td>
-                            <td>
-                              <input
-                                type="number"
-                                min="0"
-                                placeholder="0"
-                                value={row.ecsNow}
-                                onChange={(e) =>
-                                  handleRowChange(rowIndex, 'ecsNow', e.target.value)
-                                }
-                              />
-                            </td>
-                            <td>
-                              <input
-                                type="number"
-                                min="0"
-                                placeholder="0"
-                                value={row.insideFamiliesCum}
-                                onChange={(e) =>
-                                  handleRowChange(
-                                    rowIndex,
-                                    'insideFamiliesCum',
-                                    e.target.value
-                                  )
-                                }
-                              />
-                            </td>
-                            <td>
-                              <input
-                                type="number"
-                                min="0"
-                                placeholder="0"
-                                value={row.insideFamiliesNow}
-                                onChange={(e) =>
-                                  handleRowChange(
-                                    rowIndex,
-                                    'insideFamiliesNow',
-                                    e.target.value
-                                  )
-                                }
-                              />
-                            </td>
-                            <td>
-                              <input
-                                type="number"
-                                min="0"
-                                placeholder="0"
-                                value={row.insidePersonsCum}
-                                onChange={(e) =>
-                                  handleRowChange(
-                                    rowIndex,
-                                    'insidePersonsCum',
-                                    e.target.value
-                                  )
-                                }
-                              />
-                            </td>
-                            <td>
-                              <input
-                                type="number"
-                                min="0"
-                                placeholder="0"
-                                value={row.insidePersonsNow}
-                                onChange={(e) =>
-                                  handleRowChange(
-                                    rowIndex,
-                                    'insidePersonsNow',
-                                    e.target.value
-                                  )
-                                }
-                              />
-                            </td>
-                            <td>
-                              <input
-                                type="number"
-                                min="0"
-                                placeholder="0"
-                                value={row.outsideFamiliesCum}
-                                onChange={(e) =>
-                                  handleRowChange(
-                                    rowIndex,
-                                    'outsideFamiliesCum',
-                                    e.target.value
-                                  )
-                                }
-                              />
-                            </td>
-                            <td>
-                              <input
-                                type="number"
-                                min="0"
-                                placeholder="0"
-                                value={row.outsideFamiliesNow}
-                                onChange={(e) =>
-                                  handleRowChange(
-                                    rowIndex,
-                                    'outsideFamiliesNow',
-                                    e.target.value
-                                  )
-                                }
-                              />
-                            </td>
-                            <td>
-                              <input
-                                type="number"
-                                min="0"
-                                placeholder="0"
-                                value={row.outsidePersonsCum}
-                                onChange={(e) =>
-                                  handleRowChange(
-                                    rowIndex,
-                                    'outsidePersonsCum',
-                                    e.target.value
-                                  )
-                                }
-                              />
-                            </td>
-                            <td>
-                              <input
-                                type="number"
-                                min="0"
-                                placeholder="0"
-                                value={row.outsidePersonsNow}
-                                onChange={(e) =>
-                                  handleRowChange(
-                                    rowIndex,
-                                    'outsidePersonsNow',
-                                    e.target.value
-                                  )
-                                }
-                              />
-                            </td>
-                            <td>
-                              <div
-                                className="remarks-trigger"
-                                onClick={() => openTextEditorModal(rowIndex, 'remarks', row.remarks, 'Edit Remarks')}
-                                title={row.remarks || 'Add remarks...'}
-                              >
-                                {row.remarks || <span className="placeholder">Add remarks...</span>}
-                              </div>
-                            </td>
-                            <td className="col-actions">
-                              <button
-                                type="button"
-                                className="btn-icon btn-danger"
-                                onClick={() => removeRow(rowIndex)}
-                                title="Remove row"
-                                disabled={rows.length === 1}
-                              >
-                                <Trash size={16} />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              </div>
-
-              <div className="modal-footer">
-                <button type="button" className="modal-btn-cancel" onClick={handleCloseActiveModal}>Cancel</button>
-                <Button
-                  type="submit"
-                  className="modal-btn-primary"
-                  isLoading={submitting}
-                >
-                  <FilePlus size={16} />
-                  <span>Submit Report</span>
-                </Button>
-              </div>
-            </form>
           </div>
         </div>
-      )}
+      </HeaderFooterModal>
 
-      {activeCategoryModal && activeCategoryModal !== 'evacuation' && (
-        <div className="modal-overlay" onClick={handleCloseActiveModal}>
-          <div
-            className="modal-content glass-modal add-report-modal"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="modal-header">
-              <h2>{REPORT_CATEGORIES.find(c => c.id === activeCategoryModal)?.title || 'Submit Report'}</h2>
-              <button
-                type="button"
-                className="modal-close"
-                onClick={handleCloseActiveModal}
-                aria-label="Close"
-              >
-                <X size={20} />
-              </button>
+      <HeaderFooterModal
+        isOpen={activeCategoryModal && activeCategoryModal !== 'evacuation'}
+        onClose={handleCloseActiveModal}
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <div style={{ color: REPORT_CATEGORIES.find(c => c.id === activeCategoryModal)?.color }}>
+              {REPORT_CATEGORIES.find(c => c.id === activeCategoryModal)?.icon}
             </div>
-
-            <form onSubmit={handleSubmit} className="add-report-form modal-form">
-              <div className="modal-body">
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-                  {renderUnifiedForm()}
-                </div>
-              </div>
-              <div className="modal-footer">
-                <button type="button" className="modal-btn-cancel" onClick={handleCloseActiveModal}>Cancel</button>
-                <Button type="submit" className="modal-btn-primary" isLoading={submitting}>
-                  <FilePlus size={18} />
-                  <span>Submit Report</span>
-                </Button>
-              </div>
-            </form>
+            <span>{REPORT_CATEGORIES.find(c => c.id === activeCategoryModal)?.title}</span>
           </div>
+        }
+        maxWidth="98%"
+        footer={
+          <>
+            <Button variant="subtle" onClick={handleCloseActiveModal}>Cancel</Button>
+            <Button
+              variant="solid"
+              color="primary"
+              onClick={handleSubmit}
+              isLoading={submitting}
+              leftIcon={<FilePlus size={18} />}
+            >
+              Submit Report
+            </Button>
+          </>
+        }
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          {renderUnifiedForm()}
         </div>
-      )}
+      </HeaderFooterModal>
 
       {/* New Situation Report Modal */}
-      {showNewSitRepModal && (
-        <div className="modal-overlay" onClick={() => setShowNewSitRepModal(false)}>
-          <div className="modal-content glass-modal sitrep-modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <div style={{ backgroundColor: '#6366f115', color: '#6366f1', padding: '0.5rem', borderRadius: '8px' }}>
-                  <Plus size={20} />
-                </div>
-                <h2 style={{ fontSize: '1.25rem', fontWeight: '600', color: '#1e293b' }}>New Situation Report</h2>
-              </div>
-              <button type="button" className="modal-close" onClick={() => setShowNewSitRepModal(false)}>
-                <X size={20} />
-              </button>
-            </div>
-            <div className="modal-body" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#64748b', marginBottom: '0.5rem' }}>Report Title</label>
-                <input
-                  type="text"
-                  className="modern-input"
-                  style={{ width: '100%', padding: '0.75rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '1rem' }}
-                  value={newSitRepTitle}
-                  onChange={(e) => setNewSitRepTitle(e.target.value)}
-                  placeholder="e.g. Situational Report No. 1"
-                  autoFocus
-                />
-              </div>
-
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                  <label style={{ fontSize: '0.875rem', fontWeight: '500', color: '#64748b' }}>Target LGUs ({targetLgus.length})</label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const names = getLguNames(userProvince)
-                      setTargetLgus(prev => Array.from(new Set([...prev, ...names])).sort())
-                    }}
-                    style={{ padding: '4px 12px', fontSize: '0.75rem', borderRadius: '6px', background: '#f1f5f9', border: '1px solid #e2e8f0', color: '#475569', cursor: 'pointer', fontWeight: 600 }}
-                  >
-                    Select All LGUs
-                  </button>
-                </div>
-
-                <div style={{ marginBottom: '1rem' }}>
-                  <label style={{ display: 'block', fontSize: '0.75rem', color: '#94a3b8', marginBottom: '4px' }}>Add LGU from {userProvince || 'Region'}</label>
-                  <SearchableSelect
-                    options={getLguNames(userProvince).filter(name => !targetLgus.includes(name)).map(name => ({ value: name, label: name }))}
-                    value=""
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      if (val && !targetLgus.includes(val)) {
-                        setTargetLgus(prev => [...prev, val].sort());
-                      }
-                    }}
-                    placeholder="Search and select LGU..."
-                  />
-                </div>
-
-                {/* Selected LGUs Tags */}
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '12px', border: '1px dashed #e2e8f0', minHeight: '100px', alignContent: 'flex-start' }}>
-                  {targetLgus.length === 0 ? (
-                    <div style={{ width: '100%', textAlign: 'center', padding: '1rem', color: '#94a3b8', fontSize: '0.875rem' }}>
-                      No LGUs selected. This report will be visible to all LGUs in {userProvince} by default.
-                    </div>
-                  ) : (
-                    targetLgus.map((lgu) => (
-                      <div key={lgu} style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#fff', padding: '6px 10px', borderRadius: '6px', fontSize: '0.875rem', color: '#334155', border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
-                        {lgu}
-                        <X size={14} style={{ cursor: 'pointer', color: '#94a3b8' }} onClick={() => setTargetLgus(prev => prev.filter(item => item !== lgu))} />
-                      </div>
-                    ))
-                  )}
-                </div>
-
-                {targetLgus.length > 0 && (
-                  <button type="button" onClick={() => setTargetLgus([])} style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', fontWeight: '600' }}>
-                    Clear all
-                  </button>
-                )}
-              </div>
-            </div>
-            <div className="modal-footer" style={{ borderTop: '1px solid #e2e8f0', paddingTop: '1rem', justifyContent: 'flex-end', display: 'flex', gap: '0.75rem' }}>
-              <button type="button" className="modal-btn-cancel" onClick={() => setShowNewSitRepModal(false)} disabled={submitting}>Cancel</button>
-              <Button type="button" className="btn-primary" onClick={handleCreateSitRep} isLoading={submitting} disabled={!newSitRepTitle.trim()}>
-                Create Report
-              </Button>
-            </div>
+      <HeaderFooterModal
+        isOpen={showNewSitRepModal}
+        onClose={() => setShowNewSitRepModal(false)}
+        title="New Situation Report"
+        maxWidth="750px"
+        footer={
+          <>
+            <Button variant="subtle" onClick={() => setShowNewSitRepModal(false)} disabled={submitting}>Cancel</Button>
+            <Button variant="solid" onClick={handleCreateSitRep} isLoading={submitting} disabled={!newSitRepTitle.trim()}>
+              Create Report
+            </Button>
+          </>
+        }
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#64748b', marginBottom: '0.5rem' }}>Report Title</label>
+            <input
+              type="text"
+              className="modern-input"
+              style={{ width: '100%', padding: '0.75rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '1rem' }}
+              value={newSitRepTitle}
+              onChange={(e) => setNewSitRepTitle(e.target.value)}
+              placeholder="e.g. Situational Report No. 1"
+              autoFocus
+            />
           </div>
-        </div>
-      )}
 
-      {/* Edit Situation Report Modal */}
-      {showEditSitRepModal && (
-        <div className="modal-overlay" onClick={() => {
-          setShowEditSitRepModal(false)
-          setEditingSitRep(null)
-        }}>
-          <div className="modal-content glass-modal sitrep-modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <div style={{ backgroundColor: '#6366f115', color: '#6366f1', padding: '0.5rem', borderRadius: '8px' }}>
-                  <PencilSimple size={20} />
-                </div>
-                <h2 style={{ fontSize: '1.25rem', fontWeight: '600', color: '#1e293b' }}>Edit Situational Report</h2>
-              </div>
-              <button type="button" className="modal-close" onClick={() => {
-                setShowEditSitRepModal(false)
-                setEditingSitRep(null)
-              }}><X size={20} /></button>
-            </div>
-            <div className="modal-body" style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              <div>
-                <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#64748b', marginBottom: '0.5rem' }}>Report Title</label>
-                <input
-                  type="text"
-                  className="modern-input"
-                  style={{ width: '100%', padding: '0.75rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '1rem' }}
-                  value={newSitRepTitle}
-                  onChange={(e) => setNewSitRepTitle(e.target.value)}
-                  placeholder="e.g. Situational Report No. 5"
-                  autoFocus
-                />
-              </div>
-
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
-                  <label style={{ fontSize: '0.875rem', fontWeight: '500', color: '#64748b' }}>Target LGUs ({targetLgus.length})</label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const names = getLguNames(userProvince)
-                      setTargetLgus(prev => Array.from(new Set([...prev, ...names])).sort())
-                    }}
-                    style={{ padding: '4px 12px', fontSize: '0.75rem', borderRadius: '6px', background: '#f1f5f9', border: '1px solid #e2e8f0', color: '#475569', cursor: 'pointer', fontWeight: 600 }}
-                  >
-                    Select All LGUs
-                  </button>
-                </div>
-
-                <div style={{ marginBottom: '1rem' }}>
-                  <label style={{ display: 'block', fontSize: '0.75rem', color: '#94a3b8', marginBottom: '4px' }}>Add LGU from {userProvince || 'Region'}</label>
-                  <SearchableSelect
-                    options={getLguNames(userProvince).filter(name => !targetLgus.includes(name)).map(name => ({ value: name, label: name }))}
-                    value=""
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      if (val && !targetLgus.includes(val)) {
-                        setTargetLgus(prev => [...prev, val].sort());
-                      }
-                    }}
-                    placeholder="Search and select LGU..."
-                  />
-                </div>
-
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '12px', border: '1px dashed #e2e8f0', minHeight: '100px', alignContent: 'flex-start' }}>
-                  {targetLgus.length === 0 ? (
-                    <div style={{ width: '100%', textAlign: 'center', padding: '1rem', color: '#94a3b8', fontSize: '0.875rem' }}>
-                      No LGUs selected. This report will be visible to all LGUs in {userProvince} by default.
-                    </div>
-                  ) : (
-                    targetLgus.map((lgu) => (
-                      <div key={lgu} style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#fff', padding: '6px 10px', borderRadius: '6px', fontSize: '0.875rem', color: '#334155', border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
-                        {lgu}
-                        <X size={14} style={{ cursor: 'pointer', color: '#94a3b8' }} onClick={() => setTargetLgus(prev => prev.filter(item => item !== lgu))} />
-                      </div>
-                    ))
-                  )}
-                </div>
-
-                {targetLgus.length > 0 && (
-                  <button type="button" onClick={() => setTargetLgus([])} style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', fontWeight: '600' }}>
-                    Clear all
-                  </button>
-                )}
-              </div>
-            </div>
-            <div className="modal-footer" style={{ borderTop: '1px solid #e2e8f0', paddingTop: '1rem', justifyContent: 'flex-end', display: 'flex', gap: '0.75rem' }}>
-              <button
-                type="button"
-                className="modal-btn-cancel"
-                onClick={() => {
-                  setShowEditSitRepModal(false)
-                  setEditingSitRep(null)
-                }}
-                disabled={submitting}
-              >
-                Cancel
-              </button>
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+              <label style={{ fontSize: '0.875rem', fontWeight: '500', color: '#64748b' }}>Target LGUs ({targetLgus.length})</label>
               <Button
-                type="button"
-                className="btn-primary"
-                onClick={handleUpdateSitRep}
-                isLoading={submitting}
-                disabled={!newSitRepTitle.trim()}
+                variant="subtle"
+                size="sm"
+                onClick={() => {
+                  const names = getLguNames(userProvince)
+                  setTargetLgus(prev => Array.from(new Set([...prev, ...names])).sort())
+                }}
               >
-                Save Changes
+                Select All LGUs
               </Button>
             </div>
-          </div>
-        </div>
-      )}
 
-      {showTextEditorModal && (
-        <div className="modal-overlay" onClick={() => setShowTextEditorModal(false)}>
-          <div className="modal-content glass-modal remarks-editor-modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>{textEditorModalData?.title || 'Edit Text'}</h2>
-              <button type="button" className="modal-close" onClick={() => setShowTextEditorModal(false)}><X size={20} /></button>
-            </div>
-            <div className="modal-body">
-              <textarea
-                className="remarks-textarea"
-                value={textEditorModalData?.tempValue || ''}
-                onChange={(e) => setTextEditorModalData({ ...textEditorModalData, tempValue: e.target.value })}
-                placeholder={`Enter ${textEditorModalData?.title?.toLowerCase().replace('edit ', '') || 'text'} here...`}
-                autoFocus
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', fontSize: '0.75rem', color: '#94a3b8', marginBottom: '4px' }}>Add LGU from {userProvince || 'Region'}</label>
+              <SearchableSelect
+                options={getLguNames(userProvince).filter(name => !targetLgus.includes(name)).map(name => ({ value: name, label: name }))}
+                value=""
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val && !targetLgus.includes(val)) {
+                    setTargetLgus(prev => [...prev, val].sort());
+                  }
+                }}
+                placeholder="Search and select LGU..."
               />
             </div>
-            <div className="modal-footer">
-              <button type="button" className="modal-btn-cancel" onClick={() => setShowTextEditorModal(false)}>Cancel</button>
-              <button type="button" className="modal-btn-primary" onClick={saveTextUpdate}>
-                Save Changes
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      {showSignatoriesModal && createPortal(
-        <div className="modal-overlay" onClick={() => setShowSignatoriesModal(false)}>
-          <div className="modal-content glass-modal signatories-modal" style={{ maxWidth: '600px' }} onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <Users size={24} color="#6366f1" />
-                <h2>Configure Report Signatories</h2>
-              </div>
-              <button type="button" className="modal-close" onClick={() => setShowSignatoriesModal(false)}><X size={20} /></button>
-            </div>
-            <div className="modal-body">
-              <p style={{ fontSize: '0.9rem', color: '#64748b', marginBottom: '1.5rem' }}>
-                Select the personnel who will sign this report. You can search by name or office.
-              </p>
 
-              <div className="signatory-role-tabs">
-                <button 
-                  className={`role-tab ${signatoryRole === 'preparedBy' ? 'active' : ''}`}
-                  onClick={() => handleSignatoryRoleChange('preparedBy')}
-                >
-                  Prepared By ({preparedBy.length})
-                </button>
-                <button 
-                  className={`role-tab ${signatoryRole === 'notedBy' ? 'active' : ''}`}
-                  onClick={() => handleSignatoryRoleChange('notedBy')}
-                >
-                  Noted By {notedBy ? '✓' : ''}
-                </button>
-                <button 
-                  className={`role-tab ${signatoryRole === 'approvedBy' ? 'active' : ''}`}
-                  onClick={() => handleSignatoryRoleChange('approvedBy')}
-                >
-                  Approved By {approvedBy ? '✓' : ''}
-                </button>
-              </div>
-
-              <div style={{ marginBottom: '1rem' }}>
-                <SearchInput 
-                  placeholder="Search signatories..."
-                  value={signatorySearch}
-                  onChange={setSignatorySearch}
-                />
-              </div>
-
-              <div className="signatories-list">
-                {loadingSignatories ? (
-                  <LoadingSpinner label="Fetching personnel..." />
-                ) : (
-                  availableSignatories
-                    .filter(s => s.name.toLowerCase().includes(signatorySearch.toLowerCase()) || s.office.toLowerCase().includes(signatorySearch.toLowerCase()))
-                    .map(sig => {
-                      const isSelected = signatoryRole === 'preparedBy' 
-                        ? preparedBy.some(s => s.id === sig.id)
-                        : (signatoryRole === 'notedBy' ? notedBy?.id === sig.id : approvedBy?.id === sig.id)
-                      
-                      return (
-                        <div 
-                          key={sig.id} 
-                          className={`signatory-item ${isSelected ? 'selected' : ''}`}
-                          onClick={() => toggleSignatory(sig)}
-                        >
-                          <div className="signatory-info">
-                            <span className="sig-name">{sig.name}</span>
-                            <span className="sig-designation">{sig.designation}</span>
-                            <span className="sig-office">{sig.office}</span>
-                          </div>
-                          {isSelected && <Check size={18} color="#10b981" />}
-                        </div>
-                      )
-                    })
-                )}
-              </div>
-            </div>
-            <div className="modal-footer" style={{ gap: '0.5rem' }}>
-              <button 
-                type="button" 
-                className="modal-btn-cancel" 
-                style={{ marginRight: 'auto' }} 
-                onClick={() => {
-                  setShowSignatoriesModal(false);
-                  if (signatoriesReturnToPdf) {
-                    setShowPdfEditModal(true);
-                    setSignatoriesReturnToPdf(false);
-                  }
-                }}
-              >
-                Cancel
-              </button>
-              
-              <button 
-                type="button" 
-                className="modal-btn-primary"
-                disabled={preparedBy.length === 0}
-                style={{ padding: '0.625rem 1.25rem', fontSize: '0.8125rem', display: 'flex', alignItems: 'center', gap: '6px' }}
-                onClick={() => {
-                  if (signatoriesReturnToPdf) {
-                    setShowSignatoriesModal(false);
-                    setShowPdfEditModal(true);
-                    setSignatoriesReturnToPdf(false);
-                    // Refresh preview with new sigs
-                    const params = generatedSummaryData?.pdfParams;
-                    if (params) {
-                      if (pdfPreviewBlobUrl) URL.revokeObjectURL(pdfPreviewBlobUrl);
-                      const newUrl = generatePdfBlobUrl(params, aiGeneratedSummaryText, { preparedBy, notedBy, approvedBy });
-                      setPdfPreviewBlobUrl(newUrl);
-                    }
-                  } else {
-                    handleConfirmDownload();
-                  }
-                }}
-              >
-                {signatoriesReturnToPdf ? <><Check size={16} /> Apply Signatories</> : <><FileArrowDown size={16} /> Download PDF</>}
-              </button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
-      {showDownloadTypeModal && (
-        <div className="modal-overlay" onClick={() => setShowDownloadTypeModal(false)}>
-          <div className="modal-content glass-modal download-type-modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <h2 style={{ fontSize: '1.25rem' }}>Select Download Format</h2>
-                <p style={{ fontSize: '12px', color: '#64748b', margin: '4px 0 0 0' }}>Choose the preferred format for your situational report.</p>
-              </div>
-              <button type="button" className="modal-close" onClick={() => setShowDownloadTypeModal(false)}><X size={20} /></button>
-            </div>
-            <div className="modal-body">
-              <div className="download-options-grid">
-                <div className="download-option-card" onClick={() => {
-                  setShowDownloadTypeModal(false)
-                  setShowPdfEditModal(true)
-                }}>
-                  <div className="download-option-icon"><FileText size={32} /></div>
-                  <div className="download-option-title">PDF Document</div>
+            {/* Selected LGUs Tags */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '12px', border: '1px dashed #e2e8f0', minHeight: '100px', alignContent: 'flex-start' }}>
+              {targetLgus.length === 0 ? (
+                <div style={{ width: '100%', textAlign: 'center', padding: '1rem', color: '#94a3b8', fontSize: '0.875rem' }}>
+                  No LGUs selected. This report will be visible to all LGUs in {userProvince} by default.
                 </div>
-
-                <div className="download-option-card csv" onClick={() => {
-                  setShowDownloadTypeModal(false)
-                  generateConsolidatedCsv({
-                    ...generatedSummaryData.pdfParams,
-                    signatories: { preparedBy: [], notedBy: null, approvedBy: null }
-                  })
-                }}>
-                  <div className="download-option-icon"><ChartBar size={32} /></div>
-                  <div className="download-option-title">CSV Dataset</div>
-                </div>
-              </div>
-            </div>
-            <div className="modal-footer">
-              <button type="button" className="modal-btn-cancel" onClick={() => setShowDownloadTypeModal(false)}>Cancel</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Upload PDF Modal — Provincial User */}
-      {showApprovalUploadModal && createPortal(
-        <div className="modal-overlay" onClick={() => setShowApprovalUploadModal(false)}>
-          <div className="modal-content glass-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '480px' }}>
-            <div className="modal-header">
-              <div className="versions-title-stack">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
-                  <span className="sitrep-badge" style={{ background: '#2563eb' }}>UPLOAD</span>
-                  <h2 className="versions-event-name">Upload Signed PDF</h2>
-                </div>
-                <p className="modal-subtitle">Upload the signed situational report PDF. It will be sent to the Provincial Approver for review.</p>
-              </div>
-              <button className="modal-close" onClick={() => setShowApprovalUploadModal(false)}>
-                <X size={20} />
-              </button>
-            </div>
-            <div className="modal-body">
-              <div
-                className={`approval-file-upload ${isDragActive ? 'drag-active' : ''}`}
-                onDragOver={(e) => { e.preventDefault(); setIsDragActive(true); }}
-                onDragLeave={(e) => { e.preventDefault(); setIsDragActive(false); }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  setIsDragActive(false);
-                  const file = e.dataTransfer.files?.[0];
-                  if (file && file.type === 'application/pdf') {
-                    setApprovalFile(file);
-                  } else if (file) {
-                    showSuccess('Validation Error', 'Only PDF files are allowed.');
-                  }
-                }}
-              >
-                <input
-                  id="approval-pdf-input"
-                  type="file"
-                  accept=".pdf,application/pdf"
-                  onChange={(e) => setApprovalFile(e.target.files?.[0] ?? null)}
-                  className="approval-file-input-hidden"
-                  style={{ display: 'none' }}
-                />
-                {!approvalFile ? (
-                  <label htmlFor="approval-pdf-input" className="approval-file-upload-label modern-upload-label">
-                    <div className="modern-upload-icon-wrapper">
-                      <Upload size={32} className="approval-upload-icon modern-icon" />
-                    </div>
-                    <span className="approval-upload-text"><strong>Click to upload</strong> or drag and drop</span>
-                    <span className="approval-upload-hint">PDF files only (Max. 10MB)</span>
-                  </label>
-                ) : (
-                  <div className="approval-file-selected modern-file-selected">
-                    <div className="modern-file-info">
-                      <div className="modern-file-icon-wrapper">
-                        <FileArrowDown size={24} className="approval-file-icon modern-file-icon" />
-                      </div>
-                      <div className="modern-file-details">
-                        <span className="approval-file-name" title={approvalFile.name}>{approvalFile.name}</span>
-                        <span className="approval-file-size">{(approvalFile.size / 1024 / 1024).toFixed(2)} MB</span>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      className="approval-file-remove modern-remove-btn"
-                      onClick={() => {
-                        setApprovalFile(null)
-                        const input = document.getElementById('approval-pdf-input')
-                        if (input) input.value = ''
-                      }}
-                      title="Remove file"
-                    >
-                      <X size={18} />
-                    </button>
+              ) : (
+                targetLgus.map((lgu) => (
+                  <div key={lgu} style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#fff', padding: '6px 10px', borderRadius: '6px', fontSize: '0.875rem', color: '#334155', border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                    {lgu}
+                    <X size={14} style={{ cursor: 'pointer', color: '#94a3b8' }} onClick={() => setTargetLgus(prev => prev.filter(item => item !== lgu))} />
                   </div>
-                )}
-              </div>
+                ))
+              )}
             </div>
-            <div className="modal-footer">
-              <button className="modal-btn-cancel" onClick={() => setShowApprovalUploadModal(false)}>Cancel</button>
+
+            {targetLgus.length > 0 && (
+              <button type="button" onClick={() => setTargetLgus([])} style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', fontWeight: '600' }}>
+                Clear all
+              </button>
+            )}
+          </div>
+        </div>
+      </HeaderFooterModal>
+
+      {/* Edit Situation Report Modal */}
+      <HeaderFooterModal
+        isOpen={showEditSitRepModal}
+        onClose={() => {
+          setShowEditSitRepModal(false)
+          setEditingSitRep(null)
+        }}
+        title="Edit Situational Report"
+        maxWidth="750px"
+        footer={
+          <>
+            <Button
+              variant="subtle"
+              onClick={() => {
+                setShowEditSitRepModal(false)
+                setEditingSitRep(null)
+              }}
+              disabled={submitting}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="solid"
+              onClick={handleUpdateSitRep}
+              isLoading={submitting}
+              disabled={!newSitRepTitle.trim()}
+            >
+              Save Changes
+            </Button>
+          </>
+        }
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          <div>
+            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#64748b', marginBottom: '0.5rem' }}>Report Title</label>
+            <input
+              type="text"
+              className="modern-input"
+              style={{ width: '100%', padding: '0.75rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '1rem' }}
+              value={newSitRepTitle}
+              onChange={(e) => setNewSitRepTitle(e.target.value)}
+              placeholder="e.g. Situational Report No. 5"
+              autoFocus
+            />
+          </div>
+
+          <div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+              <label style={{ fontSize: '0.875rem', fontWeight: '500', color: '#64748b' }}>Target LGUs ({targetLgus.length})</label>
               <Button
-                className="modal-btn-primary"
-                onClick={handleUploadPdfSubmit}
-                isLoading={uploadingApproval}
-                disabled={!approvalFile}
+                variant="subtle"
+                size="sm"
+                onClick={() => {
+                  const names = getLguNames(userProvince)
+                  setTargetLgus(prev => Array.from(new Set([...prev, ...names])).sort())
+                }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                  <Upload size={15} />
-                  <span>Submit for Approval</span>
-                </div>
+                Select All LGUs
               </Button>
             </div>
-          </div>
-        </div>,
-        document.body
-      )}
 
-      {/* ── PDF Preview + Edit Modal ── */}
-      {showPdfEditModal && generatedSummaryData && createPortal(
-        <div className="preview-modal-overlay" onClick={() => setShowPdfEditModal(false)}>
-          <div className="preview-modal-content glass-modal pdf-edit-modal-content" onClick={e => e.stopPropagation()}>
-            {/* Header */}
-            <div className="preview-modal-header">
-              <div className="preview-modal-title-stack">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                  <div className="download-option-icon" style={{ width: '32px', height: '32px', borderRadius: '8px', margin: 0 }}>
-                    <FileArrowDown size={18} />
-                  </div>
-                  <h2 className="preview-modal-title">Finalize PDF Report</h2>
+            <div style={{ marginBottom: '1rem' }}>
+              <label style={{ display: 'block', fontSize: '0.75rem', color: '#94a3b8', marginBottom: '4px' }}>Add LGU from {userProvince || 'Region'}</label>
+              <SearchableSelect
+                options={getLguNames(userProvince).filter(name => !targetLgus.includes(name)).map(name => ({ value: name, label: name }))}
+                value=""
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val && !targetLgus.includes(val)) {
+                    setTargetLgus(prev => [...prev, val].sort());
+                  }
+                }}
+                placeholder="Search and select LGU..."
+              />
+            </div>
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px', padding: '1rem', backgroundColor: '#f8fafc', borderRadius: '12px', border: '1px dashed #e2e8f0', minHeight: '100px', alignContent: 'flex-start' }}>
+              {targetLgus.length === 0 ? (
+                <div style={{ width: '100%', textAlign: 'center', padding: '1rem', color: '#94a3b8', fontSize: '0.875rem' }}>
+                  No LGUs selected. This report will be visible to all LGUs in {userProvince} by default.
                 </div>
-                <p className="preview-modal-subtitle">{generatedSummaryData.pdfParams.reportTitle}</p>
-              </div>
-              <button className="preview-modal-close" onClick={() => setShowPdfEditModal(false)} title="Close">
-                <X size={20} />
+              ) : (
+                targetLgus.map((lgu) => (
+                  <div key={lgu} style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: '#fff', padding: '6px 10px', borderRadius: '6px', fontSize: '0.875rem', color: '#334155', border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                    {lgu}
+                    <X size={14} style={{ cursor: 'pointer', color: '#94a3b8' }} onClick={() => setTargetLgus(prev => prev.filter(item => item !== lgu))} />
+                  </div>
+                ))
+              )}
+            </div>
+
+            {targetLgus.length > 0 && (
+              <button type="button" onClick={() => setTargetLgus([])} style={{ marginTop: '0.5rem', fontSize: '0.75rem', color: '#ef4444', background: 'none', border: 'none', cursor: 'pointer', fontWeight: '600' }}>
+                Clear all
               </button>
-            </div>
-
-            {/* Body: split-panel */}
-            <div style={{ display: 'flex', flex: 1, overflow: 'hidden', padding: '1.5rem', gap: '1.5rem', minHeight: 0 }}>
-
-              {/* LEFT: Premium PDF Preview */}
-              <div style={{ flex: 1.4, display: 'flex', flexDirection: 'column', gap: '1rem', minWidth: 0 }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <Eye size={16} style={{ color: '#64748b' }} />
-                    <span style={{ fontWeight: 700, fontSize: '0.875rem', color: '#334155' }}>Live Preview</span>
-                  </div>
-                  <button
-                    type="button"
-                    className="btn-refresh-modern"
-                    onClick={() => {
-                      if (pdfPreviewBlobUrl) URL.revokeObjectURL(pdfPreviewBlobUrl)
-                      const newUrl = generatePdfBlobUrl(generatedSummaryData.pdfParams, aiGeneratedSummaryText, { preparedBy, notedBy, approvedBy })
-                      setPdfPreviewBlobUrl(newUrl)
-                    }}
-                  >
-                    <ArrowsClockwise size={14} />
-                    Refresh Preview
-                  </button>
-                </div>
-                <div className="pdf-preview-container" style={{ flex: 1 }}>
-                  {pdfPreviewBlobUrl ? (
-                    <iframe
-                      src={pdfPreviewBlobUrl}
-                      title="PDF Preview"
-                      style={{ width: '100%', height: '100%', border: 'none' }}
-                    />
-                  ) : (
-                    <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <LoadingSpinner label="Generating live preview..." />
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* RIGHT: Modern Summary Editor & Signatories */}
-              <div className="summary-sidebar" style={{ flex: 1, minWidth: 0 }}>
-                
-                {/* AI Summary Section - Maximized Height */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', flex: 1, minHeight: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-                    <div className="gemini-badge">
-                      <Sparkle size={14} />
-                      Gemini AI Summary
-                    </div>
-                    <span style={{ fontSize: '0.7rem', color: '#94a3b8', fontWeight: 600, textTransform: 'uppercase' }}>Editable</span>
-                  </div>
-                  <textarea
-                    className="summary-textarea-modern"
-                    value={aiGeneratedSummaryText}
-                    onChange={e => setAiGeneratedSummaryText(e.target.value)}
-                    placeholder="Review and refine the report summary..."
-                  />
-                </div>
-
-                {/* Simplified Signatories Section */}
-                <div className="signatories-card-modern">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                    <span style={{ fontWeight: 800, fontSize: '0.8125rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Signatories</span>
-                  </div>
-                  <div className="sig-grid-modern">
-                    <div className="sig-item-modern">
-                      <span className="sig-label-modern">Prepared By</span>
-                      <span className="sig-value-modern">{preparedBy.length > 0 ? preparedBy.map(p => p.name).join(', ') : 'None'}</span>
-                    </div>
-                    <div className="sig-item-modern">
-                      <span className="sig-label-modern">Noted By</span>
-                      <span className="sig-value-modern">{notedBy ? notedBy.name : 'None'}</span>
-                    </div>
-                    <div className="sig-item-modern">
-                      <span className="sig-label-modern">Approved By</span>
-                      <span className="sig-value-modern">{approvedBy ? approvedBy.name : 'None'}</span>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => { 
-                      setSignatoriesReturnToPdf(true);
-                      setShowPdfEditModal(false); 
-                      setShowSignatoriesModal(true); 
-                    }}
-                    style={{ alignSelf: 'flex-start', marginTop: '1rem', padding: '0.375rem 0.875rem', borderRadius: '10px', background: 'rgba(0,0,0,0.04)', border: '1px solid rgba(0,0,0,0.05)', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', color: '#64748b', transition: 'all 0.2s ease', display: 'flex', alignItems: 'center', gap: '0.5rem' }}
-                  >
-                    Change Signatories
-                  </button>
-                </div>
-
-                {/* Main Action Buttons */}
-                <div style={{ display: 'flex', gap: '1rem', marginTop: 'auto', paddingTop: '1rem' }}>
-                  <button
-                    type="button"
-                    className="btn-premium-secondary"
-                    style={{ flex: 1 }}
-                    onClick={() => setShowPdfEditModal(false)}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    className="btn-premium-primary"
-                    style={{ flex: 1.5 }}
-                    onClick={handleConfirmDownload}
-                  >
-                    <Download size={18} />
-                    Download PDF
-                  </button>
-                </div>
-
-              </div>
-            </div>
+            )}
           </div>
-        </div>,
-        document.body
-      )}
+        </div>
+      </HeaderFooterModal>
 
-      {/* Action Confirmation Modal */}
-      {showApprovalConfirmation && createPortal(
-        <div className="modal-overlay" onClick={() => setShowApprovalConfirmation(false)}>
-          <div className="modal-content glass-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '400px' }}>
-            <div className="modal-confirm">
-              <div className="modal-confirm-icon modal-confirm-icon--success">
-                <CheckCircle size={32} />
-              </div>
-              <h2 className="modal-confirm-title">Success</h2>
-              <p className="modal-confirm-text">{approvalConfirmMessage}</p>
-              <div className="modal-confirm-footer">
-                <button className="modal-btn-primary" onClick={() => setShowApprovalConfirmation(false)} style={{ minWidth: '120px' }}>
-                  Done
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
-
-      {showReviewModal && reviewSitRep && createPortal(
-        <div className="modal-overlay" onClick={() => setShowReviewModal(false)}>
-          <div
-            className="modal-content glass-modal"
-            style={{ maxWidth: '1100px', width: '96%', height: '94vh', display: 'flex', flexDirection: 'column' }}
-            onClick={e => e.stopPropagation()}
+      <HeaderFooterModal
+        isOpen={showTextEditorModal}
+        onClose={() => setShowTextEditorModal(false)}
+        title={textEditorModalData?.title || 'Edit Text'}
+        maxWidth="500px"
+        footer={
+          <>
+            <Button variant="subtle" onClick={() => setShowTextEditorModal(false)}>Cancel</Button>
+            <Button variant="solid" onClick={saveTextUpdate}>Save Changes</Button>
+          </>
+        }
+      >
+        <textarea
+          className="remarks-textarea"
+          value={textEditorModalData?.tempValue || ''}
+          onChange={(e) => setTextEditorModalData({ ...textEditorModalData, tempValue: e.target.value })}
+          placeholder={`Enter ${textEditorModalData?.title?.toLowerCase().replace('edit ', '') || 'text'} here...`}
+          autoFocus
+          style={{ width: '100%', minHeight: '150px', padding: '0.75rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.875rem', resize: 'vertical' }}
+        />
+      </HeaderFooterModal>
+      <HeaderFooterModal
+        isOpen={showSignatoriesModal}
+        onClose={() => {
+          setShowSignatoriesModal(false);
+          if (signatoriesReturnToPdf) {
+            setShowPdfEditModal(true);
+            setSignatoriesReturnToPdf(false);
+          }
+        }}
+        title="Configure Report Signatories"
+        subtitle="Select the personnel who will sign this report. You can search by name or office."
+        maxWidth="1000px"
+        footer={
+          <>
+            <Button
+              variant="subtle"
+              onClick={() => {
+                setShowSignatoriesModal(false);
+                if (signatoriesReturnToPdf) {
+                  setShowPdfEditModal(true);
+                  setSignatoriesReturnToPdf(false);
+                }
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="solid"
+              disabled={preparedBy.length === 0}
+              onClick={() => {
+                if (signatoriesReturnToPdf) {
+                  setShowSignatoriesModal(false);
+                  setShowPdfEditModal(true);
+                  setSignatoriesReturnToPdf(false);
+                  const params = generatedSummaryData?.pdfParams;
+                  if (params) {
+                    if (pdfPreviewBlobUrl) URL.revokeObjectURL(pdfPreviewBlobUrl);
+                    const newUrl = generatePdfBlobUrl(params, aiGeneratedSummaryText, { preparedBy, notedBy, approvedBy });
+                    setPdfPreviewBlobUrl(newUrl);
+                  }
+                } else {
+                  handleConfirmDownload();
+                }
+              }}
+              leftIcon={signatoriesReturnToPdf ? <Check size={16} /> : <FileArrowDown size={16} />}
+            >
+              {signatoriesReturnToPdf ? 'Apply Signatories' : 'Download PDF'}
+            </Button>
+          </>
+        }
+      >
+        <div className="signatory-role-tabs">
+          <button
+            className={`role-tab ${signatoryRole === 'preparedBy' ? 'active' : ''}`}
+            onClick={() => handleSignatoryRoleChange('preparedBy')}
           >
-            <div className="modal-header">
-              <div>
-                <h2>Review: {reviewSitRep.title}</h2>
-                <p style={{ fontSize: '0.78rem', color: '#64748b', margin: 0 }}>Review the signed PDF below, then Approve or Reject it.</p>
+            Prepared By ({preparedBy.length})
+          </button>
+          <button
+            className={`role-tab ${signatoryRole === 'notedBy' ? 'active' : ''}`}
+            onClick={() => handleSignatoryRoleChange('notedBy')}
+          >
+            Noted By {notedBy ? '✓' : ''}
+          </button>
+          <button
+            className={`role-tab ${signatoryRole === 'approvedBy' ? 'active' : ''}`}
+            onClick={() => handleSignatoryRoleChange('approvedBy')}
+          >
+            Approved By {approvedBy ? '✓' : ''}
+          </button>
+        </div>
+
+        <div style={{ marginBottom: '1rem' }}>
+          <SearchInput
+            placeholder="Search signatories..."
+            value={signatorySearch}
+            onChange={setSignatorySearch}
+          />
+        </div>
+
+        <div className="signatories-list">
+          {loadingSignatories ? (
+            <LoadingSpinner label="Fetching personnel..." />
+          ) : (
+            availableSignatories
+              .filter(s => s.name.toLowerCase().includes(signatorySearch.toLowerCase()) || s.office.toLowerCase().includes(signatorySearch.toLowerCase()))
+              .map(sig => {
+                const isSelected = signatoryRole === 'preparedBy'
+                  ? preparedBy.some(s => s.id === sig.id)
+                  : (signatoryRole === 'notedBy' ? notedBy?.id === sig.id : approvedBy?.id === sig.id)
+
+                return (
+                  <div
+                    key={sig.id}
+                    className={`signatory-item ${isSelected ? 'selected' : ''}`}
+                    onClick={() => toggleSignatory(sig)}
+                  >
+                    <div className="signatory-info">
+                      <span className="sig-name">{sig.name}</span>
+                      <span className="sig-designation">{sig.designation}</span>
+                      <span className="sig-office">{sig.office}</span>
+                    </div>
+                    {isSelected && <Check size={18} color="#10b981" />}
+                  </div>
+                )
+              })
+          )}
+        </div>
+      </HeaderFooterModal>
+      <HeaderFooterModal
+        isOpen={showDownloadTypeModal}
+        onClose={() => setShowDownloadTypeModal(false)}
+        title="Select Download Format"
+        subtitle="Choose the preferred format for your situational report."
+        maxWidth="750px"
+        footer={<Button variant="subtle" onClick={() => setShowDownloadTypeModal(false)}>Cancel</Button>}
+      >
+        <div className="download-options-grid">
+          <div className="download-option-card" onClick={() => {
+            setShowDownloadTypeModal(false)
+            setShowPdfEditModal(true)
+          }}>
+            <div className="download-option-icon"><FileText size={32} /></div>
+            <div className="download-option-title">PDF Document</div>
+          </div>
+
+          <div className="download-option-card csv" onClick={() => {
+            setShowDownloadTypeModal(false)
+            generateConsolidatedCsv({
+              ...generatedSummaryData.pdfParams,
+              signatories: { preparedBy: [], notedBy: null, approvedBy: null }
+            })
+          }}>
+            <div className="download-option-icon"><ChartBar size={32} /></div>
+            <div className="download-option-title">CSV Dataset</div>
+          </div>
+        </div>
+      </HeaderFooterModal>
+
+      {/* Upload PDF Modal — Provincial User */}
+      <HeaderFooterModal
+        isOpen={showApprovalUploadModal}
+        onClose={() => setShowApprovalUploadModal(false)}
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+            <span className="sitrep-badge" style={{ background: '#2563eb' }}>UPLOAD</span>
+            <span>Upload Signed PDF</span>
+          </div>
+        }
+        subtitle="Upload the signed situational report PDF. It will be sent to the Provincial Approver for review."
+        maxWidth="650px"
+        footer={
+          <>
+            <Button variant="subtle" onClick={() => setShowApprovalUploadModal(false)}>Cancel</Button>
+            <Button
+              variant="solid"
+              color="primary"
+              onClick={handleUploadPdfSubmit}
+              isLoading={uploadingApproval}
+              disabled={!approvalFile}
+              leftIcon={<Upload size={15} />}
+            >
+              Submit for Approval
+            </Button>
+          </>
+        }
+      >
+        <div
+          className={`approval-file-upload ${isDragActive ? 'drag-active' : ''}`}
+          onDragOver={(e) => { e.preventDefault(); setIsDragActive(true); }}
+          onDragLeave={(e) => { e.preventDefault(); setIsDragActive(false); }}
+          onDrop={(e) => {
+            e.preventDefault();
+            setIsDragActive(false);
+            const file = e.dataTransfer.files?.[0];
+            if (file && file.type === 'application/pdf') {
+              setApprovalFile(file);
+            } else if (file) {
+              showSuccess('Validation Error', 'Only PDF files are allowed.');
+            }
+          }}
+        >
+          <input
+            id="approval-pdf-input"
+            type="file"
+            accept=".pdf,application/pdf"
+            onChange={(e) => setApprovalFile(e.target.files?.[0] ?? null)}
+            className="approval-file-input-hidden"
+            style={{ display: 'none' }}
+          />
+          {!approvalFile ? (
+            <label htmlFor="approval-pdf-input" className="approval-file-upload-label modern-upload-label">
+              <div className="modern-upload-icon-wrapper">
+                <Upload size={32} className="approval-upload-icon modern-icon" />
               </div>
-              <button type="button" className="modal-close" onClick={() => setShowReviewModal(false)}><X size={20} /></button>
+              <span className="approval-upload-text"><strong>Click to upload</strong> or drag and drop</span>
+              <span className="approval-upload-hint">PDF files only (Max. 10MB)</span>
+            </label>
+          ) : (
+            <div className="approval-file-selected modern-file-selected">
+              <div className="modern-file-info">
+                <div className="modern-file-icon-wrapper">
+                  <FileArrowDown size={24} className="approval-file-icon modern-file-icon" />
+                </div>
+                <div className="modern-file-details">
+                  <span className="approval-file-name" title={approvalFile.name}>{approvalFile.name}</span>
+                  <span className="approval-file-size">{(approvalFile.size / 1024 / 1024).toFixed(2)} MB</span>
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                color="danger"
+                size="sm"
+                onClick={() => {
+                  setApprovalFile(null)
+                  const input = document.getElementById('approval-pdf-input')
+                  if (input) input.value = ''
+                }}
+                title="Remove file"
+              >
+                <X size={18} />
+              </Button>
+            </div>
+          )}
+        </div>
+      </HeaderFooterModal>
+
+      <HeaderFooterModal
+        isOpen={showPdfEditModal && !!generatedSummaryData}
+        onClose={() => setShowPdfEditModal(false)}
+        title="Finalize PDF Report"
+        subtitle={generatedSummaryData?.pdfParams?.reportTitle}
+        maxWidth="1200px"
+        footer={
+          <>
+            <Button variant="subtle" onClick={() => setShowPdfEditModal(false)}>Cancel</Button>
+            <Button variant="solid" onClick={handleConfirmDownload} icon={<Download size={18} />}>Download PDF</Button>
+          </>
+        }
+      >
+        {generatedSummaryData && (
+          <div style={{ display: 'flex', height: '65vh', gap: '1.5rem', minHeight: 0 }}>
+            {/* LEFT: Premium PDF Preview */}
+            <div style={{ flex: 1.4, display: 'flex', flexDirection: 'column', gap: '1rem', minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Eye size={16} style={{ color: '#64748b' }} />
+                  <span style={{ fontWeight: 700, fontSize: '0.875rem', color: '#334155' }}>Live Preview</span>
+                </div>
+                <Button
+                  variant="subtle"
+                  size="sm"
+                  onClick={() => {
+                    if (pdfPreviewBlobUrl) URL.revokeObjectURL(pdfPreviewBlobUrl)
+                    const newUrl = generatePdfBlobUrl(generatedSummaryData.pdfParams, aiGeneratedSummaryText, { preparedBy, notedBy, approvedBy })
+                    setPdfPreviewBlobUrl(newUrl)
+                  }}
+                  icon={<ArrowsClockwise size={14} />}
+                >
+                  Refresh Preview
+                </Button>
+              </div>
+              <div className="pdf-preview-container" style={{ flex: 1, border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
+                {pdfPreviewBlobUrl ? (
+                  <iframe
+                    src={pdfPreviewBlobUrl}
+                    title="PDF Preview"
+                    style={{ width: '100%', height: '100%', border: 'none' }}
+                  />
+                ) : (
+                  <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <LoadingSpinner label="Generating live preview..." />
+                  </div>
+                )}
+              </div>
             </div>
 
+            {/* RIGHT: Modern Summary Editor & Signatories */}
+            <div className="summary-sidebar" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', flex: 1, minHeight: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div className="gemini-badge">
+                    <Sparkle size={14} />
+                    Gemini AI Summary
+                  </div>
+                </div>
+                <textarea
+                  className="summary-textarea-modern"
+                  value={aiGeneratedSummaryText}
+                  onChange={e => setAiGeneratedSummaryText(e.target.value)}
+                  placeholder="Review and refine the report summary..."
+                  style={{ flex: 1, resize: 'none' }}
+                />
+              </div>
+
+              <div className="signatories-card-modern">
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                  <span style={{ fontWeight: 800, fontSize: '0.8125rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Signatories</span>
+                </div>
+                <div className="sig-grid-modern">
+                  <div className="sig-item-modern">
+                    <span className="sig-label-modern">Prepared By</span>
+                    <span className="sig-value-modern">{preparedBy.length > 0 ? preparedBy.map(p => p.name).join(', ') : 'None'}</span>
+                  </div>
+                  <div className="sig-item-modern">
+                    <span className="sig-label-modern">Noted By</span>
+                    <span className="sig-value-modern">{notedBy ? notedBy.name : 'None'}</span>
+                  </div>
+                  <div className="sig-item-modern">
+                    <span className="sig-label-modern">Approved By</span>
+                    <span className="sig-value-modern">{approvedBy ? approvedBy.name : 'None'}</span>
+                  </div>
+                </div>
+                <Button
+                  variant="subtle"
+                  size="sm"
+                  onClick={() => { 
+                    setSignatoriesReturnToPdf(true);
+                    setShowPdfEditModal(false); 
+                    setShowSignatoriesModal(true); 
+                  }}
+                  style={{ marginTop: '1rem' }}
+                >
+                  Change Signatories
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
+      </HeaderFooterModal>
+
+      <ConfirmationModal
+        isOpen={showApprovalConfirmation}
+        onClose={() => setShowApprovalConfirmation(false)}
+        type="success"
+        title="Success"
+        message={approvalConfirmMessage}
+        confirmText="Done"
+        onConfirm={() => setShowApprovalConfirmation(false)}
+      />
+
+      <HeaderFooterModal
+        isOpen={showReviewModal && !!reviewSitRep}
+        onClose={() => setShowReviewModal(false)}
+        title={`Review: ${reviewSitRep?.title}`}
+        subtitle="Review the signed PDF below, then Approve or Reject it."
+        maxWidth="1100px"
+        footer={
+          <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', width: '100%' }}>
+            <Button
+              variant="subtle"
+              onClick={() => setShowReviewModal(false)}
+              disabled={processingReview}
+            >
+              Cancel
+            </Button>
+
+            {!showRejectInput ? (
+              <Button
+                variant="outline"
+                color="danger"
+                onClick={() => setShowRejectInput(true)}
+                disabled={processingReview}
+                icon={<X size={14} />}
+              >
+                Reject
+              </Button>
+            ) : (
+              <Button
+                variant="solid"
+                color="danger"
+                onClick={handleRejectConfirm}
+                isLoading={processingReview}
+                disabled={!rejectRemarks.trim()}
+              >
+                Confirm Rejection
+              </Button>
+            )}
+
+            <Button
+              variant="solid"
+              color="primary"
+              onClick={handleApproveConfirm}
+              isLoading={processingReview}
+              icon={<CheckCircle size={14} />}
+            >
+              Approve
+            </Button>
+          </div>
+        }
+      >
+        {reviewSitRep && (
+          <div style={{ display: 'flex', flexDirection: 'column', height: '70vh' }}>
             {/* PDF viewer */}
-            <div style={{ flex: 1, background: '#e2e8f0', overflow: 'hidden', minHeight: 0 }}>
+            <div style={{ flex: 1, background: '#e2e8f0', overflow: 'hidden', minHeight: 0, borderRadius: '8px' }}>
               {reviewSitRep.approved_pdf_url ? (
                 <iframe
                   src={reviewSitRep.approved_pdf_url}
@@ -4087,7 +4024,7 @@ export default function AddReport() {
 
             {/* Reject remarks (shown when reject clicked) */}
             {showRejectInput && (
-              <div style={{ padding: '1rem 1.5rem', borderTop: '1px solid #fee2e2', background: '#fff5f5' }}>
+              <div style={{ padding: '1rem 0', marginTop: '1rem', borderTop: '1px solid #fee2e2' }}>
                 <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#dc2626', display: 'block', marginBottom: '0.5rem' }}>
                   Rejection Remarks <span style={{ color: '#ef4444' }}>*</span>
                 </label>
@@ -4105,56 +4042,9 @@ export default function AddReport() {
                 />
               </div>
             )}
-
-            <div className="modal-footer" style={{ gap: '0.75rem', justifyContent: 'flex-end' }}>
-              <button
-                type="button"
-                className="modal-btn-cancel"
-                onClick={() => setShowReviewModal(false)}
-                disabled={processingReview}
-              >
-                Cancel
-              </button>
-
-              {/* Reject flow */}
-              {!showRejectInput ? (
-                <button
-                  type="button"
-                  className="add-report-btn-action pdf-btn"
-                  onClick={() => setShowRejectInput(true)}
-                  disabled={processingReview}
-                >
-                  <X size={14} style={{ marginRight: 4 }} />
-                  Reject
-                </button>
-              ) : (
-                <Button
-                  type="button"
-                  className="add-report-btn-action pdf-btn"
-                  onClick={handleRejectConfirm}
-                  isLoading={processingReview}
-                  disabled={!rejectRemarks.trim()}
-                >
-                  Confirm Rejection
-                </Button>
-              )}
-
-              {/* Approve */}
-              <Button
-                type="button"
-                className="add-report-btn-action approve-btn"
-                style={{ minWidth: '110px' }}
-                onClick={handleApproveConfirm}
-                isLoading={processingReview}
-              >
-                <CheckCircle size={14} style={{ marginRight: 4 }} />
-                Approve
-              </Button>
-            </div>
           </div>
-        </div>,
-        document.body
-      )}
+        )}
+      </HeaderFooterModal>
     </div>
   )
 }

@@ -6,6 +6,7 @@ import LoadingSpinner from '../components/LoadingSpinner'
 import { supabase } from '../lib/supabase'
 import '../styles/pages/PageStyles.css'
 import '../styles/pages/EventLogs.css'
+import Button from '../components/Button'
 
 const PAGE_SIZES = [10, 25, 50, 100]
 
@@ -169,33 +170,14 @@ export default function EventLogs() {
     }
 
     return (
-        <div className="page logs-page">
-            <div className="logs-card">
-                <div className="logs-toolbar">
-                    <h1 className="logs-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: 0 }}>
+        <div className="page consolidated-report-page">
+            <div className="consolidated-report-card">
+                <div className="consolidated-report-toolbar">
+                    <h1 className="consolidated-report-title" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: 0 }}>
                         <ClockCounterClockwise size={24} color="#6366f1" />
                         Event Logs
                     </h1>
-                    <div className="logs-toolbar-controls">
-                        <div className="logs-showing-select">
-                            <span className="logs-showing-label">Showing</span>
-                            <span className="logs-showing-dropdown-wrap">
-                                <select
-                                    value={pageSize}
-                                    onChange={(e) => {
-                                        setPageSize(Number(e.target.value))
-                                        setCurrentPage(1)
-                                    }}
-                                    className="logs-showing-dropdown"
-                                >
-                                    {PAGE_SIZES.map((n) => (
-                                        <option key={n} value={n}>
-                                            {n}
-                                        </option>
-                                    ))}
-                                </select>
-                            </span>
-                        </div>
+                    <div className="consolidated-report-toolbar-controls">
                         <SearchInput
                             placeholder="Search logs..."
                             value={searchTerm}
@@ -204,12 +186,11 @@ export default function EventLogs() {
                                 setCurrentPage(1)
                             }}
                             suggestions={[]}
-                            className="logs-search-box"
+                            className="consolidated-report-search-box"
                         />
-                        <button type="button" className="btn-secondary" onClick={exportCSV}>
-                            <Upload size={16} />
+                        <Button variant="outline" onClick={exportCSV} leftIcon={<Upload size={16} />}>
                             Export CSV
-                        </button>
+                        </Button>
                     </div>
                 </div>
 
@@ -227,34 +208,34 @@ export default function EventLogs() {
                     <LoadingSpinner label="Loading event logs..." />
                 ) : logs.length > 0 ? (
                     <>
-                        <div className="logs-wrapper">
-                            <table className="logs-table">
+                        <div className="consolidated-report-table-wrapper">
+                            <table className="consolidated-report-table">
                                 <thead>
                                     <tr>
                                         <th style={{ width: '20%' }}>
-                                            <button type="button" className="logs-th-sort" onClick={() => handleSort('action')}>
+                                            <Button variant="ghost" className="consolidated-th-sort" onClick={() => handleSort('action')}>
                                                 Action
                                                 <SortIcon columnKey="action" />
-                                            </button>
+                                            </Button>
                                         </th>
                                         <th style={{ width: '20%' }}>
-                                            <button type="button" className="logs-th-sort" onClick={() => handleSort('author')}>
+                                            <Button variant="ghost" className="consolidated-th-sort" onClick={() => handleSort('author')}>
                                                 Author
                                                 <SortIcon columnKey="author" />
-                                            </button>
+                                            </Button>
                                         </th>
                                         <th style={{ width: '15%' }}>
-                                            <button type="button" className="logs-th-sort" onClick={() => handleSort('account_type')}>
+                                            <Button variant="ghost" className="consolidated-th-sort" onClick={() => handleSort('account_type')}>
                                                 Clearance
                                                 <SortIcon columnKey="account_type" />
-                                            </button>
+                                            </Button>
                                         </th>
                                         <th style={{ width: '30%' }}>Details</th>
                                         <th style={{ width: '15%' }}>
-                                            <button type="button" className="logs-th-sort" onClick={() => handleSort('created_at')}>
+                                            <Button variant="ghost" className="consolidated-th-sort" onClick={() => handleSort('created_at')}>
                                                 Date
                                                 <SortIcon columnKey="created_at" />
-                                            </button>
+                                            </Button>
                                         </th>
                                     </tr>
                                 </thead>
@@ -292,39 +273,38 @@ export default function EventLogs() {
                             </table>
                         </div>
 
-                        <div className="logs-pagination">
-                            <button
-                                type="button"
-                                className="logs-pagination-btn"
+                        <div className="consolidated-report-pagination">
+                            <Button
+                                variant="subtle"
                                 disabled={currentPage <= 1}
                                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                             >
                                 &lt; Previous
-                            </button>
-                            <div className="logs-pagination-numbers">
+                            </Button>
+                            <div className="consolidated-report-pagination-numbers">
                                 {Array.from({ length: totalPages }, (_, i) => i + 1)
                                     .filter((p) => p === 1 || p === totalPages || (p >= currentPage - 2 && p <= currentPage + 2))
                                     .map((p, idx, arr) => (
                                         <span key={p}>
-                                            {idx > 0 && arr[idx - 1] !== p - 1 && <span className="logs-pagination-ellipsis">...</span>}
-                                            <button
-                                                type="button"
-                                                className={`logs-pagination-num ${currentPage === p ? 'active' : ''}`}
+                                            {idx > 0 && arr[idx - 1] !== p - 1 && <span className="consolidated-report-pagination-ellipsis">...</span>}
+                                            <Button
+                                                variant={currentPage === p ? 'solid' : 'ghost'}
+                                                size="sm"
+                                                style={{ minWidth: '36px', height: '36px', padding: 0 }}
                                                 onClick={() => setCurrentPage(p)}
                                             >
                                                 {String(p).padStart(2, '0')}
-                                            </button>
+                                            </Button>
                                         </span>
                                     ))}
                             </div>
-                            <button
-                                type="button"
-                                className="logs-pagination-btn"
+                            <Button
+                                variant="subtle"
                                 disabled={currentPage >= totalPages}
                                 onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
                             >
                                 Next &gt;
-                            </button>
+                            </Button>
                         </div>
                     </>
                 ) : !error ? (

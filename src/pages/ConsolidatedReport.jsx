@@ -12,6 +12,8 @@ import { getCitiesForProvince, PROVINCES_WITH_CITIES, PROVINCE_NAMES } from '../
 import { useEvents } from '../contexts/EventContext'
 import Button from '../components/Button'
 import LoadingSpinner from '../components/LoadingSpinner'
+import HeaderFooterModal from '../components/HeaderFooterModal'
+import ConfirmationModal from '../components/ConfirmationModal'
 import { generateConsolidatedCsv } from '../lib/generateConsolidatedCsv'
 import { generateAISummary } from '../openai/summaryService'
 import '../styles/pages/PageStyles.css'
@@ -116,10 +118,6 @@ export default function ConsolidatedReport() {
   const [currentPage, setCurrentPage] = useState(1)
   const [sortKey, setSortKey] = useState('startDate')
   const [sortAsc, setSortAsc] = useState(false)
-  const [activeEventIds, setActiveEventIds] = useState(null)
-  const [pendingEventIds, setPendingEventIds] = useState(null)
-  const [approvedEventIds, setApprovedEventIds] = useState(null)
-  const [statusFilter, setStatusFilter] = useState(new URLSearchParams(location.search).get('status') || 'all')
   const [loadingActive, setLoadingActive] = useState(false)
 
   // Approval State
@@ -906,9 +904,14 @@ export default function ConsolidatedReport() {
             <td><input type="number" value={row.outside_families_now || 0} onChange={(e) => handleRowChange(idx, 'outside_families_now', parseInt(e.target.value) || 0)} /></td>
             <td><input type="number" value={row.outside_persons_now || 0} onChange={(e) => handleRowChange(idx, 'outside_persons_now', parseInt(e.target.value) || 0)} /></td>
             <td className="col-actions">
-              <button type="button" className="btn-icon delete" onClick={() => handleDeleteRow(idx)} title="Delete Row">
-                <Trash size={14} />
-              </button>
+              <Button 
+                variant="ghost" 
+                color="danger" 
+                size="sm" 
+                onClick={() => handleDeleteRow(idx)} 
+                title="Delete Row"
+                icon={<Trash size={14} />}
+              />
             </td>
           </>
         )
@@ -951,9 +954,14 @@ export default function ConsolidatedReport() {
               </div>
             </td>
             <td className="col-actions">
-              <button type="button" className="btn-icon delete" onClick={() => handleDeleteRow(idx)} title="Delete Row">
-                <Trash size={14} />
-              </button>
+              <Button 
+                variant="ghost" 
+                color="danger" 
+                size="sm" 
+                onClick={() => handleDeleteRow(idx)} 
+                title="Delete Row"
+                icon={<Trash size={14} />}
+              />
             </td>
           </>
         )
@@ -995,9 +1003,14 @@ export default function ConsolidatedReport() {
               />
             </td>
             <td className="col-actions">
-              <button type="button" className="btn-icon delete" onClick={() => handleDeleteRow(idx)} title="Delete Row">
-                <Trash size={14} />
-              </button>
+              <Button 
+                variant="ghost" 
+                color="danger" 
+                size="sm" 
+                onClick={() => handleDeleteRow(idx)} 
+                title="Delete Row"
+                icon={<Trash size={14} />}
+              />
             </td>
           </>
         )
@@ -1040,9 +1053,14 @@ export default function ConsolidatedReport() {
               />
             </td>
             <td className="col-actions">
-              <button type="button" className="btn-icon delete" onClick={() => handleDeleteRow(idx)} title="Delete Row">
-                <Trash size={14} />
-              </button>
+              <Button 
+                variant="ghost" 
+                color="danger" 
+                size="sm" 
+                onClick={() => handleDeleteRow(idx)} 
+                title="Delete Row"
+                icon={<Trash size={14} />}
+              />
             </td>
           </>
         )
@@ -1063,9 +1081,14 @@ export default function ConsolidatedReport() {
             <td><input type="number" value={(Number(row.totally_damaged || 0) + Number(row.partially_damaged || 0))} readOnly style={{ fontWeight: 600 }} /></td>
             <td><input type="number" value={row.amount_php || 0} onChange={(e) => handleRowChange(idx, 'amount_php', parseInt(e.target.value) || 0)} /></td>
             <td className="col-actions">
-              <button type="button" className="btn-icon delete" onClick={() => handleDeleteRow(idx)} title="Delete Row">
-                <Trash size={14} />
-              </button>
+              <Button 
+                variant="ghost" 
+                color="danger" 
+                size="sm" 
+                onClick={() => handleDeleteRow(idx)} 
+                title="Delete Row"
+                icon={<Trash size={14} />}
+              />
             </td>
           </>
         )
@@ -1101,9 +1124,14 @@ export default function ConsolidatedReport() {
               />
             </td>
             <td className="col-actions">
-              <button type="button" className="btn-icon delete" onClick={() => handleDeleteRow(idx)} title="Delete Row">
-                <Trash size={14} />
-              </button>
+              <Button 
+                variant="ghost" 
+                color="danger" 
+                size="sm" 
+                onClick={() => handleDeleteRow(idx)} 
+                title="Delete Row"
+                icon={<Trash size={14} />}
+              />
             </td>
           </>
         )
@@ -1128,9 +1156,14 @@ export default function ConsolidatedReport() {
             <td><input type="number" value={row.fnfi_amount || 0} onChange={(e) => handleRowChange(idx, 'fnfi_amount', parseInt(e.target.value) || 0)} /></td>
             <td><input value={row.fnfi_source || row.source} onChange={(e) => handleRowChange(idx, row.fnfi_source !== undefined ? 'fnfi_source' : 'source', e.target.value)} /></td>
             <td className="col-actions">
-              <button type="button" className="btn-icon delete" onClick={() => handleDeleteRow(idx)} title="Delete Row">
-                <Trash size={14} />
-              </button>
+              <Button 
+                variant="ghost" 
+                color="danger" 
+                size="sm" 
+                onClick={() => handleDeleteRow(idx)} 
+                title="Delete Row"
+                icon={<Trash size={14} />}
+              />
             </td>
           </>
         )
@@ -1172,9 +1205,14 @@ export default function ConsolidatedReport() {
               />
             </td>
             <td className="col-actions">
-              <button type="button" className="btn-icon delete" onClick={() => handleDeleteRow(idx)} title="Delete Row">
-                <Trash size={14} />
-              </button>
+              <Button 
+                variant="ghost" 
+                color="danger" 
+                size="sm" 
+                onClick={() => handleDeleteRow(idx)} 
+                title="Delete Row"
+                icon={<Trash size={14} />}
+              />
             </td>
           </>
         )
@@ -1202,9 +1240,14 @@ export default function ConsolidatedReport() {
               </div>
             </td>
             <td className="col-actions">
-              <button type="button" className="btn-icon delete" onClick={() => handleDeleteRow(idx)} title="Delete Row">
-                <Trash size={14} />
-              </button>
+              <Button 
+                variant="ghost" 
+                color="danger" 
+                size="sm" 
+                onClick={() => handleDeleteRow(idx)} 
+                title="Delete Row"
+                icon={<Trash size={14} />}
+              />
             </td>
           </>
         )
@@ -1239,9 +1282,14 @@ export default function ConsolidatedReport() {
               </div>
             </td>
             <td className="col-actions">
-              <button type="button" className="btn-icon delete" onClick={() => handleDeleteRow(idx)} title="Delete Row">
-                <Trash size={14} />
-              </button>
+              <Button 
+                variant="ghost" 
+                color="danger" 
+                size="sm" 
+                onClick={() => handleDeleteRow(idx)} 
+                title="Delete Row"
+                icon={<Trash size={14} />}
+              />
             </td>
           </>
         )
@@ -1280,9 +1328,14 @@ export default function ConsolidatedReport() {
               </div>
             </td>
             <td className="col-actions">
-              <button type="button" className="btn-icon delete" onClick={() => handleDeleteRow(idx)} title="Delete Row">
-                <Trash size={14} />
-              </button>
+              <Button 
+                variant="ghost" 
+                color="danger" 
+                size="sm" 
+                onClick={() => handleDeleteRow(idx)} 
+                title="Delete Row"
+                icon={<Trash size={14} />}
+              />
             </td>
           </>
         )
@@ -1320,9 +1373,14 @@ export default function ConsolidatedReport() {
               </div>
             </td>
             <td className="col-actions">
-              <button type="button" className="btn-icon delete" onClick={() => handleDeleteRow(idx)} title="Delete Row">
-                <Trash size={14} />
-              </button>
+              <Button 
+                variant="ghost" 
+                color="danger" 
+                size="sm" 
+                onClick={() => handleDeleteRow(idx)} 
+                title="Delete Row"
+                icon={<Trash size={14} />}
+              />
             </td>
           </>
         )
@@ -1359,9 +1417,14 @@ export default function ConsolidatedReport() {
               </div>
             </td>
             <td className="col-actions">
-              <button type="button" className="btn-icon delete" onClick={() => handleDeleteRow(idx)} title="Delete Row">
-                <Trash size={14} />
-              </button>
+              <Button 
+                variant="ghost" 
+                color="danger" 
+                size="sm" 
+                onClick={() => handleDeleteRow(idx)} 
+                title="Delete Row"
+                icon={<Trash size={14} />}
+              />
             </td>
           </>
         )
@@ -1396,9 +1459,14 @@ export default function ConsolidatedReport() {
               </div>
             </td>
             <td className="col-actions">
-              <button type="button" className="btn-icon delete" onClick={() => handleDeleteRow(idx)} title="Delete Row">
-                <Trash size={14} />
-              </button>
+              <Button 
+                variant="ghost" 
+                color="danger" 
+                size="sm" 
+                onClick={() => handleDeleteRow(idx)} 
+                title="Delete Row"
+                icon={<Trash size={14} />}
+              />
             </td>
           </>
         )
@@ -1449,11 +1517,13 @@ export default function ConsolidatedReport() {
 
   // Helper: get approval status for an event (local override > context)
   const getApprovalStatus = (event) => {
+    if (!event) return 'Pending'
     if (localApprovalMap[event.id]) return localApprovalMap[event.id].status || 'Pending'
     return event.approvalStatus || 'Pending'
   }
 
   const getApprovedPdfUrl = (event) => {
+    if (!event) return null
     if (localApprovalMap[event.id]?.url) return localApprovalMap[event.id].url
     return event.approvedPdfUrl || null
   }
@@ -1629,97 +1699,20 @@ export default function ConsolidatedReport() {
   }
 
 
-  const fetchActiveEventIds = useCallback(async () => {
-    if (!supabase) return
-    setLoadingActive(true)
-    try {
-      // 1. Fetch which event_ids have situational_reports and their statuses
-      const { data: sitreps } = await supabase
-        .from('situational_reports')
-        .select('event_id, status')
-      
-      const pIds = new Set()
-      const aIds = new Set()
-      const anySitRepIds = new Set()
-      
-      sitreps?.forEach(s => {
-        anySitRepIds.add(s.event_id)
-        const st = (s.status || 'Draft').toLowerCase()
-        if (st === 'sent' || st === 'pending approval') {
-          pIds.add(s.event_id)
-        } else if (st === 'approved') {
-          aIds.add(s.event_id)
-        }
-      })
-
-      // 2. Fetch which event_ids have ANY data in detailed tables (including reports)
-      const tables = [
-        'reports', 'related_incidents', 'roads_and_bridges',
-        'power_reports', 'water_supply_reports', 'communication_lines_reports',
-        'damaged_houses_reports', 'class_suspension_reports', 'work_suspension_reports',
-        'declaration_state_of_calamity_reports', 'pre_emptive_evacuation_reports',
-        'assistance_provided_reports', 'assistance_lgus_agencies_reports',
-        'agriculture_damage_reports', 'infrastructure_damage_reports'
-      ]
-
-      const promises = tables.map(t =>
-        supabase.from(t).select('event_id').not('event_id', 'is', null)
-      )
-
-      const results = await Promise.all(promises)
-      const ids = new Set(anySitRepIds)
-      results.forEach(res => {
-        if (res.data) {
-          res.data.forEach(row => ids.add(row.event_id))
-        }
-      })
-      
-      setActiveEventIds(ids)
-      setPendingEventIds(pIds)
-      setApprovedEventIds(aIds)
-    } catch (err) {
-      console.error('Failed to fetch active events:', err)
-      setActiveEventIds(new Set())
-      setPendingEventIds(new Set())
-      setApprovedEventIds(new Set())
-    } finally {
-      setLoadingActive(false)
-    }
-  }, [])
-
   useEffect(() => {
-    fetchActiveEventIds()
-  }, [fetchActiveEventIds])
+    // No longer fetching active event IDs for filters
+  }, [])
 
   const filteredEvents = useMemo(() => {
     let list = [...events]
-
-    if (statusFilter === 'pending') {
-      if (pendingEventIds) list = list.filter(e => pendingEventIds.has(e.id))
-    } else if (statusFilter === 'approved') {
-      if (approvedEventIds) list = list.filter(e => approvedEventIds.has(e.id))
-    } else if (activeEventIds) {
-      list = list.filter(e => activeEventIds.has(e.id))
-    } else if (eventsLoading || loadingActive) {
-      return []
-    }
 
     if (searchTerm) {
       const low = searchTerm.toLowerCase()
       list = list.filter((e) => e.name?.toLowerCase().includes(low))
     }
 
-    // Regional users only see events that have at least one approved sitrep
-    if (isRegional) {
-      if (approvedEventIds) {
-        list = list.filter(e => approvedEventIds.has(e.id))
-      } else if (eventsLoading || loadingActive) {
-        return []
-      }
-    }
-
     return list
-  }, [events, searchTerm, activeEventIds, eventsLoading, loadingActive, isRegional])
+  }, [events, searchTerm])
 
   const sortedEvents = useMemo(() => {
     const list = [...filteredEvents]
@@ -1753,16 +1746,10 @@ export default function ConsolidatedReport() {
       list = list.filter(r => (r.status || 'Draft').toLowerCase() === 'approved')
     }
 
-    if (statusFilter === 'pending') {
-      list = list.filter(r => (r.status || 'Draft').toLowerCase() === 'sent' || (r.status || 'Draft').toLowerCase() === 'pending approval')
-    } else if (statusFilter === 'approved') {
-      list = list.filter(r => (r.status || 'Draft').toLowerCase() === 'approved')
-    }
-
     return list.filter(r => 
       r.title?.toLowerCase().includes(searchTerm.toLowerCase())
     )
-  }, [sitRepVersions, selectedEvent, searchTerm, statusFilter, isProvincialApprover, isSuperAdmin])
+  }, [sitRepVersions, selectedEvent, searchTerm, isProvincialApprover, isSuperAdmin, isRegional])
 
   const filteredCategories = useMemo(() => {
     if (!searchTerm) return CATEGORY_ORDER
@@ -1809,11 +1796,18 @@ export default function ConsolidatedReport() {
     if (situationalReportId) {
       reportsToConsolidate = [situationalReportId]
     } else {
-      const { data: approvedSitreps } = await supabase
+      let q = supabase
         .from('situational_reports')
         .select('id')
         .eq('event_id', event.id)
         .eq('status', 'Approved')
+      
+      // Scoping: Provincial users only see their own approved SitReps in consolidation
+      if (!isRegional && user?.province) {
+        q = q.eq('province', user.province)
+      }
+      
+      const { data: approvedSitreps } = await q
       reportsToConsolidate = (approvedSitreps || []).map(r => r.id)
     }
 
@@ -1827,8 +1821,11 @@ export default function ConsolidatedReport() {
       query = query.eq('situational_report_id', situationalReportId)
     } else if (reportsToConsolidate.length > 0) {
       query = query.in('situational_report_id', reportsToConsolidate)
-    } else {
+    } else if (isRegional) {
       query = query.eq('event_id', event.id)
+    } else {
+      // If not regional and no reports to consolidate, don't fetch anything
+      return { categoryTotals: {}, byCityCategory: {}, details }
     }
     const { data: recentReports } = await query
     let reportIds = (recentReports || []).map((r) => r.id)
@@ -1909,8 +1906,11 @@ export default function ConsolidatedReport() {
         q = q.or(`situational_report_id.eq.${situationalReportId},event_id.eq.${event.id}`)
       } else if (reportsToConsolidate.length > 0) {
         q = q.in('situational_report_id', reportsToConsolidate)
-      } else {
+      } else if (isRegional) {
         q = q.eq('event_id', event.id)
+      } else {
+        // Not regional and no sitreps? skip this table
+        continue
       }
       const { data: rows } = await q
       let finalRows = rows || []
@@ -2000,6 +2000,13 @@ export default function ConsolidatedReport() {
     
     if (reportsToConsolidate.length > 0) {
       wq = wq.in('situational_report_id', reportsToConsolidate)
+    } else if (!isRegional) {
+      // Skip if not regional and no sitreps
+      return {
+        byCityCategory: filteredByCityCategory,
+        categoryTotals,
+        details
+      }
     }
     const { data: waterRows } = await wq
     const waterTotal = (waterRows || []).length
@@ -2148,37 +2155,17 @@ export default function ConsolidatedReport() {
         <div className="consolidated-report-toolbar">
           <div className="consolidated-report-header-stack">
             {view !== 'events' && (
-              <button
-                className="consolidated-report-back-btn"
+              <Button
+                variant="ghost"
                 onClick={handleBack}
                 title="Go Back"
-              >
-                <ArrowLeft size={20} />
-              </button>
+                icon={<ArrowLeft size={20} />}
+              />
             )}
             <h1 className="consolidated-report-title">Consolidated Reports</h1>
           </div>
 
           <div className="consolidated-report-toolbar-controls">
-            <div className="consolidated-report-showing-select">
-              <span className="consolidated-report-showing-label">Showing</span>
-              <span className="consolidated-report-dropdown-wrap">
-                <select
-                  value={pageSize}
-                  onChange={(e) => {
-                    setPageSize(Number(e.target.value))
-                    setCurrentPage(1)
-                  }}
-                  className="consolidated-report-showing-dropdown"
-                >
-                  {PAGE_SIZES.map((n) => (
-                    <option key={n} value={n}>
-                      {n}
-                    </option>
-                  ))}
-                </select>
-              </span>
-            </div>
 
             <SearchInput
               placeholder="Search incidents..."
@@ -2190,37 +2177,15 @@ export default function ConsolidatedReport() {
               suggestions={events.map(e => e.name)}
               className="consolidated-report-search-box"
             />
-            {view === 'events' && (
-              <div className="status-filter-group">
-                <button 
-                  className={`status-filter-btn ${statusFilter === 'all' ? 'active' : ''}`}
-                  onClick={() => setStatusFilter('all')}
-                >
-                  All
-                </button>
-                <button 
-                  className={`status-filter-btn ${statusFilter === 'pending' ? 'active' : ''}`}
-                  onClick={() => setStatusFilter('pending')}
-                >
-                  Pending
-                </button>
-                <button 
-                  className={`status-filter-btn ${statusFilter === 'approved' ? 'active' : ''}`}
-                  onClick={() => setStatusFilter('approved')}
-                >
-                  Approved
-                </button>
-              </div>
-            )}
+            {/* Status filters removed */}
             {view === 'lgus' && (
-              <button
-                type="button"
-                className="btn-secondary"
+              <Button
+                variant="subtle"
                 onClick={() => handleExportCategoryCsv(selectedCategory)}
+                icon={<Download size={16} />}
               >
-                <Download size={16} />
                 Export CSV
-              </button>
+              </Button>
             )}
             {/* NEW: Scope-aware Download Button */}
             {(view === 'sitreps' || view === 'provinces' || view === 'lgus' || view === 'categories') && (
@@ -2229,10 +2194,10 @@ export default function ConsolidatedReport() {
                   className="btn-primary consolidated-download-main"
                   isLoading={drillDownLoading}
                   onClick={handleConsolidatedDownloadClick}
-                  title={`Download for ${selectedLgu || selectedProvince || 'Whole Region'}`}
+                  title={`Download for ${selectedLgu || selectedProvince || (isRegional ? "Whole Region" : province)}`}
                 >
                   <Download size={18} />
-                  Download Report
+                  Download {selectedLgu || selectedProvince ? 'Report' : (isRegional ? 'Consolidated Report' : 'Provincial Report')}
                 </Button>
               </div>
             )}
@@ -2314,16 +2279,20 @@ export default function ConsolidatedReport() {
               <thead>
                 <tr>
                   <th style={{ width: '40%' }}>
-                    <button type="button" className="consolidated-th-sort" onClick={() => handleSort('name')}>
+                    <Button variant="ghost" className="consolidated-th-sort" onClick={() => handleSort('name')}>
                       Event Name
-                      <SortIcon columnKey="name" />
-                    </button>
+                      {sortKey === 'name'
+                        ? (sortAsc ? <CaretUp size={13} className="consolidated-sort-icon" /> : <CaretDown size={13} className="consolidated-sort-icon" />)
+                        : <CaretDown size={13} className="consolidated-sort-icon inactive" />}
+                    </Button>
                   </th>
                   <th style={{ width: '25%' }}>
-                    <button type="button" className="consolidated-th-sort" onClick={() => handleSort('startDate')}>
+                    <Button variant="ghost" className="consolidated-th-sort" onClick={() => handleSort('startDate')}>
                       Date of Event
-                      <SortIcon columnKey="startDate" />
-                    </button>
+                      {sortKey === 'startDate'
+                        ? (sortAsc ? <CaretUp size={13} className="consolidated-sort-icon" /> : <CaretDown size={13} className="consolidated-sort-icon" />)
+                        : <CaretDown size={13} className="consolidated-sort-icon inactive" />}
+                    </Button>
                   </th>
                   <th style={{ textAlign: 'center', width: '20%' }}>Alert Lvl</th>
                   <th className="col-action" style={{ width: '15%' }}>Actions</th>
@@ -2357,10 +2326,11 @@ export default function ConsolidatedReport() {
                           {(event.alertStatus || 'white').toUpperCase()}
                         </span>
                       </td>
-                      <td className="col-action" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', justifyContent: 'flex-end' }}>
-                        <button
-                          type="button"
-                          className="consolidated-report-btn-sitrep"
+                      <td className="col-action" style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', justifyContent: 'center' }}>
+                        <Button
+                          variant="solid"
+                          color="primary"
+                          size="sm"
                           onClick={async () => {
                             setVersionsLoading(true)
                             const sitreps = await fetchSituationalReports(event.id)
@@ -2369,10 +2339,10 @@ export default function ConsolidatedReport() {
                             navigateTo('sitreps', { event })
                           }}
                           title="View Situation Reports"
+                          icon={<FileText size={14} />}
                         >
-                          <FileText size={14} />
                           Sit Rep
-                        </button>
+                        </Button>
                       </td>
                     </tr>
                   ))
@@ -2423,31 +2393,37 @@ export default function ConsolidatedReport() {
                           {(v.status || 'Draft').toUpperCase()}
                         </span>
                       </td>
-                      <td className="col-action" style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', alignItems: 'center' }}>
+                      <td className="col-action" style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', alignItems: 'center' }}>
 
                         {/* View uploaded PDF (available to all roles) */}
                         {v.approved_pdf_url && (
                           <Button
-                            className="consolidated-report-btn-sitrep pdf-btn"
+                            variant="solid"
+                            color="danger"
+                            size="sm"
                             onClick={() => {
                               setPreviewUrl(v.approved_pdf_url)
                               setShowPreviewModal(true)
                             }}
+                            leftIcon={<FileText size={14} />}
                           >
-                            <FileText size={14} />
                             PDF
                           </Button>
                         )}
                           <Button
-                            className="consolidated-report-btn-sitrep download-btn"
+                            variant="solid"
+                            color="success"
+                            size="sm"
                             isLoading={processingId === v.id}
                             onClick={() => handleSitRepDownloadClick(v)}
+                            leftIcon={processingId === v.id ? null : <FileArrowDown size={14} />}
                           >
-                            <FileArrowDown size={14} />
                             Download
                           </Button>
                           <Button
-                            className="consolidated-report-btn-sitrep details-btn"
+                            variant="solid"
+                            color="warning"
+                            size="sm"
                             isLoading={drillDownLoading}
                             onClick={async () => {
                               setDrillDownLoading(true)
@@ -2484,23 +2460,29 @@ export default function ConsolidatedReport() {
                 {PROVINCE_NAMES.map(prov => (
                   <tr key={prov}>
                     <td className="event-name-cell" style={{ fontWeight: 600 }}>{prov}</td>
-                    <td className="col-action" style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', border: 'none' }}>
+                    <td className="col-action" style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', border: 'none' }}>
                       <Button
-                        className="consolidated-report-btn-sitrep pdf-btn"
+                        variant="solid"
+                        color="danger"
+                        size="sm"
                         onClick={() => handleConsolidatedDownloadClick(prov, null, 'pdf')}
+                        icon={<FileText size={14} />}
                       >
-                        <FileText size={14} />
                         PDF
                       </Button>
                       <Button
-                        className="consolidated-report-btn-sitrep download-btn"
+                        variant="solid"
+                        color="success"
+                        size="sm"
                         onClick={() => handleConsolidatedDownloadClick(prov, null, 'both')}
+                        icon={<FileArrowDown size={14} />}
                       >
-                        <FileArrowDown size={14} />
                         Download
                       </Button>
                       <Button
-                        className="consolidated-report-btn-sitrep details-btn"
+                        variant="solid"
+                        color="warning"
+                        size="sm"
                         onClick={() => {
                           setSelectedProvince(prov)
                           setView('lgus')
@@ -2545,23 +2527,29 @@ export default function ConsolidatedReport() {
                     <tr key={catKey}>
                       <td className="event-name-cell">{label}</td>
                       <td style={{ textAlign: 'center', fontWeight: 600 }}>{count}</td>
-                      <td className="col-action" style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', border: 'none' }}>
+                      <td className="col-action" style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', border: 'none' }}>
                         <Button
-                          className="consolidated-report-btn-sitrep pdf-btn"
+                          variant="solid"
+                          color="danger"
+                          size="sm"
                           onClick={() => handleConsolidatedDownloadClick(null, null, 'pdf')}
+                          icon={<FileText size={14} />}
                         >
-                          <FileText size={14} />
                           PDF
                         </Button>
                         <Button
-                          className="consolidated-report-btn-sitrep download-btn"
+                          variant="solid"
+                          color="success"
+                          size="sm"
                           onClick={() => handleConsolidatedDownloadClick(null, null, 'both')}
+                          icon={<FileArrowDown size={14} />}
                         >
-                          <FileArrowDown size={14} />
                           Download
                         </Button>
                         <Button
-                          className="consolidated-report-btn-sitrep details-btn"
+                          variant="solid"
+                          color="warning"
+                          size="sm"
                           onClick={async () => {
                             setSelectedCategory(catKey)
                             if (selectedLgu) {
@@ -2632,23 +2620,29 @@ export default function ConsolidatedReport() {
                   return citiesWithData.map(city => (
                     <tr key={city}>
                       <td className="event-name-cell" style={{ fontWeight: 600 }}>{city}</td>
-                      <td className="col-action" style={{ display: 'flex', gap: '0.5rem', justifyContent: 'flex-end', border: 'none' }}>
+                      <td className="col-action" style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center', border: 'none' }}>
                         <Button
-                          className="consolidated-report-btn-sitrep pdf-btn"
+                          variant="solid"
+                          color="danger"
+                          size="sm"
                           onClick={() => handleConsolidatedDownloadClick(null, city, 'pdf')}
+                          icon={<FileText size={14} />}
                         >
-                          <FileText size={14} />
                           PDF
                         </Button>
                         <Button
-                          className="consolidated-report-btn-sitrep download-btn"
+                          variant="solid"
+                          color="success"
+                          size="sm"
                           onClick={() => handleConsolidatedDownloadClick(null, city, 'both')}
+                          icon={<FileArrowDown size={14} />}
                         >
-                          <FileArrowDown size={14} />
                           Download
                         </Button>
                         <Button
-                          className="consolidated-report-btn-sitrep details-btn"
+                          variant="solid"
+                          color="warning"
+                          size="sm"
                           onClick={async () => {
                             setSelectedLgu(city)
                             if (selectedCategory) {
@@ -2680,10 +2674,15 @@ export default function ConsolidatedReport() {
               <div className="details-view-header">
                 <h3 className="details-view-title">Edit {CATEGORY_LABELS[selectedCategory]} Report Data</h3>
                 <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-                  <button type="button" className="details-view-add-row-btn" onClick={handleAddRow}>
-                    <Plus size={16} />
+                  <Button
+                    variant="solid"
+                    color="primary"
+                    size="sm"
+                    onClick={handleAddRow}
+                    leftIcon={<Plus size={16} />}
+                  >
                     Add Row
-                  </button>
+                  </Button>
                 </div>
               </div>
               <div className="report-table-wrapper">
@@ -2712,780 +2711,670 @@ export default function ConsolidatedReport() {
                 </table>
               </div>
               <div className="details-view-footer">
-                <button type="button" className="details-view-btn-cancel" onClick={handleBack}>
-                  Cancel
-                </button>
-                <button 
-                  type="button" 
-                  className="details-view-btn-submit" 
-                  onClick={handleSubmitDetails}
-                  disabled={submittingDetails}
+                <Button
+                  variant="subtle"
+                  onClick={handleBack}
                 >
-                  {submittingDetails ? 'Saving...' : 'Submit Report'}
-                </button>
+                  Cancel
+                </Button>
+                <Button 
+                  variant="solid"
+                  color="primary"
+                  onClick={handleSubmitDetails}
+                  isLoading={submittingDetails}
+                >
+                  Submit Report
+                </Button>
               </div>
             </div>
           )}
         </div>
 
         <div className="consolidated-report-pagination">
-          <button
-            type="button"
-            className="consolidated-report-pagination-btn"
+          <Button
+            variant="subtle"
             disabled={currentPage <= 1}
             onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
           >
             &lt; Previous
-          </button>
+          </Button>
           <div className="consolidated-report-pagination-numbers">
             {Array.from({ length: totalPages }, (_, i) => i + 1)
               .filter((p) => p === 1 || p === totalPages || (p >= currentPage - 2 && p <= currentPage + 2))
               .map((p, i, arr) => (
                 <span key={p}>
                   {i > 0 && arr[i - 1] !== p - 1 && <span className="consolidated-report-pagination-ellipsis">...</span>}
-                  <button
-                    type="button"
-                    className={`consolidated-report-pagination-num ${currentPage === p ? 'active' : ''}`}
+                  <Button
+                    variant={currentPage === p ? 'solid' : 'ghost'}
+                    size="sm"
+                    style={{ minWidth: '36px', height: '36px', padding: 0 }}
                     onClick={() => setCurrentPage(p)}
                   >
                     {String(p).padStart(2, '0')}
-                  </button>
+                  </Button>
                 </span>
               ))}
           </div>
-          <button
-            type="button"
-            className="consolidated-report-pagination-btn"
+          <Button
+            variant="subtle"
             disabled={currentPage >= totalPages}
             onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
           >
             Next &gt;
-          </button>
+          </Button>
         </div>
       </div>
 
       {/* ── PDF Preview + Edit Modal ── */}
-      {showPdfEditModal && generatedSummaryData && createPortal(
-        <div className="preview-modal-overlay" onClick={() => setShowPdfEditModal(false)}>
-          <div
-            className="preview-modal-content glass-modal"
-            onClick={e => e.stopPropagation()}
-            style={{ width: '95vw', maxWidth: '1400px', display: 'flex', flexDirection: 'column', maxHeight: '95vh' }}
-          >
-            {/* Header */}
-            <div className="preview-modal-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '1.25rem 1.5rem', borderBottom: '1px solid #e2e8f0', flexShrink: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
-                <FileArrowDown size={20} style={{ color: '#2563eb' }} />
-                <div>
-                  <h2 style={{ margin: 0, fontSize: '1.125rem', fontWeight: 700, color: '#0f172a' }}>Download PDF Report</h2>
-                  <p style={{ margin: 0, fontSize: '0.8125rem', color: '#64748b' }}>{generatedSummaryData.pdfParams.reportTitle}</p>
-                </div>
-              </div>
-              <button className="preview-modal-close" onClick={() => setShowPdfEditModal(false)} title="Close">
-                <X size={20} />
-              </button>
-            </div>
-
-            {/* Body: two columns */}
-            <div style={{ display: 'flex', flex: 1, overflow: 'hidden', gap: '0', minHeight: 0 }}>
-
-              {/* LEFT: PDF Preview */}
-              <div style={{ flex: 1.4, display: 'flex', flexDirection: 'column', borderRight: '1px solid #e2e8f0', minWidth: 0, minHeight: 0 }}>
-                <div style={{ padding: '0.875rem 1.25rem', background: '#f8fafc', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
-                  <span style={{ fontWeight: 600, fontSize: '0.8125rem', color: '#334155' }}>PDF Preview</span>
-                  <button
-                    type="button"
-                    style={{ display: 'flex', alignItems: 'center', gap: '0.375rem', padding: '0.375rem 0.875rem', borderRadius: '0.5rem', background: '#2563eb', color: '#fff', border: 'none', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', transition: 'opacity 0.15s' }}
-                    onClick={() => {
-                      if (pdfPreviewBlobUrl) URL.revokeObjectURL(pdfPreviewBlobUrl)
-                      const newUrl = generatePdfBlobUrl(generatedSummaryData.pdfParams, aiGeneratedSummaryText, { preparedBy, notedBy, approvedBy })
-                      setPdfPreviewBlobUrl(newUrl)
-                    }}
-                  >
-                    <ArrowsClockwise size={13} />
-                    Refresh Preview
-                  </button>
-                </div>
-                <div style={{ flex: 1, background: '#e2e8f0', overflow: 'hidden' }}>
-                  {pdfPreviewBlobUrl ? (
-                    <iframe
-                      src={pdfPreviewBlobUrl}
-                      title="PDF Preview"
-                      style={{ width: '100%', height: '100%', border: 'none' }}
-                    />
-                  ) : (
-                    <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <LoadingSpinner label="Generating preview..." />
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* RIGHT: Summary Editor + Signatories */}
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0, minHeight: 0 }}>
-
-                {/* Summary editor */}
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '1.25rem 1.5rem', borderBottom: '1px solid #f1f5f9', overflow: 'hidden', minHeight: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.625rem', flexShrink: 0 }}>
-                    <Sparkle size={15} style={{ color: '#7c3aed', flexShrink: 0 }} />
-                    <span style={{ fontWeight: 700, fontSize: '0.875rem', color: '#0f172a' }}>AI-Generated Summary</span>
-                    <span style={{ fontSize: '0.7rem', color: '#94a3b8', padding: '0.1rem 0.5rem', background: '#f1f5f9', borderRadius: '9999px' }}>editable</span>
-                  </div>
-                  <p style={{ fontSize: '0.75rem', color: '#64748b', margin: '0 0 0.75rem', flexShrink: 0 }}>Edit the summary below. Click "Refresh Preview" to see your changes reflected in the PDF.</p>
-                  <textarea
-                    value={aiGeneratedSummaryText}
-                    onChange={e => setAiGeneratedSummaryText(e.target.value)}
-                    style={{
-                      flex: 1, minHeight: 0, padding: '0.875rem', border: '1.5px solid #e2e8f0', borderRadius: '0.75rem',
-                      fontSize: '0.8125rem', lineHeight: 1.7, color: '#0f172a', background: '#f8fafc', resize: 'none',
-                      fontFamily: 'inherit', outline: 'none', transition: 'border-color 0.15s', overflow: 'auto'
-                    }}
-                    onFocus={e => e.target.style.borderColor = '#2563eb'}
-                    onBlur={e => e.target.style.borderColor = '#e2e8f0'}
-                  />
-                </div>
-
-                {/* Signatories mini section */}
-                <div style={{ padding: '1rem 1.5rem', borderBottom: '1px solid #f1f5f9', flexShrink: 0 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
-                    <Users size={15} style={{ color: '#2563eb' }} />
-                    <span style={{ fontWeight: 700, fontSize: '0.875rem', color: '#0f172a' }}>Signatories</span>
-                    <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>(auto-populated)</span>
-                  </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                      <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.025em' }}>Prepared by</span>
-                      <span style={{ fontSize: '0.75rem', color: '#0f172a', fontWeight: 600 }}>
-                        {preparedBy.length > 0 ? preparedBy.map(p => p.name).join(', ') : <em style={{ color: '#94a3b8', fontWeight: 400 }}>None</em>}
-                      </span>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                      <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.025em' }}>Noted by</span>
-                      <span style={{ fontSize: '0.75rem', color: '#0f172a', fontWeight: 600 }}>
-                        {notedBy ? notedBy.name : <em style={{ color: '#94a3b8', fontWeight: 400 }}>None</em>}
-                      </span>
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
-                      <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.025em' }}>Approved by</span>
-                      <span style={{ fontSize: '0.75rem', color: '#0f172a', fontWeight: 600 }}>
-                        {approvedBy ? approvedBy.name : <em style={{ color: '#94a3b8', fontWeight: 400 }}>None</em>}
-                      </span>
-                    </div>
-                    <div style={{ gridColumn: 'span 3', borderTop: '1px dashed #e2e8f0', marginTop: '0.25rem', paddingTop: '0.5rem' }}>
-                      <button
-                        type="button"
-                        onClick={() => { setShowPdfEditModal(false); setShowSignatoriesModal(true) }}
-                        style={{ padding: '0.375rem 0.75rem', borderRadius: '0.5rem', background: '#f8fafc', border: '1px solid #e2e8f0', fontSize: '0.725rem', fontWeight: 700, cursor: 'pointer', color: '#64748b', transition: 'all 0.2s' }}
-                      >
-                        Change Signatories
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Action buttons */}
-                <div style={{ padding: '1rem 1.5rem', display: 'flex', gap: '0.75rem', flexShrink: 0 }}>
-                  <button
-                    type="button"
-                    className="modal-btn-cancel"
-                    style={{ flex: 1 }}
-                    onClick={() => setShowPdfEditModal(false)}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    style={{
-                      flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem',
-                      padding: '0.75rem 1rem', borderRadius: '0.75rem', background: '#2563eb', color: '#fff',
-                      border: 'none', fontWeight: 700, fontSize: '0.9rem', cursor: 'pointer', transition: 'opacity 0.15s'
-                    }}
-                    onClick={handleConfirmDownload}
-                  >
-                    <FileArrowDown size={16} />
-                    Download PDF
-                  </button>
-                </div>
-
-              </div>
+      <HeaderFooterModal
+        isOpen={showPdfEditModal && !!generatedSummaryData}
+        onClose={() => setShowPdfEditModal(false)}
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+            <FileArrowDown size={20} style={{ color: '#2563eb' }} />
+            <div>
+              <div style={{ fontSize: '1.125rem', fontWeight: 700, color: '#0f172a' }}>Download PDF Report</div>
+              <div style={{ fontSize: '0.8125rem', color: '#64748b', fontWeight: 400 }}>{generatedSummaryData?.pdfParams?.reportTitle}</div>
             </div>
           </div>
-        </div>,
-        document.body
-      )}
-
-      {/* ── Signatories Modal ── */}
-      {showSignatoriesModal && createPortal(
-        <div className="modal-overlay" onClick={() => setShowSignatoriesModal(false)}>
-          <div className="modal-content glass-modal" style={{ maxWidth: '560px' }} onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <div className="versions-title-stack">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
-                  <div style={{ color: '#2563eb' }}><Sparkle size={18} /></div>
-                  <h2 className="versions-event-name">Report Signatories</h2>
-                </div>
-                <p className="modal-subtitle">Assign who prepared, noted, and approved this report. Only active users from {province || 'this region'} are shown.</p>
-              </div>
-              <button className="modal-close" onClick={() => setShowSignatoriesModal(false)} aria-label="Close">
-                <X size={20} />
-              </button>
+        }
+        maxWidth="1400px"
+        width="95vw"
+        height="95vh"
+        footer={
+          <>
+            <Button variant="subtle" onClick={() => setShowPdfEditModal(false)}>Cancel</Button>
+            <Button variant="solid" onClick={handleConfirmDownload} leftIcon={<FileArrowDown size={16} />}>
+              Download PDF
+            </Button>
+          </>
+        }
+      >
+        <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
+          {/* LEFT: PDF Preview */}
+          <div style={{ flex: 1.4, display: 'flex', flexDirection: 'column', borderRight: '1px solid #e2e8f0' }}>
+            <div style={{ padding: '0.875rem 1.25rem', background: '#f8fafc', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontWeight: 600, fontSize: '0.8125rem', color: '#334155' }}>PDF Preview</span>
+              <Button
+                variant="solid"
+                size="sm"
+                onClick={() => {
+                  if (pdfPreviewBlobUrl) URL.revokeObjectURL(pdfPreviewBlobUrl)
+                  const newUrl = generatePdfBlobUrl(generatedSummaryData.pdfParams, aiGeneratedSummaryText, { preparedBy, notedBy, approvedBy })
+                  setPdfPreviewBlobUrl(newUrl)
+                }}
+                leftIcon={<ArrowsClockwise size={13} />}
+              >
+                Refresh Preview
+              </Button>
             </div>
-
-            <div className="modal-body" style={{ padding: '1.25rem 0' }}>
-              {/* Search */}
-              <div style={{ padding: '0 1.5rem 0.875rem' }}>
-                <input
-                  type="text"
-                  placeholder="Search users..."
-                  value={signatorySearch}
-                  onChange={(e) => setSignatorySearch(e.target.value)}
-                  style={{ width: '100%', boxSizing: 'border-box', padding: '0.625rem 1rem', border: '1px solid #e2e8f0', borderRadius: '0.75rem', fontSize: '0.8125rem', color: '#1e293b', background: '#f8fafc', outline: 'none', transition: 'all 0.2s' }}
+            <div style={{ flex: 1, background: '#e2e8f0', overflow: 'hidden' }}>
+              {pdfPreviewBlobUrl ? (
+                <iframe
+                  src={pdfPreviewBlobUrl}
+                  title="PDF Preview"
+                  style={{ width: '100%', height: '100%', border: 'none' }}
                 />
-              </div>
-
-              {/* Role Tabs */}
-              <div style={{ display: 'flex', gap: 0, padding: '0 1.5rem', borderBottom: '1px solid #f1f5f9' }}>
-                {[
-                  { key: 'preparedBy', label: 'Prepared by', count: preparedBy.length },
-                  { key: 'notedBy', label: 'Noted by', count: notedBy ? 1 : 0 },
-                  { key: 'approvedBy', label: 'Approved by', count: approvedBy ? 1 : 0 },
-                ].map(tab => (
-                  <button
-                    key={tab.key}
-                    onClick={() => setSignatoryRole(tab.key)}
-                    style={{
-                      flex: 1, padding: '0.75rem 0.25rem', fontSize: '0.8125rem', fontWeight: 600, cursor: 'pointer',
-                      border: 'none', borderBottom: signatoryRole === tab.key ? '2px solid #2563eb' : '2px solid transparent',
-                      background: 'transparent', color: signatoryRole === tab.key ? '#2563eb' : '#64748b',
-                      transition: 'all 0.15s ease', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.375rem'
-                    }}
-                  >
-                    {tab.label}
-                    {tab.count > 0 && (
-                      <span style={{ background: '#2563eb', color: '#fff', borderRadius: '9999px', padding: '0.05rem 0.45rem', fontSize: '0.7rem', fontWeight: 700 }}>{tab.count}</span>
-                    )}
-                  </button>
-                ))}
-              </div>
-
-              {/* Signatory List */}
-              <div style={{ maxHeight: '350px', overflowY: 'auto', padding: '1.25rem 1.5rem', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                {availableSignatories
-                  .filter(s => s.name.toLowerCase().includes(signatorySearch.toLowerCase()))
-                  .map(s => {
-                    let isSelected = false
-                    if (signatoryRole === 'preparedBy') isSelected = preparedBy.some(p => p.id === s.id)
-                    else if (signatoryRole === 'notedBy') isSelected = notedBy?.id === s.id
-                    else if (signatoryRole === 'approvedBy') isSelected = approvedBy?.id === s.id
-
-                    const handleSelect = () => {
-                      if (signatoryRole === 'preparedBy') {
-                        setPreparedBy(prev => isSelected ? prev.filter(p => p.id !== s.id) : [...prev, s])
-                      } else if (signatoryRole === 'notedBy') {
-                        setNotedBy(isSelected ? null : s)
-                      } else if (signatoryRole === 'approvedBy') {
-                        setApprovedBy(isSelected ? null : s)
-                      }
-                    }
-
-                    return (
-                      <div key={s.id} onClick={handleSelect} style={{
-                        display: 'flex', alignItems: 'center', gap: '0.875rem',
-                        padding: '0.75rem 1rem', borderRadius: '0.875rem', cursor: 'pointer',
-                        background: isSelected ? 'rgba(37,99,235,0.06)' : '#f8fafc',
-                        border: isSelected ? '1px solid rgba(37,99,235,0.2)' : '1px solid transparent',
-                        transition: 'all 0.15s ease'
-                      }}>
-                        <div style={{
-                          width: '36px', height: '36px', borderRadius: '50%', flexShrink: 0,
-                          background: isSelected ? 'rgba(37,99,235,0.12)' : 'rgba(0,0,0,0.06)',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontWeight: 700, fontSize: '0.875rem', color: isSelected ? '#2563eb' : '#64748b'
-                        }}>
-                          {s.name.charAt(0).toUpperCase()}
-                        </div>
-                        <div style={{ flex: 1, minWidth: 0 }}>
-                          <div style={{ fontWeight: 600, fontSize: '0.9375rem', color: '#0f172a' }}>{s.name}</div>
-                        </div>
-                        <div style={{
-                          width: '20px', height: '20px', borderRadius: '50%', flexShrink: 0,
-                          background: isSelected ? '#2563eb' : 'transparent',
-                          border: isSelected ? 'none' : '1.5px solid #cbd5e1',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          color: 'white', transition: 'all 0.15s ease'
-                        }}>
-                          {isSelected && <Check size={12} weight="bold" />}
-                        </div>
-                      </div>
-                    )
-                  })}
-                {availableSignatories.length === 0 && (
-                  <div style={{ padding: '2.5rem 1.5rem', textAlign: 'center', color: '#94a3b8', fontSize: '0.875rem' }}>
-                    No active users found in {province || 'this region'}.
-                  </div>
-                )}
-              </div>
-
-              {/* Summary strip */}
-              {(preparedBy.length > 0 || notedBy || approvedBy) && (
-                <div style={{ padding: '0.875rem 1.5rem', background: '#f8fafc', borderTop: '1px solid #f1f5f9', fontSize: '0.8125rem', color: '#475569', display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
-                  {preparedBy.length > 0 && <span><strong>Prepared:</strong> {preparedBy.map(p => p.name).join(', ')}</span>}
-                  {notedBy && <span><strong>Noted:</strong> {notedBy.name}</span>}
-                  {approvedBy && <span><strong>Approved:</strong> {approvedBy.name}</span>}
+              ) : (
+                <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <LoadingSpinner label="Generating preview..." />
                 </div>
               )}
             </div>
+          </div>
 
-            <div className="modal-footer">
-              <button className="modal-btn-cancel" onClick={() => setShowSignatoriesModal(false)}>
-                Cancel
-              </button>
-              <button className="modal-btn-primary" onClick={handleConfirmDownload}>
-                <FileArrowDown size={16} />
-                Download PDF
-              </button>
+          {/* RIGHT: Summary Editor + Signatories */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            {/* Summary editor */}
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', padding: '1.25rem 1.5rem', borderBottom: '1px solid #f1f5f9', overflow: 'hidden' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.625rem' }}>
+                <Sparkle size={15} style={{ color: '#7c3aed' }} />
+                <span style={{ fontWeight: 700, fontSize: '0.875rem', color: '#0f172a' }}>AI-Generated Summary</span>
+                <span style={{ fontSize: '0.7rem', color: '#94a3b8', padding: '0.1rem 0.5rem', background: '#f1f5f9', borderRadius: '9999px' }}>editable</span>
+              </div>
+              <p style={{ fontSize: '0.75rem', color: '#64748b', margin: '0 0 0.75rem' }}>Edit the summary below. Click "Refresh Preview" to see your changes reflected in the PDF.</p>
+              <textarea
+                value={aiGeneratedSummaryText}
+                onChange={e => setAiGeneratedSummaryText(e.target.value)}
+                style={{
+                  flex: 1, minHeight: 0, padding: '0.875rem', border: '1.5px solid #e2e8f0', borderRadius: '0.75rem',
+                  fontSize: '0.8125rem', lineHeight: 1.7, color: '#0f172a', background: '#f8fafc', resize: 'none',
+                  fontFamily: 'inherit', outline: 'none', transition: 'border-color 0.15s', overflow: 'auto'
+                }}
+              />
+            </div>
+
+            {/* Signatories mini section */}
+            <div style={{ padding: '1rem 1.5rem', flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.75rem' }}>
+                <Users size={15} style={{ color: '#2563eb' }} />
+                <span style={{ fontWeight: 700, fontSize: '0.875rem', color: '#0f172a' }}>Signatories</span>
+                <span style={{ fontSize: '0.7rem', color: '#94a3b8' }}>(auto-populated)</span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                  <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.025em' }}>Prepared by</span>
+                  <span style={{ fontSize: '0.75rem', color: '#0f172a', fontWeight: 600 }}>
+                    {preparedBy.length > 0 ? preparedBy.map(p => p.name).join(', ') : <em style={{ color: '#94a3b8', fontWeight: 400 }}>None</em>}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                  <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.025em' }}>Noted by</span>
+                  <span style={{ fontSize: '0.75rem', color: '#0f172a', fontWeight: 600 }}>
+                    {notedBy ? notedBy.name : <em style={{ color: '#94a3b8', fontWeight: 400 }}>None</em>}
+                  </span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+                  <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.025em' }}>Approved by</span>
+                  <span style={{ fontSize: '0.75rem', color: '#0f172a', fontWeight: 600 }}>
+                    {approvedBy ? approvedBy.name : <em style={{ color: '#94a3b8', fontWeight: 400 }}>None</em>}
+                  </span>
+                </div>
+                <div style={{ gridColumn: 'span 3', borderTop: '1px dashed #e2e8f0', marginTop: '0.25rem', paddingTop: '0.5rem' }}>
+                  <Button
+                    variant="subtle"
+                    size="sm"
+                    onClick={() => { setShowPdfEditModal(false); setShowSignatoriesModal(true) }}
+                  >
+                    Change Signatories
+                  </Button>
+                </div>
+              </div>
             </div>
           </div>
-        </div>,
-        document.body
-      )}
+        </div>
+      </HeaderFooterModal>
 
-      {/* Upload PDF Modal — Provincial User */}
-      {showApprovalUploadModal && createPortal(
-        <div className="modal-overlay" onClick={() => setShowApprovalUploadModal(false)}>
-          <div className="modal-content glass-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '480px' }}>
-            <div className="modal-header">
-              <div className="versions-title-stack">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
-                  <span className="sitrep-badge" style={{ background: '#2563eb' }}>UPLOAD</span>
-                  <h2 className="versions-event-name">Upload Signed PDF</h2>
-                </div>
-                <p className="modal-subtitle">Upload the signed situational report PDF. It will be sent to the Provincial Approver for review.</p>
-              </div>
-              <button className="modal-close" onClick={() => setShowApprovalUploadModal(false)}>
-                <X size={20} />
-              </button>
-            </div>
-            <div className="modal-body">
-              <div
-                className={`approval-file-upload ${isDragActive ? 'drag-active' : ''}`}
-                onDragOver={(e) => { e.preventDefault(); setIsDragActive(true); }}
-                onDragLeave={(e) => { e.preventDefault(); setIsDragActive(false); }}
-                onDrop={(e) => {
-                  e.preventDefault();
-                  setIsDragActive(false);
-                  const file = e.dataTransfer.files?.[0];
-                  if (file && file.type === 'application/pdf') {
-                    setApprovalFile(file);
-                  } else if (file) {
-                    showSuccess('Validation Error', 'Only PDF files are allowed.');
-                  }
+      {/* ── Signatories Modal ── */}
+      <HeaderFooterModal
+        isOpen={showSignatoriesModal}
+        onClose={() => setShowSignatoriesModal(false)}
+        title="Report Signatories"
+        subtitle={`Assign who prepared, noted, and approved this report. Only active users from ${province || 'this region'} are shown.`}
+        maxWidth="560px"
+        footer={
+          <>
+            <Button variant="subtle" onClick={() => setShowSignatoriesModal(false)}>Cancel</Button>
+            <Button variant="solid" onClick={handleConfirmDownload} leftIcon={<FileArrowDown size={16} />}>
+              Download PDF
+            </Button>
+          </>
+        }
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+          <input
+            type="text"
+            placeholder="Search users..."
+            value={signatorySearch}
+            onChange={(e) => setSignatorySearch(e.target.value)}
+            style={{ width: '100%', boxSizing: 'border-box', padding: '0.625rem 1rem', border: '1px solid #e2e8f0', borderRadius: '0.75rem', fontSize: '0.8125rem', color: '#1e293b', background: '#f8fafc', outline: 'none', transition: 'all 0.2s' }}
+          />
+
+          <div style={{ display: 'flex', gap: 0, borderBottom: '1px solid #f1f5f9' }}>
+            {[
+              { key: 'preparedBy', label: 'Prepared by', count: preparedBy.length },
+              { key: 'notedBy', label: 'Noted by', count: notedBy ? 1 : 0 },
+              { key: 'approvedBy', label: 'Approved by', count: approvedBy ? 1 : 0 },
+            ].map(tab => (
+              <button
+                key={tab.key}
+                onClick={() => setSignatoryRole(tab.key)}
+                style={{
+                  flex: 1, padding: '0.75rem 0.25rem', fontSize: '0.8125rem', fontWeight: 600, cursor: 'pointer',
+                  border: 'none', borderBottom: signatoryRole === tab.key ? '2px solid #2563eb' : '2px solid transparent',
+                  background: 'transparent', color: signatoryRole === tab.key ? '#2563eb' : '#64748b',
+                  transition: 'all 0.15s ease', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.375rem'
                 }}
               >
-                <input
-                  id="approval-pdf-input"
-                  type="file"
-                  accept=".pdf,application/pdf"
-                  onChange={(e) => setApprovalFile(e.target.files?.[0] ?? null)}
-                  className="approval-file-input-hidden"
-                  style={{ display: 'none' }}
-                />
-                {!approvalFile ? (
-                  <label htmlFor="approval-pdf-input" className="approval-file-upload-label modern-upload-label">
-                    <div className="modern-upload-icon-wrapper">
-                      <Upload size={32} className="approval-upload-icon modern-icon" />
-                    </div>
-                    <span className="approval-upload-text"><strong>Click to upload</strong> or drag and drop</span>
-                    <span className="approval-upload-hint">PDF files only (Max. 10MB)</span>
-                  </label>
-                ) : (
-                  <div className="approval-file-selected modern-file-selected">
-                    <div className="modern-file-info">
-                      <div className="modern-file-icon-wrapper">
-                        <FileArrowDown size={24} className="approval-file-icon modern-file-icon" />
-                      </div>
-                      <div className="modern-file-details">
-                        <span className="approval-file-name" title={approvalFile.name}>{approvalFile.name}</span>
-                        <span className="approval-file-size">{(approvalFile.size / 1024 / 1024).toFixed(2)} MB</span>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      className="approval-file-remove modern-remove-btn"
-                      onClick={() => {
-                        setApprovalFile(null)
-                        const input = document.getElementById('approval-pdf-input')
-                        if (input) input.value = ''
-                      }}
-                      title="Remove file"
-                    >
-                      <X size={18} />
-                    </button>
-                  </div>
+                {tab.label}
+                {tab.count > 0 && (
+                  <span style={{ background: '#2563eb', color: '#fff', borderRadius: '9999px', padding: '0.05rem 0.45rem', fontSize: '0.7rem', fontWeight: 700 }}>{tab.count}</span>
                 )}
+              </button>
+            ))}
+          </div>
+
+          <div style={{ maxHeight: '350px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+            {availableSignatories
+              .filter(s => s.name.toLowerCase().includes(signatorySearch.toLowerCase()))
+              .map(s => {
+                let isSelected = false
+                if (signatoryRole === 'preparedBy') isSelected = preparedBy.some(p => p.id === s.id)
+                else if (signatoryRole === 'notedBy') isSelected = notedBy?.id === s.id
+                else if (signatoryRole === 'approvedBy') isSelected = approvedBy?.id === s.id
+
+                const handleSelect = () => {
+                  if (signatoryRole === 'preparedBy') {
+                    setPreparedBy(prev => isSelected ? prev.filter(p => p.id !== s.id) : [...prev, s])
+                  } else if (signatoryRole === 'notedBy') {
+                    setNotedBy(isSelected ? null : s)
+                  } else if (signatoryRole === 'approvedBy') {
+                    setApprovedBy(isSelected ? null : s)
+                  }
+                }
+
+                return (
+                  <div key={s.id} onClick={handleSelect} style={{
+                    display: 'flex', alignItems: 'center', gap: '0.875rem',
+                    padding: '0.75rem 1rem', borderRadius: '0.875rem', cursor: 'pointer',
+                    background: isSelected ? 'rgba(37,99,235,0.06)' : '#f8fafc',
+                    border: isSelected ? '1px solid rgba(37,99,235,0.2)' : '1px solid transparent',
+                    transition: 'all 0.15s ease'
+                  }}>
+                    <div style={{
+                      width: '36px', height: '36px', borderRadius: '50%', flexShrink: 0,
+                      background: isSelected ? 'rgba(37,99,235,0.12)' : 'rgba(0,0,0,0.06)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontWeight: 700, fontSize: '0.875rem', color: isSelected ? '#2563eb' : '#64748b'
+                    }}>
+                      {s.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: '0.9375rem', color: '#0f172a' }}>{s.name}</div>
+                    </div>
+                    <div style={{
+                      width: '20px', height: '20px', borderRadius: '50%', flexShrink: 0,
+                      background: isSelected ? '#2563eb' : 'transparent',
+                      border: isSelected ? 'none' : '1.5px solid #cbd5e1',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: 'white', transition: 'all 0.15s ease'
+                    }}>
+                      {isSelected && <Check size={12} weight="bold" />}
+                    </div>
+                  </div>
+                )
+              })}
+            {availableSignatories.length === 0 && (
+              <div style={{ padding: '2.5rem 1.5rem', textAlign: 'center', color: '#94a3b8', fontSize: '0.875rem' }}>
+                No active users found in {province || 'this region'}.
               </div>
+            )}
+          </div>
+
+          {(preparedBy.length > 0 || notedBy || approvedBy) && (
+            <div style={{ padding: '0.875rem 1rem', background: '#f8fafc', borderRadius: '8px', border: '1px solid #f1f5f9', fontSize: '0.8125rem', color: '#475569', display: 'flex', flexWrap: 'wrap', gap: '1rem' }}>
+              {preparedBy.length > 0 && <span><strong>Prepared:</strong> {preparedBy.map(p => p.name).join(', ')}</span>}
+              {notedBy && <span><strong>Noted:</strong> {notedBy.name}</span>}
+              {approvedBy && <span><strong>Approved:</strong> {approvedBy.name}</span>}
             </div>
-            <div className="modal-footer">
-              <button className="modal-btn-cancel" onClick={() => setShowApprovalUploadModal(false)}>Cancel</button>
-              <Button
-                className="modal-btn-primary"
-                onClick={handleUploadPdfSubmit}
-                isLoading={uploadingApproval}
-                disabled={!approvalFile}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-                  <Upload size={15} />
-                  <span>Submit for Approval</span>
+          )}
+        </div>
+      </HeaderFooterModal>
+
+      {/* Upload PDF Modal — Provincial User */}
+      <HeaderFooterModal
+        isOpen={showApprovalUploadModal}
+        onClose={() => setShowApprovalUploadModal(false)}
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+            <span className="sitrep-badge" style={{ background: '#2563eb' }}>UPLOAD</span>
+            <span>Upload Signed PDF</span>
+          </div>
+        }
+        subtitle="Upload the signed situational report PDF. It will be sent to the Provincial Approver for review."
+        maxWidth="480px"
+        footer={
+          <>
+            <Button variant="subtle" onClick={() => setShowApprovalUploadModal(false)}>Cancel</Button>
+            <Button
+              variant="solid"
+              color="primary"
+              onClick={handleUploadPdfSubmit}
+              isLoading={uploadingApproval}
+              disabled={!approvalFile}
+              leftIcon={<Upload size={15} />}
+            >
+              Submit for Approval
+            </Button>
+          </>
+        }
+      >
+        <div
+          className={`approval-file-upload ${isDragActive ? 'drag-active' : ''}`}
+          onDragOver={(e) => { e.preventDefault(); setIsDragActive(true); }}
+          onDragLeave={(e) => { e.preventDefault(); setIsDragActive(false); }}
+          onDrop={(e) => {
+            e.preventDefault();
+            setIsDragActive(false);
+            const file = e.dataTransfer.files?.[0];
+            if (file && file.type === 'application/pdf') {
+              setApprovalFile(file);
+            } else if (file) {
+              showSuccess('Validation Error', 'Only PDF files are allowed.');
+            }
+          }}
+        >
+          <input
+            id="approval-pdf-input"
+            type="file"
+            accept=".pdf,application/pdf"
+            onChange={(e) => setApprovalFile(e.target.files?.[0] ?? null)}
+            className="approval-file-input-hidden"
+            style={{ display: 'none' }}
+          />
+          {!approvalFile ? (
+            <label htmlFor="approval-pdf-input" className="approval-file-upload-label modern-upload-label">
+              <div className="modern-upload-icon-wrapper">
+                <Upload size={32} className="approval-upload-icon modern-icon" />
+              </div>
+              <span className="approval-upload-text"><strong>Click to upload</strong> or drag and drop</span>
+              <span className="approval-upload-hint">PDF files only (Max. 10MB)</span>
+            </label>
+          ) : (
+            <div className="approval-file-selected modern-file-selected">
+              <div className="modern-file-info">
+                <div className="modern-file-icon-wrapper">
+                  <FileArrowDown size={24} className="approval-file-icon modern-file-icon" />
                 </div>
+                <div className="modern-file-details">
+                  <span className="approval-file-name" title={approvalFile.name}>{approvalFile.name}</span>
+                  <span className="approval-file-size">{(approvalFile.size / 1024 / 1024).toFixed(2)} MB</span>
+                </div>
+              </div>
+              <Button
+                variant="ghost"
+                color="danger"
+                size="sm"
+                onClick={() => {
+                  setApprovalFile(null)
+                  const input = document.getElementById('approval-pdf-input')
+                  if (input) input.value = ''
+                }}
+                title="Remove file"
+              >
+                <X size={18} />
               </Button>
             </div>
-          </div>
-        </div>,
-        document.body
-      )}
+          )}
+        </div>
+      </HeaderFooterModal>
 
 
 
       {/* Action Confirmation Modal */}
-      {showApprovalConfirmation && createPortal(
-        <div className="modal-overlay" onClick={() => setShowApprovalConfirmation(false)}>
-          <div className="modal-content glass-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '400px' }}>
-            <div className="modal-confirm">
-              <div className="modal-confirm-icon modal-confirm-icon--success">
-                <CheckCircle size={32} />
-              </div>
-              <h2 className="modal-confirm-title">Success</h2>
-              <p className="modal-confirm-text">{approvalConfirmMessage}</p>
-              <div className="modal-confirm-footer">
-                <button className="modal-btn-primary" onClick={() => setShowApprovalConfirmation(false)} style={{ minWidth: '120px' }}>
-                  Done
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
+      <ConfirmationModal
+        isOpen={showApprovalConfirmation}
+        onClose={() => setShowApprovalConfirmation(false)}
+        type="success"
+        title="Success"
+        message={approvalConfirmMessage}
+        confirmLabel="Done"
+        onConfirm={() => setShowApprovalConfirmation(false)}
+      />
 
       {/* Approved View Modal */}
-      {showApprovedView && approvedViewEvent && createPortal(
-        <div className="modal-overlay" onClick={() => { setShowApprovedView(false); setApprovedViewEvent(null) }}>
-          <div className="modal-content glass-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '480px' }}>
-            <div className="modal-header">
-              <div className="approved-view-title-stack">
-                <h2>{approvedViewEvent.name}</h2>
-              </div>
-              <button className="modal-close" onClick={() => { setShowApprovedView(false); setApprovedViewEvent(null) }}>
-                <X size={20} />
-              </button>
-            </div>
-            <div className="modal-body">
-              <div className="approved-view-details">
-                <div className="approved-view-detail-row">
-                  <span className="approved-view-label">Event</span>
-                  <span className="approved-view-value">{approvedViewEvent.name}</span>
-                </div>
-                <div className="approved-view-detail-row">
-                  <span className="approved-view-label">Date</span>
-                  <span className="approved-view-value">
-                    {approvedViewEvent.startDate
-                      ? new Date(approvedViewEvent.startDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
-                      : '-'}
-                  </span>
-                </div>
-                <div className="approved-view-detail-row">
-                  <span className="approved-view-label">Alert Level</span>
-                  <span className="approved-view-value">
-                    <span className={`alert-pill alert-${(approvedViewEvent.alertStatus || 'white').toLowerCase()}`}>
-                      {(approvedViewEvent.alertStatus || 'white').toUpperCase()}
-                    </span>
-                  </span>
-                </div>
-              </div>
-            </div>
-            <div className="modal-footer">
-              {(() => {
-                const pdfUrl = getApprovedPdfUrl(approvedViewEvent) || approvedViewEvent.approvedPdfUrl
-                return pdfUrl ? (
-                  <a
-                    href={pdfUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="modal-btn-success"
-                    style={{ textDecoration: 'none', flex: 1, justifyContent: 'center' }}
-                  >
-                    <Download size={16} />
-                    Download PDF
-                  </a>
-                ) : (
-                  <span className="approved-view-no-pdf">No PDF available</span>
-                )
-              })()}
-              <button
-                className="modal-btn-cancel"
-                onClick={() => handleEditApprovedReport(approvedViewEvent)}
-                style={{ flex: 1, justifyContent: 'center' }}
-              >
-                <PencilSimple size={16} />
-                Edit Report
-              </button>
-            </div>
+      <HeaderFooterModal
+        isOpen={showApprovedView && !!approvedViewEvent}
+        onClose={() => { setShowApprovedView(false); setApprovedViewEvent(null) }}
+        title={approvedViewEvent?.name || 'Report Details'}
+        maxWidth="480px"
+        footer={
+          <>
+            {(() => {
+              const pdfUrl = getApprovedPdfUrl(approvedViewEvent) || approvedViewEvent?.approvedPdfUrl
+              return pdfUrl ? (
+                <Button
+                  as="a"
+                  href={pdfUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  variant="solid"
+                  color="primary"
+                  style={{ flex: 1 }}
+                  leftIcon={<Download size={16} />}
+                >
+                  Download PDF
+                </Button>
+              ) : (
+                <span className="approved-view-no-pdf">No PDF available</span>
+              )
+            })()}
+            <Button
+              variant="subtle"
+              onClick={() => handleEditApprovedReport(approvedViewEvent)}
+              style={{ flex: 1 }}
+              leftIcon={<PencilSimple size={16} />}
+            >
+              Edit Report
+            </Button>
+          </>
+        }
+      >
+        <div className="approved-view-details">
+          <div className="approved-view-detail-row">
+            <span className="approved-view-label">Event</span>
+            <span className="approved-view-value">{approvedViewEvent?.name}</span>
           </div>
-        </div>,
-        document.body
-      )
+          <div className="approved-view-detail-row">
+            <span className="approved-view-label">Date</span>
+            <span className="approved-view-value">
+              {approvedViewEvent?.startDate
+                ? new Date(approvedViewEvent.startDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+                : '-'}
+            </span>
+          </div>
+          <div className="approved-view-detail-row">
+            <span className="approved-view-label">Alert Level</span>
+            <span className="approved-view-value">
+              <span className={`alert-pill alert-${(approvedViewEvent?.alertStatus || 'white').toLowerCase()}`}>
+                {(approvedViewEvent?.alertStatus || 'white').toUpperCase()}
+              </span>
+            </span>
+          </div>
+        </div>
+      </HeaderFooterModal>
       }
 
       {/* ── Sit Rep Versions Modal ── */}
       {
-        showVersionsModal && versionsEvent && createPortal(
-          <div className="modal-overlay" onClick={() => setShowVersionsModal(false)}>
-            <div className="modal-content glass-modal" style={{ maxWidth: '640px' }} onClick={(e) => e.stopPropagation()}>
-              <div className="modal-header">
-                <div className="versions-title-stack">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
-                    <span className="sitrep-badge">VERSIONS</span>
-                    <h2 className="versions-event-name">{versionsEvent.name}</h2>
-                  </div>
-                  <p className="modal-subtitle">Select a situation report to generate its consolidated summary.</p>
-                </div>
-                <button className="modal-close" onClick={() => setShowVersionsModal(false)}>
-                  <X size={20} />
-                </button>
-              </div>
-
-              <div className="modal-body" style={{ background: '#f8fafc', position: 'relative' }}>
-                {processingId && (
-                  <div style={{
-                    position: 'absolute', inset: 0, zIndex: 10,
-                    background: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(4px)',
-                    display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.75rem',
-                    borderRadius: 'inherit'
-                  }}>
-                    <ArrowsClockwise size={28} className="animate-spin" weight="bold" style={{ color: '#2563eb' }} />
-                    <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#334155' }}>Generating Report...</span>
-                    <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Fetching data and building PDF preview</span>
-                  </div>
-                )}
-                {versionsLoading ? (
-                  <div className="versions-loading">
-                    <ArrowsClockwise size={24} className="animate-spin" weight="bold" />
-                    <span>Loading versions...</span>
-                  </div>
-                ) : sitRepVersions.length === 0 ? (
-                  <div className="versions-empty">
-                    <div className="versions-empty-icon"><FileText size={40} /></div>
-                    <h3>No Sit Reps Found</h3>
-                    <p>Add situation reports in the "Add Report" section first to generate consolidated versions here.</p>
-                  </div>
-                ) : (
-                  <div className="versions-list">
-                    {sitRepVersions.map((v) => (
-                      <div key={v.id} className="version-card">
-                        <div className="version-card-main">
-                          <div className="version-card-icon"><FileText size={18} /></div>
-                          <div className="version-card-info">
-                            <span className="version-card-title">{v.title}</span>
-                            <span className="version-card-date">
-                              Created: {new Date(v.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="version-card-actions">
-                          <button
-                            type="button"
-                            className="version-action-btn btn-lgu"
-                            onClick={(e) => { e.stopPropagation(); handleOpenLguStatus(versionsEvent, v); }}
-                            title="View LGU Submission Status"
-                          >
-                            <ChartBar size={14} />
-                            <span>LGUs</span>
-                          </button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              <div className="modal-footer">
-                <button className="modal-btn-cancel" onClick={() => setShowVersionsModal(false)}>Close</button>
-              </div>
+      <HeaderFooterModal
+        isOpen={showVersionsModal && !!versionsEvent}
+        onClose={() => setShowVersionsModal(false)}
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+            <span className="sitrep-badge">VERSIONS</span>
+            <span>{versionsEvent?.name}</span>
+          </div>
+        }
+        subtitle="Select a situation report to generate its consolidated summary."
+        maxWidth="640px"
+        footer={<Button variant="subtle" onClick={() => setShowVersionsModal(false)}>Close</Button>}
+      >
+        <div style={{ position: 'relative' }}>
+          {processingId && (
+            <div style={{
+              position: 'absolute', inset: 0, zIndex: 10,
+              background: 'rgba(255,255,255,0.85)', backdropFilter: 'blur(4px)',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: '0.75rem',
+              borderRadius: 'inherit'
+            }}>
+              <ArrowsClockwise size={28} className="animate-spin" weight="bold" style={{ color: '#2563eb' }} />
+              <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#334155' }}>Generating Report...</span>
+              <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Fetching data and building PDF preview</span>
             </div>
-          </div>,
-          document.body
-        )
+          )}
+          {versionsLoading ? (
+            <div className="versions-loading">
+              <ArrowsClockwise size={24} className="animate-spin" weight="bold" />
+              <span>Loading versions...</span>
+            </div>
+          ) : sitRepVersions.length === 0 ? (
+            <div className="versions-empty">
+              <div className="versions-empty-icon"><FileText size={40} /></div>
+              <h3>No Sit Reps Found</h3>
+              <p>Add situation reports in the "Add Report" section first to generate consolidated versions here.</p>
+            </div>
+          ) : (
+            <div className="versions-list">
+              {sitRepVersions.map((v) => (
+                <div key={v.id} className="version-card">
+                  <div className="version-card-main">
+                    <div className="version-card-icon"><FileText size={18} /></div>
+                    <div className="version-card-info">
+                      <span className="version-card-title">{v.title}</span>
+                      <span className="version-card-date">
+                        Created: {new Date(v.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="version-card-actions">
+                    <Button
+                      variant="subtle"
+                      size="sm"
+                      onClick={(e) => { e.stopPropagation(); handleOpenLguStatus(versionsEvent, v); }}
+                      title="View LGU Submission Status"
+                      leftIcon={<ChartBar size={14} />}
+                    >
+                      LGUs
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </HeaderFooterModal>
       }
 
       {/* ── LGU Submission Status Modal ── */}
-      {showLguStatusModal && lguStatusEvent && createPortal(
-        <div className="modal-overlay" onClick={() => setShowLguStatusModal(false)}>
-          <div className="modal-content glass-modal" style={{ maxWidth: '800px', width: '90%' }} onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <div className="versions-title-stack">
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
-                  <span className="sitrep-badge" style={{ background: 'rgba(59, 130, 246, 0.1)', color: '#2563eb', border: '1px solid rgba(59, 130, 246, 0.2)' }}>LGU STATUS</span>
-                  <h2 className="versions-event-name">{lguStatusEvent.name}</h2>
+      <HeaderFooterModal
+        isOpen={showLguStatusModal && !!lguStatusEvent}
+        onClose={() => setShowLguStatusModal(false)}
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+            <span className="sitrep-badge" style={{ background: 'rgba(59, 130, 246, 0.1)', color: '#2563eb', border: '1px solid rgba(59, 130, 246, 0.2)' }}>LGU STATUS</span>
+            <span>{lguStatusEvent?.name}</span>
+          </div>
+        }
+        subtitle={`${lguStatusVersion?.title} — Tracking submission progress`}
+        maxWidth="800px"
+        footer={<Button variant="subtle" onClick={() => setShowLguStatusModal(false)}>Close</Button>}
+      >
+        <div className="lgu-status-body">
+          {lguStatusLoading ? (
+            <div className="versions-loading">
+              <div className="loading-spinner-small"></div>
+              <span>Loading LGU submissions...</span>
+            </div>
+          ) : (
+            <div className="lgu-status-container">
+              <div className="lgu-status-column submitted-col">
+                <div className="lgu-status-col-header">
+                  <h3>Submitted</h3>
+                  <span className="lgu-count-badge success">{lguStatusData.submitted.length}</span>
                 </div>
-                <p className="modal-subtitle">{lguStatusVersion?.title} &mdash; Tracking submission progress</p>
+                <ul className="lgu-list">
+                  {lguStatusData.submitted.length > 0 ? (
+                    lguStatusData.submitted.map(lgu => (
+                      <li key={lgu} className="lgu-item submitted">
+                        <CheckCircle size={16} className="lgu-icon" />
+                        {lgu}
+                      </li>
+                    ))
+                  ) : (
+                    <li className="lgu-item empty">No LGUs have submitted yet.</li>
+                  )}
+                </ul>
               </div>
-              <button className="modal-close" onClick={() => setShowLguStatusModal(false)}>
-                <X size={20} />
-              </button>
-            </div>
 
-            <div className="modal-body lgu-status-body">
-              {lguStatusLoading ? (
-                <div className="versions-loading">
-                  <div className="loading-spinner-small"></div>
-                  <span>Loading LGU submissions...</span>
+              <div className="lgu-status-column pending-col">
+                <div className="lgu-status-col-header">
+                  <h3>Not Submitted</h3>
+                  <span className="lgu-count-badge warning">{lguStatusData.pending.length}</span>
                 </div>
-              ) : (
-                <div className="lgu-status-container">
-                  <div className="lgu-status-column submitted-col">
-                    <div className="lgu-status-col-header">
-                      <h3>Submitted</h3>
-                      <span className="lgu-count-badge success">{lguStatusData.submitted.length}</span>
-                    </div>
-                    <ul className="lgu-list">
-                      {lguStatusData.submitted.length > 0 ? (
-                        lguStatusData.submitted.map(lgu => (
-                          <li key={lgu} className="lgu-item submitted">
-                            <CheckCircle size={16} className="lgu-icon" />
-                            {lgu}
-                          </li>
-                        ))
-                      ) : (
-                        <li className="lgu-item empty">No LGUs have submitted yet.</li>
-                      )}
-                    </ul>
-                  </div>
-
-                  <div className="lgu-status-column pending-col">
-                    <div className="lgu-status-col-header">
-                      <h3>Not Submitted</h3>
-                      <span className="lgu-count-badge warning">{lguStatusData.pending.length}</span>
-                    </div>
-                    <ul className="lgu-list">
-                      {lguStatusData.pending.length > 0 ? (
-                        lguStatusData.pending.map(lgu => (
-                          <li key={lgu} className="lgu-item pending">
-                            <ArrowsClockwise size={16} className="lgu-icon" />
-                            {lgu}
-                          </li>
-                        ))
-                      ) : (
-                        <li className="lgu-item empty success-empty">All LGUs have submitted!</li>
-                      )}
-                    </ul>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <div className="modal-footer">
-              <button className="modal-btn-cancel" onClick={() => setShowLguStatusModal(false)}>Close</button>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
-
-      {showTextEditorModal && (
-        <div className="modal-overlay" onClick={() => setShowTextEditorModal(false)}>
-          <div className="modal-content glass-modal remarks-editor-modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>{textEditorModalData?.title || 'Edit Text'}</h2>
-              <button type="button" className="modal-close" onClick={() => setShowTextEditorModal(false)}><X size={20} /></button>
-            </div>
-            <div className="modal-body">
-              <textarea
-                className="remarks-textarea"
-                value={textEditorModalData?.tempValue || ''}
-                onChange={(e) => setTextEditorModalData({ ...textEditorModalData, tempValue: e.target.value })}
-                placeholder={`Enter ${textEditorModalData?.title?.toLowerCase().replace('edit ', '') || 'text'} here...`}
-                autoFocus
-              />
-            </div>
-            <div className="modal-footer">
-              <button type="button" className="modal-btn-cancel" onClick={() => setShowTextEditorModal(false)}>Cancel</button>
-              <button type="button" className="modal-btn-primary" onClick={saveTextUpdate}>
-                Save Changes
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showDownloadTypeModal && (
-        <div className="modal-overlay" onClick={() => setShowDownloadTypeModal(false)}>
-          <div className="modal-content glass-modal download-type-modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>Select Download Format</h2>
-              <button type="button" className="modal-close" onClick={() => setShowDownloadTypeModal(false)}><X size={20} /></button>
-            </div>
-            <div className="modal-body">
-              <p style={{ fontSize: '0.875rem', color: '#64748b', marginBottom: '1rem', textAlign: 'center' }}>
-                How would you like to download this consolidated report?
-              </p>
-              <div className="download-options-grid">
-                <div className="download-option-card" onClick={() => {
-                  setShowDownloadTypeModal(false)
-                  setShowSignatoriesModal(true)
-                }}>
-                  <div className="download-option-icon"><FileText size={28} /></div>
-                  <div>
-                    <div className="download-option-title">PDF Document</div>
-                    <div className="download-option-desc">Includes official signatures & formatting</div>
-                  </div>
-                </div>
-
-                <div className="download-option-card csv" onClick={() => {
-                  setShowDownloadTypeModal(false)
-                  generateConsolidatedCsv({
-                    ...generatedSummaryData.pdfParams,
-                    summaryText: aiGeneratedSummaryText,
-                    signatories: { preparedBy: [], notedBy: null, approvedBy: null }
-                  })
-                }}>
-                  <div className="download-option-icon"><ChartBar size={28} /></div>
-                  <div>
-                    <div className="download-option-title">CSV Datasets</div>
-                    <div className="download-option-desc">Clean data in ZIP format (Excel compatible)</div>
-                  </div>
-                </div>
+                <ul className="lgu-list">
+                  {lguStatusData.pending.length > 0 ? (
+                    lguStatusData.pending.map(lgu => (
+                      <li key={lgu} className="lgu-item pending">
+                        <ArrowsClockwise size={16} className="lgu-icon" />
+                        {lgu}
+                      </li>
+                    ))
+                  ) : (
+                    <li className="lgu-item empty success-empty">All LGUs have submitted!</li>
+                  )}
+                </ul>
               </div>
             </div>
-            <div className="modal-footer">
-              <button type="button" className="modal-btn-cancel" onClick={() => setShowDownloadTypeModal(false)}>Cancel</button>
+          )}
+        </div>
+      </HeaderFooterModal>
+
+      <HeaderFooterModal
+        isOpen={showTextEditorModal}
+        onClose={() => setShowTextEditorModal(false)}
+        title={textEditorModalData?.title || 'Edit Text'}
+        maxWidth="600px"
+        footer={
+          <>
+            <Button variant="subtle" onClick={() => setShowTextEditorModal(false)}>Cancel</Button>
+            <Button variant="solid" onClick={saveTextUpdate}>Save Changes</Button>
+          </>
+        }
+      >
+        <textarea
+          className="remarks-textarea"
+          value={textEditorModalData?.tempValue || ''}
+          onChange={(e) => setTextEditorModalData({ ...textEditorModalData, tempValue: e.target.value })}
+          placeholder={`Enter ${textEditorModalData?.title?.toLowerCase().replace('edit ', '') || 'text'} here...`}
+          autoFocus
+          style={{ width: '100%', minHeight: '150px', padding: '0.75rem', border: '1px solid #e2e8f0', borderRadius: '8px', fontSize: '0.875rem', resize: 'vertical' }}
+        />
+      </HeaderFooterModal>
+
+      <HeaderFooterModal
+        isOpen={showDownloadTypeModal}
+        onClose={() => setShowDownloadTypeModal(false)}
+        title="Select Download Format"
+        subtitle="How would you like to download this consolidated report?"
+        maxWidth="500px"
+        footer={<Button variant="subtle" onClick={() => setShowDownloadTypeModal(false)}>Cancel</Button>}
+      >
+        <div className="download-options-grid">
+          <div className="download-option-card" onClick={() => {
+            setShowDownloadTypeModal(false)
+            setShowSignatoriesModal(true)
+          }}>
+            <div className="download-option-icon"><FileText size={28} /></div>
+            <div>
+              <div className="download-option-title">PDF Document</div>
+              <div className="download-option-desc">Includes official signatures & formatting</div>
+            </div>
+          </div>
+
+          <div className="download-option-card csv" onClick={() => {
+            setShowDownloadTypeModal(false)
+            generateConsolidatedCsv({
+              ...generatedSummaryData.pdfParams,
+              summaryText: aiGeneratedSummaryText,
+              signatories: { preparedBy: [], notedBy: null, approvedBy: null }
+            })
+          }}>
+            <div className="download-option-icon"><ChartBar size={28} /></div>
+            <div>
+              <div className="download-option-title">CSV Datasets</div>
+              <div className="download-option-desc">Clean data in ZIP format (Excel compatible)</div>
             </div>
           </div>
         </div>
-      )}
+      </HeaderFooterModal>
 
 
-      {showPreviewModal && (
-        <div className="modal-overlay" onClick={() => setShowPreviewModal(false)}>
-          <div className="modal-content premium-preview-modal" onClick={e => e.stopPropagation()}>
-            <div className="premium-preview-header">
-              <h2 className="premium-preview-title">Report PDF Preview</h2>
-              <button type="button" className="premium-preview-close-icon" onClick={() => setShowPreviewModal(false)} title="Close">
-                <X size={20} />
-              </button>
-            </div>
-            <div className="premium-preview-body">
-              <iframe
-                src={previewUrl}
-                title="PDF Preview"
-                style={{ width: '100%', height: '100%', border: 'none' }}
-              />
-            </div>
-            <div className="premium-preview-footer">
-              <button type="button" className="premium-preview-btn-close" onClick={() => setShowPreviewModal(false)}>Close</button>
-            </div>
-          </div>
+      <HeaderFooterModal
+        isOpen={showPreviewModal}
+        onClose={() => setShowPreviewModal(false)}
+        title="Report PDF Preview"
+        maxWidth="1000px"
+        footer={<Button variant="subtle" onClick={() => setShowPreviewModal(false)}>Close</Button>}
+      >
+        <div style={{ height: '70vh' }}>
+          <iframe
+            src={previewUrl}
+            title="PDF Preview"
+            style={{ width: '100%', height: '100%', border: 'none' }}
+          />
         </div>
-      )}
+      </HeaderFooterModal>
     </div>
   )
 }

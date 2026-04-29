@@ -7,6 +7,7 @@ import { hashPassword, validatePassword } from '../lib/passwordUtils'
 import LoadingSpinner from './LoadingSpinner'
 import Button from './Button'
 import SearchableSelect from './SearchableSelect'
+import HeaderFooterModal from './HeaderFooterModal'
 
 export default function SettingsModal({ isOpen, onClose, user, onLogout }) {
     const navigate = useNavigate()
@@ -124,134 +125,116 @@ export default function SettingsModal({ isOpen, onClose, user, onLogout }) {
     }
 
     return (
-        <div className="modal-overlay" onClick={onClose} role="dialog" aria-modal="true">
-            <div
-                className="modal-content"
-                onClick={(e) => e.stopPropagation()}
-                style={{
-                    maxWidth: '650px',
-                    height: '520px',
-                    display: 'flex',
-                    flexDirection: 'column'
-                }}
-            >
-                <div className="modal-header">
-                    <div>
-                        <h2>Settings & Profile</h2>
-                        <div className="modal-header-subtitle">
-                            {user?.email} • <span className="text-primary">{user?.account_type || user?.role}</span>
-                        </div>
-                    </div>
-                    <button className="modal-close" onClick={onClose} aria-label="Close">
-                        <X size={20} />
+        <HeaderFooterModal
+            isOpen={isOpen}
+            onClose={onClose}
+            title="Settings & Profile"
+            subtitle={<>{user?.email} • <span className="text-primary">{user?.account_type || user?.role}</span></>}
+            maxWidth="650px"
+            bodyPadding="0"
+            className="settings-modal-content"
+        >
+            <div className="modal-body-p0" style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+                {/* Modal Sidebar Tabs */}
+                <div className="modal-sidebar">
+                    <button
+                        onClick={() => setActiveTab('security')}
+                        className={`modal-sidebar-tab ${activeTab === 'security' ? 'active' : ''}`}
+                    >
+                        <Shield size={16} /> Security
+                    </button>
+
+                    <button
+                        onClick={() => {
+                            onClose()
+                            navigate('/event-logs')
+                        }}
+                        className="modal-sidebar-tab"
+                    >
+                        <ClockCounterClockwise size={16} /> Event Logs
+                    </button>
+                    <button
+                        onClick={() => {
+                            navigate('/manual')
+                            onClose()
+                        }}
+                        className="modal-sidebar-tab"
+                    >
+                        <Info size={16} /> Help & Manual
                     </button>
                 </div>
 
-                <div className="modal-body-p0" style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-                    {/* Modal Sidebar Tabs */}
-                    <div className="modal-sidebar">
-                        <button
-                            onClick={() => setActiveTab('security')}
-                            className={`modal-sidebar-tab ${activeTab === 'security' ? 'active' : ''}`}
-                        >
-                            <Shield size={16} /> Security
-                        </button>
+                {/* Modal Content Area */}
+                <div className="modal-body-content">
+                    {activeTab === 'security' && (
+                        <div className="settings-tab-pane">
+                            <h3 className="settings-section-title">Change Password</h3>
+                            <p className="settings-section-desc">Ensure your account is using a long, random password to stay secure.</p>
 
-                        <button
-                            onClick={() => {
-                                onClose()
-                                navigate('/event-logs')
-                            }}
-                            className="modal-sidebar-tab"
-                        >
-                            <ClockCounterClockwise size={16} /> Event Logs
-                        </button>
-                        <button
-                            onClick={() => {
-                                navigate('/manual')
-                                onClose()
-                            }}
-                            className="modal-sidebar-tab"
-                        >
-                            <Info size={16} /> Help & Manual
-                        </button>
-                    </div>
-
-                    {/* Modal Content Area */}
-                    <div className="modal-body-content">
-
-                        {activeTab === 'security' && (
-                            <div className="settings-tab-pane">
-                                <h3 className="settings-section-title">Change Password</h3>
-                                <p className="settings-section-desc">Ensure your account is using a long, random password to stay secure.</p>
-
-                                <form onSubmit={handlePasswordSubmit}>
-                                    <div className="form-group">
-                                        <label className="settings-label">Current Password</label>
-                                        <div className="password-input-wrapper">
-                                            <input
-                                                type={showCurrent ? 'text' : 'password'}
-                                                value={currentPassword}
-                                                onChange={(e) => setCurrentPassword(e.target.value)}
-                                                className="event-modal-input"
-                                                required
-                                            />
-                                            <button type="button" onClick={() => setShowCurrent(!showCurrent)} className="password-toggle-btn">
-                                                {showCurrent ? <EyeClosed size={16} /> : <Eye size={16} />}
-                                            </button>
-                                        </div>
+                            <form onSubmit={handlePasswordSubmit}>
+                                <div className="form-group">
+                                    <label className="settings-label">Current Password</label>
+                                    <div className="password-input-wrapper">
+                                        <input
+                                            type={showCurrent ? 'text' : 'password'}
+                                            value={currentPassword}
+                                            onChange={(e) => setCurrentPassword(e.target.value)}
+                                            className="event-modal-input"
+                                            required
+                                        />
+                                        <button type="button" onClick={() => setShowCurrent(!showCurrent)} className="password-toggle-btn">
+                                            {showCurrent ? <EyeClosed size={16} /> : <Eye size={16} />}
+                                        </button>
                                     </div>
+                                </div>
 
-                                    <div className="form-group">
-                                        <label className="settings-label">New Password</label>
-                                        <div className="password-input-wrapper">
-                                            <input
-                                                type={showNew ? 'text' : 'password'}
-                                                value={newPassword}
-                                                onChange={(e) => setNewPassword(e.target.value)}
-                                                placeholder="At least 8 chars, uppercase & lowercase"
-                                                className="event-modal-input"
-                                                required
-                                            />
-                                            <button type="button" onClick={() => setShowNew(!showNew)} className="password-toggle-btn">
-                                                {showNew ? <EyeClosed size={16} /> : <Eye size={16} />}
-                                            </button>
-                                        </div>
+                                <div className="form-group">
+                                    <label className="settings-label">New Password</label>
+                                    <div className="password-input-wrapper">
+                                        <input
+                                            type={showNew ? 'text' : 'password'}
+                                            value={newPassword}
+                                            onChange={(e) => setNewPassword(e.target.value)}
+                                            placeholder="At least 8 chars, uppercase & lowercase"
+                                            className="event-modal-input"
+                                            required
+                                        />
+                                        <button type="button" onClick={() => setShowNew(!showNew)} className="password-toggle-btn">
+                                            {showNew ? <EyeClosed size={16} /> : <Eye size={16} />}
+                                        </button>
                                     </div>
+                                </div>
 
-                                    <div className="form-group">
-                                        <label className="settings-label">Confirm New Password</label>
-                                        <div className="password-input-wrapper">
-                                            <input
-                                                type={showNew ? 'text' : 'password'}
-                                                value={confirmNewPassword}
-                                                onChange={(e) => setConfirmNewPassword(e.target.value)}
-                                                className="event-modal-input"
-                                                required
-                                            />
-                                        </div>
+                                <div className="form-group">
+                                    <label className="settings-label">Confirm New Password</label>
+                                    <div className="password-input-wrapper">
+                                        <input
+                                            type={showNew ? 'text' : 'password'}
+                                            value={confirmNewPassword}
+                                            onChange={(e) => setConfirmNewPassword(e.target.value)}
+                                            className="event-modal-input"
+                                            required
+                                        />
                                     </div>
+                                </div>
 
-                                    {pwdError && <div className="settings-error-msg">{pwdError}</div>}
-                                    {pwdSuccess && <div className="settings-success-msg">{pwdSuccess}</div>}
+                                {pwdError && <div className="settings-error-msg">{pwdError}</div>}
+                                {pwdSuccess && <div className="settings-success-msg">{pwdSuccess}</div>}
 
-                                    <Button
-                                        type="submit"
-                                        className="modal-btn-primary"
-                                        isLoading={submittingPwd}
-                                        style={{ width: '100%' }}
-                                    >
-                                        Update Password
-                                    </Button>
-                                </form>
-                            </div>
-                        )}
-
-
-
-                    </div>
+                                <Button
+                                    type="submit"
+                                    variant="solid"
+                                    color="primary"
+                                    isLoading={submittingPwd}
+                                    style={{ width: '100%' }}
+                                >
+                                    Update Password
+                                </Button>
+                            </form>
+                        </div>
+                    )}
                 </div>
             </div>
-        </div>
+        </HeaderFooterModal>
     )
 }

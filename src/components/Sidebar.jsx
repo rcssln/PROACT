@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import {
-  SquaresFour, FilePlus, Users, Gear, SignOut, FileText, ChartBar, User, CalendarCheck, List } from '@phosphor-icons/react'
+  SquaresFour, FilePlus, Users, Gear, SignOut, FileText, ChartBar, User, CalendarCheck, CheckSquareOffset, CaretLeft, CaretRight } from '@phosphor-icons/react'
 import { useEvents } from '../contexts/EventContext'
 import SettingsModal from './SettingsModal'
+import ConfirmationModal from './ConfirmationModal'
 import '../styles/components/Sidebar.css'
 
 export default function Sidebar({ user, onLogout, isCollapsed, onToggle }) {
@@ -19,7 +20,7 @@ export default function Sidebar({ user, onLogout, isCollapsed, onToggle }) {
   const isAdmin = isRegionalAdmin || isProvincialAdmin || isLguAdmin || isSuperAdmin
   const navigate = useNavigate()
   const location = useLocation()
-  const { currentEvent, notifications, pendingUsersCount } = useEvents()
+  const { currentEvent, notifications, pendingUsersCount, pendingApprovalsCount } = useEvents()
   
   const unreadNotifs = notifications?.filter(n => !n.is_read) || []
   
@@ -38,6 +39,8 @@ export default function Sidebar({ user, onLogout, isCollapsed, onToggle }) {
         ).length
       case '/users':
         return pendingUsersCount || 0
+      case '/for-approval':
+        return pendingApprovalsCount || 0
       default:
         return 0
     }
@@ -84,7 +87,7 @@ export default function Sidebar({ user, onLogout, isCollapsed, onToggle }) {
           onClick={onToggle}
           title={isCollapsed ? 'Expand Sidebar' : 'Collapse Sidebar'}
         >
-          {<List size={18} weight="bold" />}
+          {isCollapsed ? <CaretRight size={14} weight="bold" /> : <CaretLeft size={14} weight="bold" />}
         </button>
       </div>
 
@@ -149,6 +152,21 @@ export default function Sidebar({ user, onLogout, isCollapsed, onToggle }) {
             )}
           </NavLink>
         )}
+        {(accountType === 'Provincial Approver' || isSuperAdmin) && (
+          <NavLink
+            to="/for-approval"
+            className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
+            title={isCollapsed ? 'For Approval' : ''}
+          >
+            <CheckSquareOffset size={16} weight="bold" />
+            {!isCollapsed && <span>For Approval</span>}
+            {getNavCount('/for-approval') > 0 && (
+              <span className={isCollapsed ? 'sidebar-nav-badge--collapsed' : 'sidebar-nav-badge'}>
+                {getNavCount('/for-approval')}
+              </span>
+            )}
+          </NavLink>
+        )}
         {isAdmin && (
           <NavLink
             to="/users"
@@ -200,37 +218,25 @@ export default function Sidebar({ user, onLogout, isCollapsed, onToggle }) {
         </button>
       </div>
 
-      {showLogoutModal && createPortal(
-        <div className="modal-overlay" onClick={closeLogoutModal} role="dialog" aria-modal="true" aria-labelledby="logout-modal-title">
-          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '380px' }}>
-            <div className="modal-confirm">
-              <div className="modal-confirm-icon modal-confirm-icon--warning">
-                <SignOut size={28} />
-              </div>
-              <h2 id="logout-modal-title" className="modal-confirm-title">Log out</h2>
-              <p className="modal-confirm-text">Are you sure you want to log out?</p>
-              <div className="modal-confirm-footer">
-                <button type="button" className="modal-btn-cancel" onClick={closeLogoutModal}>
-                  Cancel
-                </button>
-                <button type="button" className="modal-btn-danger" onClick={confirmLogout}>
-                  Log out
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
+      <ConfirmationModal
+        isOpen={showLogoutModal}
+        onClose={closeLogoutModal}
+        title="Log out"
+        message="Are you sure you want to log out?"
+        confirmText="Log out"
+        type="danger"
+        icon={SignOut}
+        onConfirm={confirmLogout}
+        maxWidth="380px"
+      />
 
-      {showSettingsModal && createPortal(
+      {showSettingsModal && (
         <SettingsModal
           isOpen={showSettingsModal}
           onClose={() => setShowSettingsModal(false)}
           user={user}
           onLogout={onLogout}
-        />,
-        document.body
+        />
       )}
     </aside>
   )

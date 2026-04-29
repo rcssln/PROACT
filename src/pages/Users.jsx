@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useOutletContext } from 'react-router-dom'
-import { Upload, UserPlus, X, CaretDown, CaretUp, Eye, EyeClosed, WarningCircle } from '@phosphor-icons/react'
+import { Upload, UserPlus, X, CaretDown, CaretUp, Eye, EyeClosed, WarningCircle, Plus, FileCsv, PencilSimple, Trash, MagnifyingGlass, UserCircle, Envelope, Phone, Shield, MapPin } from '@phosphor-icons/react'
 import SearchInput from '../components/SearchInput'
 import SearchableSelect from '../components/SearchableSelect'
 import LoadingSpinner from '../components/LoadingSpinner'
@@ -10,6 +10,8 @@ import { LGU_NAMES } from '../data/locations'
 import { PROVINCE_NAMES, getCitiesForProvince } from '../data/provinces'
 import { validatePassword, hashPassword, getPasswordRules } from '../lib/passwordUtils'
 import Button from '../components/Button'
+import HeaderFooterModal from '../components/HeaderFooterModal'
+import ConfirmationModal from '../components/ConfirmationModal'
 import '../styles/pages/PageStyles.css'
 import '../styles/pages/Users.css'
 
@@ -282,7 +284,7 @@ export default function Users() {
         setSubmitting(false)
       }
     } else {
-      alert('Database not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to .env')
+      showSuccess('Configuration Error', 'Database not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to .env')
     }
   }
 
@@ -290,46 +292,46 @@ export default function Users() {
     e.preventDefault()
     if (!editingUser) return
     if (!form.email.trim() || !form.firstName.trim() || !form.lastName.trim()) {
-      alert('Please fill in Email, First Name, and Last Name.')
+      showSuccess('Validation Error', 'Please fill in Email, First Name, and Last Name.')
       return
     }
     if (canCreateAccounts) {
       if (!form.accountType) {
-        alert('Please select Account type.')
+        showSuccess('Validation Error', 'Please select Account type.')
         return
       }
       if (form.accountType !== 'Regional' && !form.province) {
-        alert('Please select a Province.')
+        showSuccess('Validation Error', 'Please select a Province.')
         return
       }
       if (form.accountType === 'LGU' && !form.city) {
-        alert('Please select a City for LGU account.')
+        showSuccess('Validation Error', 'Please select a City for LGU account.')
         return
       }
     }
     if (form.password || form.confirmPassword) {
       if (!form.currentPassword.trim()) {
-        alert('Please enter the current password to change password.')
+        showSuccess('Validation Error', 'Please enter the current password to change password.')
         return
       }
       const currentHash = await hashPassword(form.currentPassword, currentUser?.email || '')
       const storedHash = editingUser.password_hash || ''
       if (storedHash && currentHash !== storedHash) {
-        alert('Current password is incorrect.')
+        showSuccess('Validation Error', 'Current password is incorrect.')
         return
       }
       const pwdValidation = validatePassword(form.password)
       if (!pwdValidation.valid) {
-        alert(pwdValidation.message)
+        showSuccess('Validation Error', pwdValidation.message)
         return
       }
       if (form.password !== form.confirmPassword) {
-        alert('New password and Confirm password do not match.')
+        showSuccess('Validation Error', 'New password and Confirm password do not match.')
         return
       }
     }
     if (!supabase) {
-      alert('Database not configured.')
+      showSuccess('Database Error', 'Database not configured.')
       return
     }
     setShowSaveConfirm(true)
@@ -421,30 +423,11 @@ export default function Users() {
   }
 
   return (
-    <div className="page users-page">
-      <div className="users-card">
-        <div className="users-toolbar">
-          <h1 className="users-title">Users</h1>
-          <div className="users-toolbar-controls">
-            <div className="users-showing-select">
-              <span className="users-showing-label">Showing</span>
-              <span className="users-showing-dropdown-wrap">
-                <select
-                  value={pageSize}
-                  onChange={(e) => {
-                    setPageSize(Number(e.target.value))
-                    setCurrentPage(1)
-                  }}
-                  className="users-showing-dropdown"
-                >
-                  {PAGE_SIZES.map((n) => (
-                    <option key={n} value={n}>
-                      {n}
-                    </option>
-                  ))}
-                </select>
-              </span>
-            </div>
+    <div className="page consolidated-report-page">
+      <div className="consolidated-report-card">
+        <div className="consolidated-report-toolbar">
+          <h1 className="consolidated-report-title">Users</h1>
+          <div className="consolidated-report-toolbar-controls">
             <SearchInput
               placeholder="Search users..."
               value={searchTerm}
@@ -453,16 +436,23 @@ export default function Users() {
                 setCurrentPage(1)
               }}
               suggestions={users.map(u => `${u.first_name} ${u.last_name}`)}
-              className="users-search-box"
+              className="consolidated-report-search-box"
             />
-            <button type="button" className="btn-secondary" onClick={exportCSV}>
-              <Upload size={16} />
+            <Button 
+              variant="outline" 
+              onClick={exportCSV}
+              leftIcon={<Upload size={16} />}
+            >
               Export CSV
-            </button>
-            <button type="button" className="btn-primary users-btn-add" onClick={openModal}>
-              <UserPlus size={18} />
+            </Button>
+            <Button 
+              variant="solid" 
+              color="primary" 
+              onClick={openModal}
+              leftIcon={<UserPlus size={18} />}
+            >
               Add User
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -476,21 +466,21 @@ export default function Users() {
           <LoadingSpinner label="Loading users..." />
         ) : users.length > 0 ? (
           <>
-            <div className="users-wrapper">
-              <table className="users-table">
+            <div className="consolidated-report-table-wrapper">
+              <table className="consolidated-report-table">
                 <thead>
                   <tr>
                     <th>
-                      <button type="button" className="users-th-sort" onClick={() => handleSort('first_name')}>
+                      <Button variant="ghost" className="consolidated-th-sort" onClick={() => handleSort('first_name')}>
                         Name
                         <SortIcon columnKey="first_name" />
-                      </button>
+                      </Button>
                     </th>
                     <th>
-                      <button type="button" className="users-th-sort" onClick={() => handleSort('email')}>
+                      <Button variant="ghost" className="consolidated-th-sort" onClick={() => handleSort('email')}>
                         Email
                         <SortIcon columnKey="email" />
-                      </button>
+                      </Button>
                     </th>
                     <th>Number</th>
                     {(isSuperAdmin || isRegionalAdmin) && (
@@ -500,13 +490,13 @@ export default function Users() {
                       </>
                     )}
                     <th>
-                      <button type="button" className="users-th-sort" onClick={() => handleSort('city')}>
+                      <Button variant="ghost" className="consolidated-th-sort" onClick={() => handleSort('city')}>
                         City
                         <SortIcon columnKey="city" />
-                      </button>
+                      </Button>
                     </th>
                     <th>Status</th>
-                    <th className="users-col-action">Actions</th>
+                    <th className="col-action">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -536,10 +526,16 @@ export default function Users() {
                               {user.status || 'Active'}
                             </span>
                           </td>
-                          <td className="users-col-action">
-                            <button type="button" className="users-btn-view" onClick={() => openViewDetailsModal(user)}>
+                          <td className="col-action" style={{ display: 'flex', gap: '0.5rem', justifyContent: 'center' }}>
+                            <Button
+                              variant="solid"
+                              color="warning"
+                              size="sm"
+                              onClick={() => openViewDetailsModal(user)}
+                              icon={<Eye size={16} />}
+                            >
                               View details
-                            </button>
+                            </Button>
                           </td>
                         </tr>
                       )
@@ -548,39 +544,38 @@ export default function Users() {
               </table>
             </div>
 
-            <div className="users-pagination">
-              <button
-                type="button"
-                className="users-pagination-btn"
+            <div className="consolidated-report-pagination">
+              <Button
+                variant="subtle"
                 disabled={currentPage <= 1}
                 onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
               >
                 &lt; Previous
-              </button>
-              <div className="users-pagination-numbers">
+              </Button>
+              <div className="consolidated-report-pagination-numbers">
                 {Array.from({ length: totalPages }, (_, i) => i + 1)
                   .filter((p) => p === 1 || p === totalPages || (p >= currentPage - 2 && p <= currentPage + 2))
-                  .map((p, idx, arr) => (
+                  .map((p, i, arr) => (
                     <span key={p}>
-                      {idx > 0 && arr[idx - 1] !== p - 1 && <span className="users-pagination-ellipsis">...</span>}
-                      <button
-                        type="button"
-                        className={`users-pagination-num ${currentPage === p ? 'active' : ''}`}
+                      {i > 0 && arr[i - 1] !== p - 1 && <span className="consolidated-report-pagination-ellipsis">...</span>}
+                      <Button
+                        variant={currentPage === p ? 'solid' : 'ghost'}
+                        size="sm"
+                        style={{ minWidth: '36px', height: '36px', padding: 0 }}
                         onClick={() => setCurrentPage(p)}
                       >
                         {String(p).padStart(2, '0')}
-                      </button>
+                      </Button>
                     </span>
                   ))}
               </div>
-              <button
-                type="button"
-                className="users-pagination-btn"
+              <Button
+                variant="subtle"
                 disabled={currentPage >= totalPages}
                 onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
               >
                 Next &gt;
-              </button>
+              </Button>
             </div>
           </>
         ) : !error ? (
@@ -590,481 +585,471 @@ export default function Users() {
         ) : null}
       </div>
 
-      {isModalOpen && (
-        <div className="modal-overlay users-modal-overlay" onClick={closeModal}>
-          <div className="modal-content users-modal glass-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>Add User</h2>
-              <button type="button" className="modal-close" onClick={closeModal} aria-label="Close">
-                <X size={20} />
-              </button>
+      <HeaderFooterModal
+        isOpen={isModalOpen}
+        onClose={closeModal}
+        title="Add User"
+        maxWidth="600px"
+        footer={
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <Button variant="subtle" onClick={closeModal}>Cancel</Button>
+            <Button 
+              variant="solid" 
+              color="primary" 
+              onClick={() => document.getElementById('add-user-form').requestSubmit()} 
+              isLoading={submitting}
+            >
+              {submitting ? 'Adding...' : 'Add User'}
+            </Button>
+          </div>
+        }
+      >
+        <form id="add-user-form" onSubmit={handleSubmit}>
+          <div className="users-form-group">
+            <label htmlFor="user-email">Email *</label>
+            <input
+              id="user-email"
+              type="email"
+              placeholder="email@example.com"
+              value={form.email}
+              onChange={(e) => handleChange('email', e.target.value)}
+              required
+            />
+          </div>
+          <div className="users-form-row">
+            <div className="users-form-group">
+              <label htmlFor="user-firstName">First Name *</label>
+              <input
+                id="user-firstName"
+                type="text"
+                placeholder="First name"
+                value={form.firstName}
+                onChange={(e) => handleChange('firstName', e.target.value)}
+                required
+              />
             </div>
-            <form onSubmit={handleSubmit} className="modal-form">
-              <div className="modal-body">
-                <div className="users-form-group">
-                  <label htmlFor="user-email">Email *</label>
-                  <input
-                    id="user-email"
-                    type="email"
-                    placeholder="email@example.com"
-                    value={form.email}
-                    onChange={(e) => handleChange('email', e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="users-form-row">
-                  <div className="users-form-group">
-                    <label htmlFor="user-firstName">First Name *</label>
-                    <input
-                      id="user-firstName"
-                      type="text"
-                      placeholder="First name"
-                      value={form.firstName}
-                      onChange={(e) => handleChange('firstName', e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="users-form-group">
-                    <label htmlFor="user-lastName">Last Name *</label>
-                    <input
-                      id="user-lastName"
-                      type="text"
-                      placeholder="Last name"
-                      value={form.lastName}
-                      onChange={(e) => handleChange('lastName', e.target.value)}
-                      required
-                    />
-                  </div>
-                </div>
-                <p className="users-form-hint">A temporary password will be generated and sent to the user&apos;s email.</p>
-                <div className="users-form-group">
-                  <label htmlFor="user-accountType">Account type *</label>
+            <div className="users-form-group">
+              <label htmlFor="user-lastName">Last Name *</label>
+              <input
+                id="user-lastName"
+                type="text"
+                placeholder="Last name"
+                value={form.lastName}
+                onChange={(e) => handleChange('lastName', e.target.value)}
+                required
+              />
+            </div>
+          </div>
+          <p className="users-form-hint">A temporary password will be generated and sent to the user&apos;s email.</p>
+          <div className="users-form-group">
+            <label htmlFor="user-accountType">Account type *</label>
+            <SearchableSelect
+              value={form.accountType}
+              options={allowedAccountTypes}
+              onChange={(e) => {
+                const newType = e.target.value
+                handleChange('accountType', newType)
+                // Auto-fill province for Provincial/LGU creators
+                if (isProvincial || isLgu) {
+                  handleChange('province', currentUser?.province || '')
+                } else {
+                  handleChange('province', '')
+                }
+                // Auto-fill city for LGU creators
+                if (isLgu) {
+                  handleChange('city', currentUser?.city || '')
+                } else {
+                  handleChange('city', '')
+                }
+              }}
+              placeholder="Select type..."
+            />
+          </div>
+          {form.accountType && (
+            <>
+              <div className="users-form-group">
+                <label htmlFor="user-province">Province *</label>
+                {isRegionalOrSuper ? (
                   <SearchableSelect
-                    value={form.accountType}
-                    options={allowedAccountTypes}
+                    value={form.province}
+                    options={PROVINCE_NAMES}
                     onChange={(e) => {
-                      const newType = e.target.value
-                      handleChange('accountType', newType)
-                      // Auto-fill province for Provincial/LGU creators
-                      if (isProvincial || isLgu) {
-                        handleChange('province', currentUser?.province || '')
-                      } else {
-                        handleChange('province', '')
-                      }
-                      // Auto-fill city for LGU creators
-                      if (isLgu) {
-                        handleChange('city', currentUser?.city || '')
-                      } else {
-                        handleChange('city', '')
-                      }
+                      handleChange('province', e.target.value)
+                      handleChange('city', '')
                     }}
-                    placeholder="Select type..."
+                    placeholder="Select province..."
                   />
-                </div>
-                {form.accountType && (
-                  <>
-                    {/* Province: auto-filled for Provincial/LGU creators, selectable for Regional/Super Admin */}
-                    <div className="users-form-group">
-                      <label htmlFor="user-province">Province *</label>
-                      {isRegionalOrSuper ? (
-                        <SearchableSelect
-                          value={form.province}
-                          options={PROVINCE_NAMES}
-                          onChange={(e) => {
-                            handleChange('province', e.target.value)
-                            handleChange('city', '')
-                          }}
-                          placeholder="Select province..."
-                        />
-                      ) : (
-                        <input
-                          type="text"
-                          value={currentUser?.province || ''}
-                          readOnly
-                          disabled
-                          style={{ background: '#f1f5f9', cursor: 'not-allowed' }}
-                        />
-                      )}
-                    </div>
-                    {/* City: only for LGU account type */}
-                    {form.accountType === 'LGU' && (
-                      <div className="users-form-group">
-                        <label htmlFor="user-city-lgu">City / Municipality *</label>
-                        {isLgu ? (
-                          <input
-                            type="text"
-                            value={currentUser?.city || ''}
-                            readOnly
-                            disabled
-                            style={{ background: '#f1f5f9', cursor: 'not-allowed' }}
-                          />
-                        ) : (
-                          <SearchableSelect
-                            value={form.city}
-                            options={getCitiesForProvince(form.province || currentUser?.province)}
-                            onChange={(e) => handleChange('city', e.target.value)}
-                            placeholder="Select city..."
-                          />
-                        )}
-                      </div>
-                    )}
-                  </>
+                ) : (
+                  <input
+                    type="text"
+                    value={currentUser?.province || ''}
+                    readOnly
+                    disabled
+                    style={{ background: '#f1f5f9', cursor: 'not-allowed' }}
+                  />
                 )}
               </div>
-              <div className="modal-footer">
-                <button type="button" className="modal-btn-cancel" onClick={closeModal}>
-                  Cancel
-                </button>
-                <Button type="submit" className="modal-btn-primary" isLoading={submitting}>
-                  Add User
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {viewDetailsUser && (
-        <div className="modal-overlay users-modal-overlay" onClick={closeViewDetailsModal}>
-          <div className="modal-content users-modal users-details-modal glass-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>User details</h2>
-              <button type="button" className="modal-close" onClick={closeViewDetailsModal} aria-label="Close">
-                <X size={20} />
-              </button>
-            </div>
-            <div className="modal-body">
-              <div className="users-details-row">
-                <span className="users-details-label">Name</span>
-                <span className="users-details-value">{displayName(viewDetailsUser)}</span>
-              </div>
-              <div className="users-details-row">
-                <span className="users-details-label">Email</span>
-                <span className="users-details-value">{viewDetailsUser.email}</span>
-              </div>
-              <div className="users-details-row">
-                <span className="users-details-label">Number</span>
-                <span className="users-details-value">{viewDetailsUser.phone || '—'}</span>
-              </div>
-              {(viewDetailsUser.account_type || viewDetailsUser.province) && (
-                <>
-                  <div className="users-details-row">
-                    <span className="users-details-label">Account type</span>
-                    <span className="users-details-value">{viewDetailsUser.account_type || '—'}</span>
-                  </div>
-                  <div className="users-details-row">
-                    <span className="users-details-label">Province</span>
-                    <span className="users-details-value">{viewDetailsUser.province || '—'}</span>
-                  </div>
-                </>
+              {form.accountType === 'LGU' && (
+                <div className="users-form-group">
+                  <label htmlFor="user-city-lgu">City / Municipality *</label>
+                  {isLgu ? (
+                    <input
+                      type="text"
+                      value={currentUser?.city || ''}
+                      readOnly
+                      disabled
+                      style={{ background: '#f1f5f9', cursor: 'not-allowed' }}
+                    />
+                  ) : (
+                    <SearchableSelect
+                      value={form.city}
+                      options={getCitiesForProvince(form.province || currentUser?.province)}
+                      onChange={(e) => handleChange('city', e.target.value)}
+                      placeholder="Select city..."
+                    />
+                  )}
+                </div>
               )}
-              <div className="users-details-row">
-                <span className="users-details-label">City</span>
-                <span className="users-details-value">{viewDetailsUser.city || '—'}</span>
+            </>
+          )}
+        </form>
+      </HeaderFooterModal>
+
+      <HeaderFooterModal
+        isOpen={!!viewDetailsUser}
+        onClose={closeViewDetailsModal}
+        title="User Details"
+        maxWidth="500px"
+        footer={
+          <>
+            <Button variant="subtle" onClick={closeViewDetailsModal}>Close</Button>
+            <Button variant="solid" onClick={openEditModalFromDetails}>Edit</Button>
+          </>
+        }
+      >
+        {viewDetailsUser && (
+          <div className="details-modal-content">
+            <div className="details-status-top">
+              <div className="details-status-type" style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                <div className="users-avatar" style={{ width: '40px', height: '40px', fontSize: '1rem' }}>
+                  {firstLetter(viewDetailsUser)}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: '0.05em' }}>User Details</span>
+                  <span style={{ fontSize: '1.125rem', fontWeight: 700, color: 'var(--text-main)' }}>{displayName(viewDetailsUser)}</span>
+                </div>
               </div>
-              <div className="users-details-row">
-                <span className="users-details-label">Status</span>
-                <span className="users-details-value">
-                  <span className={`users-status users-status-${(viewDetailsUser.status || 'Active').toLowerCase()}`}>
-                    {viewDetailsUser.status || 'Active'}
-                  </span>
+              <span className={`users-status users-status-${(viewDetailsUser.status || 'Active').toLowerCase()}`}>
+                {viewDetailsUser.status || 'Active'}
+              </span>
+            </div>
+            
+            <div style={{ marginTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '0.25rem' }}>
+              <div className="details-row">
+                <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Envelope size={18} color="var(--text-muted)" />
+                  Email Address
+                </span>
+                <span>{viewDetailsUser.email}</span>
+              </div>
+              <div className="details-row">
+                <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Phone size={18} color="var(--text-muted)" />
+                  Phone Number
+                </span>
+                <span>{viewDetailsUser.phone || '—'}</span>
+              </div>
+              <div className="details-row">
+                <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Shield size={18} color="var(--text-muted)" />
+                  Account Type
+                </span>
+                <span>{viewDetailsUser.account_type || '—'}</span>
+              </div>
+              <div className="details-row">
+                <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <MapPin size={18} color="var(--text-muted)" />
+                  Location
+                </span>
+                <span>
+                  {viewDetailsUser.province || '—'}
+                  {viewDetailsUser.city ? `, ${viewDetailsUser.city}` : ''}
                 </span>
               </div>
             </div>
-            <div className="modal-footer">
-              <button type="button" className="modal-btn-cancel" onClick={closeViewDetailsModal}>
-                Close
-              </button>
-              <button type="button" className="modal-btn-primary" onClick={openEditModalFromDetails}>
-                Edit
-              </button>
-            </div>
           </div>
-        </div>
-      )}
+        )}
+      </HeaderFooterModal>
 
-      {editingUser && (
-        <div className="modal-overlay users-modal-overlay" onClick={closeEditModal}>
-          <div className="modal-content users-modal users-edit-modal glass-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>Edit User</h2>
-              <button type="button" className="modal-close" onClick={closeEditModal} aria-label="Close">
-                <X size={20} />
-              </button>
+      <HeaderFooterModal
+        isOpen={!!editingUser}
+        onClose={closeEditModal}
+        title="Edit User"
+        maxWidth="640px"
+        bodyPadding="0"
+        footer={
+          <>
+            <Button variant="subtle" onClick={closeEditModal}>Cancel</Button>
+            <Button variant="solid" onClick={() => document.getElementById('edit-user-form').requestSubmit()} isLoading={submittingEdit}>Save Changes</Button>
+          </>
+        }
+      >
+        <form id="edit-user-form" onSubmit={handleEditSubmit} className="users-edit-form">
+          <div className="users-edit-form-grid">
+            <div className="users-form-group users-edit-full-width">
+              <label htmlFor="edit-user-email">Email Address *</label>
+              <input
+                id="edit-user-email"
+                type="email"
+                placeholder="email@example.com"
+                value={form.email}
+                onChange={(e) => handleChange('email', e.target.value)}
+                required
+              />
             </div>
-            <form onSubmit={handleEditSubmit} className="modal-form">
-              <div className="modal-body">
-                <div className="users-edit-form-grid">
-                  <div className="users-form-group users-edit-full-width">
-                    <label htmlFor="edit-user-email">Email *</label>
-                    <input
-                      id="edit-user-email"
-                      type="email"
-                      placeholder="email@example.com"
-                      value={form.email}
-                      onChange={(e) => handleChange('email', e.target.value)}
-                      required
-                    />
-                  </div>
-                  <div className="users-form-row users-edit-full-width">
-                    <div className="users-form-group">
-                      <label htmlFor="edit-user-firstName">First Name *</label>
-                      <input
-                        id="edit-user-firstName"
-                        type="text"
-                        placeholder="First name"
-                        value={form.firstName}
-                        onChange={(e) => handleChange('firstName', e.target.value)}
-                        required
-                      />
-                    </div>
-                    <div className="users-form-group">
-                      <label htmlFor="edit-user-lastName">Last Name *</label>
-                      <input
-                        id="edit-user-lastName"
-                        type="text"
-                        placeholder="Last name"
-                        value={form.lastName}
-                        onChange={(e) => handleChange('lastName', e.target.value)}
-                        required
-                      />
-                    </div>
-                  </div>
-                  <div className="users-form-group">
-                    <label htmlFor="edit-user-phone">Number</label>
-                    <input
-                      id="edit-user-phone"
-                      type="tel"
-                      placeholder="Phone number"
-                      value={form.phone}
-                      onChange={(e) => handleChange('phone', e.target.value)}
-                    />
-                  </div>
-                  <div className="users-form-group">
-                    <label htmlFor="edit-user-accountType">Account type *</label>
+            
+            <div className="users-form-group">
+              <label htmlFor="edit-user-firstName">First Name *</label>
+              <input
+                id="edit-user-firstName"
+                type="text"
+                placeholder="First name"
+                value={form.firstName}
+                onChange={(e) => handleChange('firstName', e.target.value)}
+                required
+              />
+            </div>
+            <div className="users-form-group">
+              <label htmlFor="edit-user-lastName">Last Name *</label>
+              <input
+                id="edit-user-lastName"
+                type="text"
+                placeholder="Last name"
+                value={form.lastName}
+                onChange={(e) => handleChange('lastName', e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="users-form-group">
+              <label htmlFor="edit-user-phone">Phone Number</label>
+              <input
+                id="edit-user-phone"
+                type="tel"
+                placeholder="Phone number"
+                value={form.phone}
+                onChange={(e) => handleChange('phone', e.target.value)}
+              />
+            </div>
+            <div className="users-form-group">
+              <label htmlFor="edit-user-accountType">Account type *</label>
+              <SearchableSelect
+                value={form.accountType}
+                options={allowedAccountTypes}
+                onChange={(e) => {
+                  const newType = e.target.value
+                  handleChange('accountType', newType)
+                  if (isProvincial || isLgu) {
+                    handleChange('province', currentUser?.province || '')
+                  } else {
+                    handleChange('province', '')
+                  }
+                  if (isLgu) {
+                    handleChange('city', currentUser?.city || '')
+                  } else {
+                    handleChange('city', '')
+                  }
+                }}
+                placeholder="Select type..."
+              />
+            </div>
+
+            {form.accountType && (
+              <>
+                <div className="users-form-group">
+                  <label htmlFor="edit-user-province">Province *</label>
+                  {isRegionalOrSuper ? (
                     <SearchableSelect
-                      value={form.accountType}
-                      options={allowedAccountTypes}
+                      value={form.province}
+                      options={PROVINCE_NAMES}
                       onChange={(e) => {
-                        const newType = e.target.value
-                        handleChange('accountType', newType)
-                        // Auto-fill province for Provincial/LGU admins
-                        if (isProvincial || isLgu) {
-                          handleChange('province', currentUser?.province || '')
-                        } else {
-                          handleChange('province', '')
-                        }
-                        // Auto-fill city for LGU admins
-                        if (isLgu) {
-                          handleChange('city', currentUser?.city || '')
-                        } else {
-                          handleChange('city', '')
-                        }
+                        handleChange('province', e.target.value)
+                        handleChange('city', '')
                       }}
-                      placeholder="Select type..."
+                      placeholder="Select province..."
                     />
-                  </div>
-                  {form.accountType && (
-                    <>
-                      <div className="users-form-group">
-                        <label htmlFor="edit-user-province">Province *</label>
-                        {isRegionalOrSuper ? (
-                          <SearchableSelect
-                            value={form.province}
-                            options={PROVINCE_NAMES}
-                            onChange={(e) => {
-                              handleChange('province', e.target.value)
-                              handleChange('city', '')
-                            }}
-                            placeholder="Select province..."
-                          />
-                        ) : (
-                          <input
-                            type="text"
-                            value={form.province || currentUser?.province || ''}
-                            readOnly
-                            disabled
-                            style={{ background: '#f1f5f9', cursor: 'not-allowed' }}
-                          />
-                        )}
-                      </div>
-                      {form.accountType === 'LGU' && (
-                        <div className="users-form-group">
-                          <label htmlFor="edit-user-city-lgu">City / Municipality *</label>
-                          {isLgu ? (
-                            <input
-                              type="text"
-                              value={form.city || currentUser?.city || ''}
-                              readOnly
-                              disabled
-                              style={{ background: '#f1f5f9', cursor: 'not-allowed' }}
-                            />
-                          ) : (
-                            <SearchableSelect
-                              value={form.city}
-                              options={getCitiesForProvince(form.province || currentUser?.province)}
-                              onChange={(e) => handleChange('city', e.target.value)}
-                              placeholder="Select city..."
-                            />
-                          )}
-                        </div>
-                      )}
-                    </>
+                  ) : (
+                    <input
+                      type="text"
+                      value={form.province || currentUser?.province || ''}
+                      readOnly
+                      disabled
+                      style={{ background: '#f1f5f9', cursor: 'not-allowed' }}
+                    />
                   )}
-                  <div className="users-form-group users-edit-full-width">
-                    <label htmlFor="edit-user-status">Status</label>
-                    <SearchableSelect
-                      value={form.status}
-                      options={['Active', 'Inactive']}
-                      onChange={(e) => handleChange('status', e.target.value)}
-                      placeholder="Select status..."
-                    />
-                  </div>
-                  <div className="users-form-section-label users-edit-full-width users-edit-section-label">Change password (optional)</div>
-                  <div className="users-form-group users-edit-full-width">
-                    <label htmlFor="edit-user-currentPassword">Current password</label>
-                    <div className="users-password-input-wrap">
-                      <input
-                        id="edit-user-currentPassword"
-                        type={showCurrentPassword ? 'text' : 'password'}
-                        placeholder="Enter current password to change"
-                        value={form.currentPassword}
-                        onChange={(e) => handleChange('currentPassword', e.target.value)}
-                        autoComplete="current-password"
-                      />
-                      <button
-                        type="button"
-                        className="users-password-toggle"
-                        onClick={() => setShowCurrentPassword((p) => !p)}
-                        aria-label={showCurrentPassword ? 'Hide password' : 'Show password'}
-                        tabIndex={-1}
-                      >
-                        {showCurrentPassword ? <EyeClosed size={18} /> : <Eye size={18} />}
-                      </button>
-                    </div>
-                  </div>
+                </div>
+                {form.accountType === 'LGU' && (
                   <div className="users-form-group">
-                    <label htmlFor="edit-user-password">New password</label>
-                    <div className="users-password-input-wrap">
+                    <label htmlFor="edit-user-city-lgu">City / Municipality *</label>
+                    {isLgu ? (
                       <input
-                        id="edit-user-password"
-                        type={showEditPassword ? 'text' : 'password'}
-                        placeholder="At least 8 characters, uppercase and lowercase"
-                        value={form.password}
-                        onChange={(e) => handleChange('password', e.target.value)}
-                        minLength={form.password ? 8 : 0}
-                        autoComplete="new-password"
-                        className={form.password && !getPasswordRules(form.password).allValid ? 'users-input-invalid' : ''}
+                        type="text"
+                        value={form.city || currentUser?.city || ''}
+                        readOnly
+                        disabled
+                        style={{ background: '#f1f5f9', cursor: 'not-allowed' }}
                       />
-                      <button
-                        type="button"
-                        className="users-password-toggle"
-                        onClick={() => setShowEditPassword((p) => !p)}
-                        aria-label={showEditPassword ? 'Hide password' : 'Show password'}
-                        tabIndex={-1}
-                      >
-                        {showEditPassword ? <EyeClosed size={18} /> : <Eye size={18} />}
-                      </button>
-                    </div>
-                    <div className="users-password-rules" aria-live="polite">
-                      <span className={getPasswordRules(form.password).length ? 'users-rule-ok' : 'users-rule-pending'}>
-                        {getPasswordRules(form.password).length ? '✓' : '○'} At least 8 characters
-                      </span>
-                      <span className={getPasswordRules(form.password).uppercase ? 'users-rule-ok' : 'users-rule-pending'}>
-                        {getPasswordRules(form.password).uppercase ? '✓' : '○'} One uppercase letter
-                      </span>
-                      <span className={getPasswordRules(form.password).lowercase ? 'users-rule-ok' : 'users-rule-pending'}>
-                        {getPasswordRules(form.password).lowercase ? '✓' : '○'} One lowercase letter
-                      </span>
-                    </div>
-                  </div>
-                  <div className="users-form-group">
-                    <label htmlFor="edit-user-confirmPassword">Confirm new password</label>
-                    <div className="users-password-input-wrap">
-                      <input
-                        id="edit-user-confirmPassword"
-                        type={showEditConfirmPassword ? 'text' : 'password'}
-                        placeholder="Re-enter new password"
-                        value={form.confirmPassword}
-                        onChange={(e) => handleChange('confirmPassword', e.target.value)}
-                        minLength={form.password ? 8 : 0}
-                        autoComplete="new-password"
-                        className={form.confirmPassword && form.password !== form.confirmPassword ? 'users-input-invalid' : ''}
+                    ) : (
+                      <SearchableSelect
+                        value={form.city}
+                        options={getCitiesForProvince(form.province || currentUser?.province)}
+                        onChange={(e) => handleChange('city', e.target.value)}
+                        placeholder="Select city..."
                       />
-                      <button
-                        type="button"
-                        className="users-password-toggle"
-                        onClick={() => setShowEditConfirmPassword((p) => !p)}
-                        aria-label={showEditConfirmPassword ? 'Hide password' : 'Show password'}
-                        tabIndex={-1}
-                      >
-                        {showEditConfirmPassword ? <EyeClosed size={18} /> : <Eye size={18} />}
-                      </button>
-                    </div>
-                    {form.confirmPassword.length > 0 && (
-                      <span className={form.password === form.confirmPassword ? 'users-confirm-ok' : 'users-confirm-error'} role="status">
-                        {form.password === form.confirmPassword ? '✓ Passwords match' : '✗ Passwords do not match'}
-                      </span>
                     )}
                   </div>
+                )}
+              </>
+            )}
+
+            <div className="users-form-group users-edit-full-width">
+              <label htmlFor="edit-user-status">Status</label>
+              <SearchableSelect
+                value={form.status}
+                options={['Active', 'Inactive']}
+                onChange={(e) => handleChange('status', e.target.value)}
+                placeholder="Select status..."
+              />
+            </div>
+            
+            <div className="users-edit-section-header users-edit-full-width">
+              <h4 className="users-edit-section-title">Change Password (Optional)</h4>
+              <p className="users-edit-section-subtitle">Only fill this if you want to update the user&apos;s password.</p>
+            </div>
+
+            <div className="users-form-group users-edit-full-width">
+              <label htmlFor="edit-user-currentPassword">Current Password</label>
+              <div className="users-password-input-wrap">
+                <input
+                  id="edit-user-currentPassword"
+                  type={showCurrentPassword ? 'text' : 'password'}
+                  placeholder="Enter current password to verify"
+                  value={form.currentPassword}
+                  onChange={(e) => handleChange('currentPassword', e.target.value)}
+                  autoComplete="current-password"
+                />
+                <button
+                  type="button"
+                  className="users-password-toggle"
+                  onClick={() => setShowCurrentPassword((p) => !p)}
+                  aria-label={showCurrentPassword ? 'Hide password' : 'Show password'}
+                  tabIndex={-1}
+                >
+                  {showCurrentPassword ? <EyeClosed size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+            </div>
+            
+            <div className="users-form-group">
+              <label htmlFor="edit-user-password">New Password</label>
+              <div className="users-password-input-wrap">
+                <input
+                  id="edit-user-password"
+                  type={showEditPassword ? 'text' : 'password'}
+                  placeholder="At least 8 characters"
+                  value={form.password}
+                  onChange={(e) => handleChange('password', e.target.value)}
+                  minLength={form.password ? 8 : 0}
+                  autoComplete="new-password"
+                  className={form.password && !getPasswordRules(form.password).allValid ? 'users-input-invalid' : ''}
+                />
+                <button
+                  type="button"
+                  className="users-password-toggle"
+                  onClick={() => setShowEditPassword((p) => !p)}
+                  aria-label={showEditPassword ? 'Hide password' : 'Show password'}
+                  tabIndex={-1}
+                >
+                  {showEditPassword ? <EyeClosed size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+            </div>
+            <div className="users-form-group">
+              <label htmlFor="edit-user-confirmPassword">Confirm New Password</label>
+              <div className="users-password-input-wrap">
+                <input
+                  id="edit-user-confirmPassword"
+                  type={showEditConfirmPassword ? 'text' : 'password'}
+                  placeholder="Re-enter new password"
+                  value={form.confirmPassword}
+                  onChange={(e) => handleChange('confirmPassword', e.target.value)}
+                  minLength={form.password ? 8 : 0}
+                  autoComplete="new-password"
+                  className={form.confirmPassword && form.password !== form.confirmPassword ? 'users-input-invalid' : ''}
+                />
+                <button
+                  type="button"
+                  className="users-password-toggle"
+                  onClick={() => setShowEditConfirmPassword((p) => !p)}
+                  aria-label={showEditConfirmPassword ? 'Hide password' : 'Show password'}
+                  tabIndex={-1}
+                >
+                  {showEditConfirmPassword ? <EyeClosed size={18} /> : <Eye size={18} />}
+                </button>
+              </div>
+            </div>
+            
+            {(form.password || form.confirmPassword) && (
+              <div className="users-password-rules-summary users-edit-full-width">
+                <div className="users-password-rules" aria-live="polite">
+                  <span className={getPasswordRules(form.password).length ? 'users-rule-ok' : 'users-rule-pending'}>
+                    {getPasswordRules(form.password).length ? '✓' : '○'} 8+ chars
+                  </span>
+                  <span className={getPasswordRules(form.password).uppercase ? 'users-rule-ok' : 'users-rule-pending'}>
+                    {getPasswordRules(form.password).uppercase ? '✓' : '○'} Upper
+                  </span>
+                  <span className={getPasswordRules(form.password).lowercase ? 'users-rule-ok' : 'users-rule-pending'}>
+                    {getPasswordRules(form.password).lowercase ? '✓' : '○'} Lower
+                  </span>
+                  <span className={form.password === form.confirmPassword && form.confirmPassword ? 'users-rule-ok' : 'users-rule-pending'}>
+                    {form.password === form.confirmPassword && form.confirmPassword ? '✓' : '○'} Match
+                  </span>
                 </div>
               </div>
-              <div className="modal-footer">
-                <button type="button" className="modal-btn-cancel" onClick={closeEditModal}>
-                  Cancel
-                </button>
-                <Button type="submit" className="modal-btn-primary" isLoading={submittingEdit}>
-                  Save changes
-                </Button>
-              </div>
-            </form>
+            )}
           </div>
-        </div>
-      )}
+        </form>
+      </HeaderFooterModal>
 
-      {showSaveConfirm && (
-        <div className="modal-overlay users-modal-overlay" onClick={() => setShowSaveConfirm(false)}>
-          <div className="modal-content glass-modal" style={{ maxWidth: '400px' }} onClick={(e) => e.stopPropagation()}>
-            <div className="modal-confirm">
-              <div className="modal-confirm-icon modal-confirm-icon--warning">
-                <WarningCircle size={32} />
-              </div>
-              <h3 className="modal-confirm-title">Confirm Changes</h3>
-              <p className="modal-confirm-text">Are you sure you want to save these changes to the user account?</p>
-              <div className="modal-confirm-footer">
-                <button type="button" className="modal-btn-cancel" onClick={() => setShowSaveConfirm(false)}>
-                  Cancel
-                </button>
-                <Button type="button" className="modal-btn-primary" isLoading={submittingEdit} onClick={handleConfirmEdit}>
-                  Confirm
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmationModal
+        isOpen={showSaveConfirm}
+        onClose={() => setShowSaveConfirm(false)}
+        type="warning"
+        title="Confirm Changes"
+        message="Are you sure you want to save these changes to the user account?"
+        confirmText="Confirm"
+        onConfirm={handleConfirmEdit}
+        isLoading={submittingEdit}
+      />
 
-      {tempPasswordResult && (
-        <div className="modal-overlay users-modal-overlay" onClick={() => setTempPasswordResult(null)}>
-          <div className="modal-content users-modal users-temp-password-modal glass-modal" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-header">
-              <h2>User created</h2>
-              <button type="button" className="modal-close" onClick={() => setTempPasswordResult(null)} aria-label="Close">
-                <X size={20} />
-              </button>
-            </div>
-            <p className="users-temp-password-intro">
+      <ConfirmationModal
+        isOpen={!!tempPasswordResult}
+        onClose={() => setTempPasswordResult(null)}
+        type="success"
+        title="User Created Successfully"
+        message={tempPasswordResult ? (
+          <div>
+            <p style={{ marginBottom: '1rem' }}>
               An email with a temporary password has been sent to <strong>{tempPasswordResult.email}</strong>. The user should change it after first login.
             </p>
-            <p className="users-temp-password-rules">Password rules: at least 8 characters, one uppercase, one lowercase.</p>
-            <div className="modal-footer">
-              <button type="button" className="modal-btn-primary" onClick={() => setTempPasswordResult(null)}>
-                Got it
-              </button>
-            </div>
+            <p style={{ fontSize: '0.75rem', color: '#64748b', fontStyle: 'italic' }}>
+              Password rules: at least 8 characters, one uppercase, one lowercase.
+            </p>
           </div>
-        </div>
-      )}
+        ) : null}
+        confirmText="Got it"
+        onConfirm={() => setTempPasswordResult(null)}
+      />
     </div>
   )
 }

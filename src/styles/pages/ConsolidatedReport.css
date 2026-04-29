@@ -229,8 +229,8 @@
 }
 
 .col-action {
-  text-align: right !important;
-  padding-right: 1.75rem !important;
+  text-align: center !important;
+  padding-right: 0 !important;
 }
 
 /* Toolbar controls */
@@ -329,7 +329,7 @@
   color: var(--text-main);
   background: var(--bg-page);
   border: 1px solid var(--border-color);
-  border-radius: 10px;
+  border-radius: 0.375rem;
   cursor: pointer;
   transition: all 0.3s ease;
 }
@@ -383,7 +383,7 @@
 .status-pill {
   white-space: nowrap;
   padding: 0.25rem 0.75rem;
-  border-radius: 999px;
+  border-radius: 6px;
   font-size: 0.75rem;
   font-weight: 700;
   transition: all 0.2s ease;
@@ -689,7 +689,7 @@
 .alert-pill {
   display: inline-block;
   padding: 0.25rem 0.75rem;
-  border-radius: 9999px;
+  border-radius: 6px;
   font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -907,7 +907,7 @@
   align-items: center;
   gap: 0.375rem;
   padding: 0.375rem 0.875rem;
-  border-radius: 0.5rem;
+  border-radius: 4px;
   font-size: 0.75rem;
   font-weight: 700;
   letter-spacing: 0.01em;

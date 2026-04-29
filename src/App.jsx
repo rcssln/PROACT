@@ -9,6 +9,7 @@ import Users from './pages/Users'
 import ConsolidatedReport from './pages/ConsolidatedReport'
 import EventLogs from './pages/EventLogs'
 import ManageEvents from './pages/ManageEvents'
+import ForApproval from './pages/ForApproval'
 import Manual from './pages/Manual'
 import { EventProvider } from './contexts/EventContext'
 
@@ -129,6 +130,7 @@ function App() {
             <Route path="consolidated-report" element={<ConsolidatedReport />} />
             <Route path="event-logs" element={<EventLogs />} />
             <Route path="manage-events" element={<ManageEvents />} />
+            <Route path="for-approval" element={<ForApproval />} />
             <Route path="manual" element={<Manual />} />
           </Route>
           <Route path="*" element={<Navigate to={isAuthenticated ? '/dashboard' : '/login'} replace />} />

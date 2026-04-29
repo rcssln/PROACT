@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { createPortal } from 'react-dom'
 import { useOutletContext } from 'react-router-dom'
-import { ArrowsClockwise, DotsThree, ArrowRight, TrendUp, TrendDown, CaretLeft, CaretRight, Pencil, Warning, CloudRain, Pulse, Flame, Info, Check, Calendar, Bell, X, ChartBar as BarChartIcon, ChartPie as PieChartIcon, ChartLineUp as LineChartIcon, ShieldCheck, PaperPlaneRight } from '@phosphor-icons/react'
+import { ArrowsClockwise, DotsThree, ArrowRight, TrendUp, TrendDown, CaretLeft, CaretRight, Pencil, Warning, CloudRain, Pulse, Flame, Info, Check, Calendar, Bell, X, ChartBar as BarChartIcon, ChartPie as PieChartIcon, ChartLineUp as LineChartIcon, ShieldCheck, PaperPlaneRight, MagnifyingGlass } from '@phosphor-icons/react'
 import {
   ResponsiveContainer,
   BarChart,
@@ -28,6 +28,9 @@ import '../styles/components/EventModal.css'
 import SearchableSelect from '../components/SearchableSelect'
 import ModernDateTimePicker from '../components/ModernDateTimePicker'
 import NotificationBell from '../components/NotificationBell'
+import HeaderFooterModal from '../components/HeaderFooterModal'
+import Button from '../components/Button'
+import ConfirmationModal from '../components/ConfirmationModal'
 
 const CATEGORY_LABELS = {
   relatedIncidents: 'Related Incidents',
@@ -211,6 +214,9 @@ export default function Dashboard() {
   const [currentStep, setCurrentStep] = useState(0)
   const prevStepRef = useRef(-1)
   const [showEditEventModal, setShowEditEventModal] = useState(false)
+  const [showSignalDetailsModal, setShowSignalDetailsModal] = useState(false)
+  const [signalSearchTerm, setSignalSearchTerm] = useState('')
+  const [activeSignalTab, setActiveSignalTab] = useState('lgus')
   const [showSelectEventToEdit, setShowSelectEventToEdit] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [selectedEventIdToEdit, setSelectedEventIdToEdit] = useState('')
@@ -270,7 +276,11 @@ export default function Dashboard() {
     notifications: dbNotifications,
     fetchNotifications,
     eventDeployments,
-    fetchEventDeployments
+    fetchEventDeployments,
+    eventSignals,
+    fetchEventSignals,
+    assignSignal,
+    bulkAssignSignals
   } = useEvents()
 
   const handleNotificationClick = (notif) => {
@@ -283,18 +293,12 @@ export default function Dashboard() {
 
       const data = typeof notif.data === 'string' ? JSON.parse(notif.data) : notif.data
       const eventId = data?.event_id
-      const event = events.find(e => e.id === eventId)
       if (event) {
-        // Fetch current deployments for this event to show in UI
-        fetchEventDeployments(eventId)
-
+        // Instead of showing the deployment checkbox modal (Image 1),
+        // we now show the signal management modal (Image 2)
         setSelectedEventToDeploy(event)
-        setLguForm({
-          cities: [],
-          strengthLabel: event.eventType === 'typhoon' ? 'Wind Signal' : 'Rainfall',
-          strengthValue: event.eventType === 'typhoon' ? 'Signal No. 1' : 'Light'
-        })
-        setShowLguDeploymentModal(true)
+        fetchEventSignals(eventId)
+        setShowSignalDetailsModal(true)
       }
     }
   }
@@ -1688,14 +1692,14 @@ CHRONOLOGY OF EVENTS`;
                   <thead>
                     <tr>
                       <th>Locality</th>
-                      <th style={{ textAlign: 'right' }}>Count</th>
+                      <th style={{ textAlign: 'left' }}>Count</th>
                     </tr>
                   </thead>
                   <tbody>
                     {card.barangayData.slice(0, 15).map((item, idx) => (
                       <tr key={idx}>
                         <td style={{ fontSize: '0.75rem', color: 'var(--text-main)' }}>{item.name}</td>
-                        <td style={{ textAlign: 'right', fontWeight: 700, fontFamily: 'DM Mono', fontSize: '0.8125rem', color: 'var(--text-main)' }}>{item.value.toLocaleString()}</td>
+                        <td style={{ textAlign: 'left', fontWeight: 700, fontFamily: 'DM Mono', fontSize: '0.8125rem', color: 'var(--text-main)' }}>{item.value.toLocaleString()}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1779,13 +1783,6 @@ CHRONOLOGY OF EVENTS`;
                 </span>
               </div>
             </div>
-            <div className="meta-item">
-              <div className="meta-icon"><Check size={18} /></div>
-              <div className="meta-content">
-                <span className="meta-label">Status</span>
-                <span className="meta-value">Active Monitoring</span>
-              </div>
-            </div>
           </div>
         </section>
 
@@ -1820,7 +1817,7 @@ CHRONOLOGY OF EVENTS`;
         {/* Main Content Area: Modular Responsive Dashboard */}
         <div className="dash-main-card">
           {loading && !result ? (
-            <div style={{ padding: '4rem', textAlign: 'center' }}>
+            <div style={{ padding: '4rem', textAlign: 'left' }}>
               <LoadingSpinner label="Preparing summary dashboard..." />
             </div>
           ) : error && !result ? (
@@ -1839,7 +1836,7 @@ CHRONOLOGY OF EVENTS`;
                         borderRadius: '12px',
                         padding: '2rem',
                         marginBottom: '2rem',
-                        textAlign: 'center'
+                        textAlign: 'left'
                       }}>
                       <Warning size={32} color="#d97706" style={{ marginBottom: '1rem', opacity: 0.8 }} />
                       <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#92400e', marginBottom: '0.5rem' }}>No Approved Reports Available</h3>
@@ -1988,15 +1985,15 @@ CHRONOLOGY OF EVENTS`;
                         <thead>
                           <tr>
                             <th>Municipality</th>
-                            <th style={{ textAlign: 'right' }}>Brgys</th>
-                            <th style={{ textAlign: 'right' }}>Families</th>
-                            <th style={{ textAlign: 'right' }}>Persons</th>
-                            <th style={{ textAlign: 'right' }}>In ECs</th>
-                            <th style={{ textAlign: 'right' }}>Out ECs</th>
-                            <th style={{ textAlign: 'right' }}>Total Served</th>
-                            <th style={{ textAlign: 'right' }}>Active ECs</th>
-                            <th style={{ textAlign: 'right' }}>Dmg Houses</th>
-                            <th style={{ textAlign: 'center' }}>Calamity</th>
+                            <th style={{ textAlign: 'left' }}>Brgys</th>
+                            <th style={{ textAlign: 'left' }}>Families</th>
+                            <th style={{ textAlign: 'left' }}>Persons</th>
+                            <th style={{ textAlign: 'left' }}>In ECs</th>
+                            <th style={{ textAlign: 'left' }}>Out ECs</th>
+                            <th style={{ textAlign: 'left' }}>Total Served</th>
+                            <th style={{ textAlign: 'left' }}>Active ECs</th>
+                            <th style={{ textAlign: 'left' }}>Dmg Houses</th>
+                            <th style={{ textAlign: 'left' }}>Calamity</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -2007,15 +2004,15 @@ CHRONOLOGY OF EVENTS`;
                                   <div style={{ fontWeight: 700, color: 'var(--text-main)', fontSize: '12px' }}>{city.toUpperCase()}</div>
                                   <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{getProvinceForCity(city)}</div>
                                 </td>
-                                <td style={{ textAlign: 'right', fontFamily: 'DM Mono', fontSize: '11px' }}>{stats.brgys?.size || 0}</td>
-                                <td style={{ textAlign: 'right', fontFamily: 'DM Mono', fontSize: '11px' }}>{stats.families.toLocaleString()}</td>
-                                <td style={{ textAlign: 'right', fontFamily: 'DM Mono', fontSize: '11px', fontWeight: 700, color: stats.persons > 100000 ? T.rose : stats.persons > 10000 ? T.amber : 'var(--text-main)' }}>{stats.persons.toLocaleString()}</td>
-                                <td style={{ textAlign: 'right', fontFamily: 'DM Mono', fontSize: '11px' }}>{stats.inside.toLocaleString()}</td>
-                                <td style={{ textAlign: 'right', fontFamily: 'DM Mono', fontSize: '11px' }}>{stats.outside.toLocaleString()}</td>
-                                <td style={{ textAlign: 'right', fontFamily: 'DM Mono', fontSize: '11px', color: T.teal, fontWeight: 700 }}>{stats.served.toLocaleString()}</td>
-                                <td style={{ textAlign: 'right', fontFamily: 'DM Mono', fontSize: '11px' }}>{stats.ecs}</td>
-                                <td style={{ textAlign: 'right', fontFamily: 'DM Mono', fontSize: '11px', color: stats.dmg > 0 ? T.amber : 'var(--text-muted)' }}>{stats.dmg > 0 ? stats.dmg.toLocaleString() : '—'}</td>
-                                <td style={{ textAlign: 'center' }}>
+                                <td style={{ textAlign: 'left', fontFamily: 'DM Mono', fontSize: '11px' }}>{stats.brgys?.size || 0}</td>
+                                <td style={{ textAlign: 'left', fontFamily: 'DM Mono', fontSize: '11px' }}>{stats.families.toLocaleString()}</td>
+                                <td style={{ textAlign: 'left', fontFamily: 'DM Mono', fontSize: '11px', fontWeight: 700, color: stats.persons > 100000 ? T.rose : stats.persons > 10000 ? T.amber : 'var(--text-main)' }}>{stats.persons.toLocaleString()}</td>
+                                <td style={{ textAlign: 'left', fontFamily: 'DM Mono', fontSize: '11px' }}>{stats.inside.toLocaleString()}</td>
+                                <td style={{ textAlign: 'left', fontFamily: 'DM Mono', fontSize: '11px' }}>{stats.outside.toLocaleString()}</td>
+                                <td style={{ textAlign: 'left', fontFamily: 'DM Mono', fontSize: '11px', color: T.teal, fontWeight: 700 }}>{stats.served.toLocaleString()}</td>
+                                <td style={{ textAlign: 'left', fontFamily: 'DM Mono', fontSize: '11px' }}>{stats.ecs}</td>
+                                <td style={{ textAlign: 'left', fontFamily: 'DM Mono', fontSize: '11px', color: stats.dmg > 0 ? T.amber : 'var(--text-muted)' }}>{stats.dmg > 0 ? stats.dmg.toLocaleString() : '—'}</td>
+                                <td style={{ textAlign: 'left' }}>
                                   {details.suspensions.find(s => s.city === city && s.type === 'stateOfCalamity') ? (
                                     <span style={{ fontSize: '9px', fontWeight: 800, background: 'rgba(240,69,69,0.1)', color: T.rose, padding: '2px 6px', borderRadius: '4px' }}>DECLARED</span>
                                   ) : <span style={{ color: '#94a3b8' }}>—</span>}
@@ -2023,7 +2020,7 @@ CHRONOLOGY OF EVENTS`;
                               </tr>
                             ))
                           ) : (
-                            <tr><td colSpan="10" style={{ textAlign: 'center', color: '#94a3b8', padding: '2rem' }}>No municipality data aggregated yet</td></tr>
+                            <tr><td colSpan="10" style={{ textAlign: 'left', color: '#94a3b8', padding: '2rem' }}>No municipality data aggregated yet</td></tr>
                           )}
                         </tbody>
                       </table>
@@ -2234,7 +2231,7 @@ CHRONOLOGY OF EVENTS`;
                               </tr>
                             ))
                           ) : (
-                            <tr><td colSpan="5" style={{ textAlign: 'center', color: '#94a3b8', padding: '3rem' }}>No incident records available</td></tr>
+                            <tr><td colSpan="5" style={{ textAlign: 'left', color: '#94a3b8', padding: '3rem' }}>No incident records available</td></tr>
                           )}
                         </tbody>
                       </table>
@@ -2288,22 +2285,22 @@ CHRONOLOGY OF EVENTS`;
                         <div className="premium-card-title">Roads & Bridges Passability</div>
                       </div>
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: 8, marginBottom: 14 }}>
-                        <div style={{ background: '#fef2f2', border: '1px solid #fee2e2', borderTop: `2px solid ${T.rose}`, borderRadius: 10, padding: 10, textAlign: 'center' }}>
+                        <div style={{ background: '#fef2f2', border: '1px solid #fee2e2', borderTop: `2px solid ${T.rose}`, borderRadius: 10, padding: 10, textAlign: 'left' }}>
                           <div style={{ fontSize: '24px', fontWeight: 800, color: T.rose }}>{Object.values(result?.details?.byCity || {}).reduce((s, p) => s + p.roadsNotPassable, 0)}</div>
                           <div style={{ fontSize: '8px', fontWeight: 700, color: '#b91c1c' }}>NOT PASSABLE</div>
                         </div>
-                        <div style={{ background: '#f0fdf4', border: '1px solid #dcfce7', borderTop: `2px solid ${T.teal}`, borderRadius: 10, padding: 10, textAlign: 'center' }}>
+                        <div style={{ background: '#f0fdf4', border: '1px solid #dcfce7', borderTop: `2px solid ${T.teal}`, borderRadius: 10, padding: 10, textAlign: 'left' }}>
                           <div style={{ fontSize: '24px', fontWeight: 800, color: T.teal }}>{Object.values(result?.details?.byCity || {}).reduce((s, p) => s + (p.roadsPassable || 0), 0)}</div>
                           <div style={{ fontSize: '8px', fontWeight: 700, color: '#15803d' }}>NOW PASSABLE</div>
                         </div>
-                        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderTop: `2px solid #64748b`, borderRadius: 10, padding: 10, textAlign: 'center' }}>
+                        <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderTop: `2px solid #64748b`, borderRadius: 10, padding: 10, textAlign: 'left' }}>
                           <div style={{ fontSize: '24px', fontWeight: 800, color: '#1e293b' }}>0</div>
                           <div style={{ fontSize: '8px', fontWeight: 700, color: '#475569' }}>BRIDGES</div>
                         </div>
                       </div>
                       <div style={{ maxHeight: '200px', overflowY: 'auto' }}>
                         <table className="premium-table">
-                          <thead><tr><th>Classification</th><th style={{ textAlign: 'right' }}>Not Passable</th><th style={{ textAlign: 'right' }}>Passable</th></tr></thead>
+                          <thead><tr><th>Classification</th><th style={{ textAlign: 'left' }}>Not Passable</th><th style={{ textAlign: 'left' }}>Passable</th></tr></thead>
                           <tbody>
                             {[
                               { name: 'National (Primary)', np: details?.infrastructure?.filter(r => r.type === 'road' && r.class === 'Primary' && !r.status?.toLowerCase().includes('passable')).length || 0, p: details?.infrastructure?.filter(r => r.type === 'road' && r.class === 'Primary' && r.status?.toLowerCase().includes('passable')).length || 0 },
@@ -2313,8 +2310,8 @@ CHRONOLOGY OF EVENTS`;
                             ].map((row, i) => (
                               <tr key={i}>
                                 <td style={{ fontSize: '10px' }}>{row.name}</td>
-                                <td style={{ textAlign: 'right', fontWeight: 700, color: row.np > 0 ? T.rose : '#94a3b8' }}>{row.np}</td>
-                                <td style={{ textAlign: 'right', fontWeight: 700, color: row.p > 0 ? T.teal : '#94a3b8' }}>{row.p}</td>
+                                <td style={{ textAlign: 'left', fontWeight: 700, color: row.np > 0 ? T.rose : '#94a3b8' }}>{row.np}</td>
+                                <td style={{ textAlign: 'left', fontWeight: 700, color: row.p > 0 ? T.teal : '#94a3b8' }}>{row.p}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -2339,7 +2336,7 @@ CHRONOLOGY OF EVENTS`;
                           </div>
                         ))}
                         {details.infrastructure.filter(i => i.type === 'communication').length === 0 && (
-                          <div style={{ gridColumn: 'span 2', textAlign: 'center', padding: '1rem', color: '#94a3b8' }}>All lines operational</div>
+                          <div style={{ gridColumn: 'span 2', textAlign: 'left', padding: '1rem', color: '#94a3b8' }}>All lines operational</div>
                         )}
                       </div>
                     </div>
@@ -2365,7 +2362,7 @@ CHRONOLOGY OF EVENTS`;
                               </tr>
                             ))}
                             {details.infrastructure.filter(i => i.type === 'water').length === 0 && (
-                              <tr><td colSpan="3" style={{ textAlign: 'center', color: '#94a3b8', padding: '1rem' }}>No water utility interruptions reported</td></tr>
+                              <tr><td colSpan="3" style={{ textAlign: 'left', color: '#94a3b8', padding: '1rem' }}>No water utility interruptions reported</td></tr>
                             )}
                           </tbody>
                         </table>
@@ -2388,7 +2385,7 @@ CHRONOLOGY OF EVENTS`;
                             <th>Municipality</th>
                             <th>Qty</th>
                             <th>Status</th>
-                            <th style={{ textAlign: 'right' }}>Cost (PHP)</th>
+                            <th style={{ textAlign: 'left' }}>Cost (PHP)</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -2411,11 +2408,11 @@ CHRONOLOGY OF EVENTS`;
                                     {infra.status?.toUpperCase()}
                                   </span>
                                 </td>
-                                <td style={{ textAlign: 'right', fontFamily: 'DM Mono', fontWeight: 700 }}>{infra.cost.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                                <td style={{ textAlign: 'left', fontFamily: 'DM Mono', fontWeight: 700 }}>{infra.cost.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                               </tr>
                             ))
                           ) : (
-                            <tr><td colSpan="6" style={{ textAlign: 'center', color: '#94a3b8', padding: '2rem' }}>No infrastructure damage reports recorded</td></tr>
+                            <tr><td colSpan="6" style={{ textAlign: 'left', color: '#94a3b8', padding: '2rem' }}>No infrastructure damage reports recorded</td></tr>
                           )}
                         </tbody>
                       </table>
@@ -2433,7 +2430,7 @@ CHRONOLOGY OF EVENTS`;
                       </div>
                       <div style={{ fontSize: '12px', color: '#b91c1c', marginTop: '4px' }}>Estimated families awaiting relief commodities in high-impact zones.</div>
                     </div>
-                    <div style={{ textAlign: 'right' }}>
+                    <div style={{ textAlign: 'left' }}>
                       <div style={{ fontSize: '32px', fontWeight: 800, color: T.rose }}>{(Object.values(result?.details?.byCity || {}).reduce((s, p) => s + p.families, 0) - Object.values(result?.details?.byCity || {}).reduce((s, p) => s + p.served, 0)).toLocaleString()}</div>
                       <div style={{ fontSize: '9px', fontWeight: 700, color: '#64748b' }}>PENDING FAMILIES</div>
                     </div>
@@ -2469,7 +2466,7 @@ CHRONOLOGY OF EVENTS`;
                       </div>
                       <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
                         <table className="premium-table">
-                          <thead><tr><th>Item Description</th><th style={{ textAlign: 'right' }}>Quantity</th><th>Unit</th></tr></thead>
+                          <thead><tr><th>Item Description</th><th style={{ textAlign: 'left' }}>Quantity</th><th>Unit</th></tr></thead>
                           <tbody>
                             {[
                               { item: 'Family Food Packs', qty: 15402, u: 'boxes' },
@@ -2480,7 +2477,7 @@ CHRONOLOGY OF EVENTS`;
                             ].map((row, i) => (
                               <tr key={i} className="trow">
                                 <td style={{ fontWeight: 600 }}>{row.item}</td>
-                                <td style={{ textAlign: 'right', fontFamily: 'DM Mono', fontWeight: 700 }}>{row.qty.toLocaleString()}</td>
+                                <td style={{ textAlign: 'left', fontFamily: 'DM Mono', fontWeight: 700 }}>{row.qty.toLocaleString()}</td>
                                 <td style={{ fontSize: '10px', color: '#64748b' }}>{row.u}</td>
                               </tr>
                             ))}
@@ -2497,7 +2494,7 @@ CHRONOLOGY OF EVENTS`;
                     <div style={{ overflowX: 'auto', maxHeight: '400px' }}>
                       <table className="premium-table">
                         <thead>
-                          <tr><th>Municipality</th><th>Cost Valuation (PHP)</th><th style={{ textAlign: 'right' }}>Weight Share</th></tr>
+                          <tr><th>Municipality</th><th>Cost Valuation (PHP)</th><th style={{ textAlign: 'left' }}>Weight Share</th></tr>
                         </thead>
                         <tbody>
                           {Object.entries(result?.details?.assistanceByLgu || {}).length > 0 ? (
@@ -2507,7 +2504,7 @@ CHRONOLOGY OF EVENTS`;
                                 <tr key={i} className="trow">
                                   <td style={{ fontWeight: 600 }}>{lgu}</td>
                                   <td style={{ fontFamily: 'DM Mono', fontWeight: 700, color: '#166534' }}>₱ {cost.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
-                                  <td style={{ textAlign: 'right' }}>
+                                  <td style={{ textAlign: 'left' }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
                                       <span style={{ fontSize: '10px', color: '#64748b' }}>{((cost / totalCost) * 100).toFixed(1)}%</span>
                                       <div style={{ width: '80px', height: '4px', background: '#f1f5f9', borderRadius: '4px', overflow: 'hidden' }}>
@@ -2518,7 +2515,7 @@ CHRONOLOGY OF EVENTS`;
                                 </tr>
                               );
                             })
-                          ) : <tr><td colSpan="3" style={{ textAlign: 'center', color: '#94a3b8', padding: '2rem' }}>No assistance valuation records available</td></tr>}
+                          ) : <tr><td colSpan="3" style={{ textAlign: 'left', color: '#94a3b8', padding: '2rem' }}>No assistance valuation records available</td></tr>}
                         </tbody>
                       </table>
                     </div>
@@ -2613,7 +2610,7 @@ CHRONOLOGY OF EVENTS`;
                                 <td style={{ fontSize: '11px' }}>{s.city} (All Levels)</td>
                               </tr>
                             ))
-                          ) : <tr><td colSpan="4" style={{ textAlign: 'center', color: '#94a3b8', padding: '2rem' }}>Normal operations reported</td></tr>}
+                          ) : <tr><td colSpan="4" style={{ textAlign: 'left', color: '#94a3b8', padding: '2rem' }}>Normal operations reported</td></tr>}
                         </tbody>
                       </table>
                     </div>
@@ -2688,13 +2685,13 @@ CHRONOLOGY OF EVENTS`;
                       </div>
                       <div style={{ maxHeight: '240px', overflowY: 'auto' }}>
                         <table className="premium-table">
-                          <thead><tr><th>Municipality</th><th style={{ textAlign: 'right' }}>Families</th><th style={{ textAlign: 'right' }}>Persons</th></tr></thead>
+                          <thead><tr><th>Municipality</th><th style={{ textAlign: 'left' }}>Families</th><th style={{ textAlign: 'left' }}>Persons</th></tr></thead>
                           <tbody>
                             {details.preEvacuation.slice(0, 4).map((r, i) => (
                               <tr key={i} className="trow">
                                 <td style={{ fontWeight: 600 }}>{r.mun}</td>
-                                <td style={{ textAlign: 'right', fontFamily: 'DM Mono' }}>{r.fam.toLocaleString()}</td>
-                                <td style={{ textAlign: 'right', fontFamily: 'DM Mono', color: '#64748b' }}>{r.per.toLocaleString()}</td>
+                                <td style={{ textAlign: 'left', fontFamily: 'DM Mono' }}>{r.fam.toLocaleString()}</td>
+                                <td style={{ textAlign: 'left', fontFamily: 'DM Mono', color: '#64748b' }}>{r.per.toLocaleString()}</td>
                               </tr>
                             ))}
                           </tbody>
@@ -2732,12 +2729,12 @@ CHRONOLOGY OF EVENTS`;
                               Object.entries(result?.details?.byCity || {}).filter(([_, stats]) => stats.dmg > 0).sort((a, b) => b[1].dmg - a[1].dmg).map(([city, stats], i) => (
                                 <tr key={i}>
                                   <td style={{ fontWeight: 600 }}>{city}</td>
-                                  <td style={{ textAlign: 'right', color: T.rose, fontWeight: 700 }}>{stats.dmg_total || 0}</td>
-                                  <td style={{ textAlign: 'right', color: T.orange, fontWeight: 700 }}>{stats.dmg_partial || 0}</td>
-                                  <td style={{ textAlign: 'right', fontWeight: 700, fontFamily: 'DM Mono', color: T.dark }}>{stats.dmg}</td>
+                                  <td style={{ textAlign: 'left', color: T.rose, fontWeight: 700 }}>{stats.dmg_total || 0}</td>
+                                  <td style={{ textAlign: 'left', color: T.orange, fontWeight: 700 }}>{stats.dmg_partial || 0}</td>
+                                  <td style={{ textAlign: 'left', fontWeight: 700, fontFamily: 'DM Mono', color: T.dark }}>{stats.dmg}</td>
                                 </tr>
                               ))
-                            ) : <tr><td colSpan="4" style={{ textAlign: 'center', color: '#94a3b8' }}>No housing damage reported</td></tr>}
+                            ) : <tr><td colSpan="4" style={{ textAlign: 'left', color: '#94a3b8' }}>No housing damage reported</td></tr>}
                           </tbody>
                         </table>
                       </div>
@@ -2748,314 +2745,452 @@ CHRONOLOGY OF EVENTS`;
             </>
           )}
         </div>
-        {showEditEventModal && createPortal(
-          <div className="modal-overlay" onClick={() => setShowEditEventModal(false)}>
-            <div className="modal-content glass-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '640px' }}>
-              <div className="modal-header">
-                <div className="header-icon" style={{ background: 'rgba(99, 102, 241, 0.1)', color: '#6366f1', padding: '12px', borderRadius: '12px' }}>
-                  <Calendar size={24} />
-                </div>
-                <div className="header-text" style={{ marginLeft: '12px', flex: 1 }}>
-                  <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#1e293b', margin: 0 }}>Edit Event</h2>
-                  <p style={{ fontSize: '0.875rem', color: '#64748b', margin: '2px 0 0' }}>Modify event details.</p>
-                </div>
-                <button className="modal-close" onClick={() => setShowEditEventModal(false)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
-                  <X size={20} />
+      <HeaderFooterModal
+        isOpen={showEditEventModal}
+        onClose={() => setShowEditEventModal(false)}
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <div style={{ background: 'rgba(99, 102, 241, 0.1)', color: '#6366f1', padding: '10px', borderRadius: '10px' }}>
+              <Calendar size={20} />
+            </div>
+            <div>
+              <div style={{ fontSize: '1.125rem', fontWeight: 800, color: '#1e293b' }}>Edit Event</div>
+              <div style={{ fontSize: '0.8125rem', color: '#64748b', fontWeight: 400 }}>Modify event details.</div>
+            </div>
+          </div>
+        }
+        maxWidth="640px"
+        footer={
+          <>
+            <button className="btn-secondary" onClick={() => setShowEditEventModal(false)} style={{ height: '42px', padding: '0 20px' }}>Cancel</button>
+            <button 
+              className="btn-primary" 
+              onClick={async () => {
+                const success = await updateEvent(selectedEventIdToEdit, editForm)
+                if (success !== false) setShowEditEventModal(false)
+              }}
+              style={{ height: '42px', padding: '0 24px' }}
+            >
+              Save Changes
+            </button>
+          </>
+        }
+      >
+        <div style={{ padding: '4px' }}>
+          <div className="form-group" style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#475569', marginBottom: '8px' }}>Event Name</label>
+            <input
+              type="text"
+              placeholder="e.g. Typhoon Kristine"
+              value={editForm.name}
+              onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
+              style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }}
+            />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+            <div className="form-group">
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#475569', marginBottom: '8px' }}>Event Type</label>
+              <select
+                value={editForm.eventType}
+                onChange={(e) => setEditForm((f) => ({ ...f, eventType: e.target.value, alertLevel: '' }))}
+                style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', background: 'white' }}
+              >
+                <option value="calamity">Calamity</option>
+                <option value="typhoon">Typhoon</option>
+                <option value="flood">Flood</option>
+                <option value="earthquake">Earthquake</option>
+                <option value="fire">Fire Incident</option>
+              </select>
+            </div>
+            <div className="form-group">
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#475569', marginBottom: '8px' }}>Theme Color</label>
+              <input
+                type="color"
+                value={editForm.color}
+                onChange={(e) => setEditForm((f) => ({ ...f, color: e.target.value }))}
+                style={{ width: '100%', height: '42px', padding: '2px', borderRadius: '8px', border: '1px solid #e2e8f0' }}
+              />
+            </div>
+          </div>
+
+          <div className="form-group" style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#475569', marginBottom: '8px' }}>
+              {editForm.eventType === 'typhoon' ? 'Typhoon Category' : 'Alert Level / Warning Signal'}
+            </label>
+            <select
+              value={editForm.alertLevel || ''}
+              onChange={(e) => setEditForm((f) => ({ ...f, alertLevel: e.target.value }))}
+              style={{
+                width: '100%', padding: '10px', borderRadius: '8px',
+                border: '1px solid #e2e8f0', background: 'white', color: '#1e293b'
+              }}
+            >
+              {(ALERT_LEVELS[editForm.eventType] || ALERT_LEVELS.calamity).map(opt => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+            {editForm.alertLevel && (
+              <p style={{ margin: '6px 0 0', fontSize: '0.75rem', color: '#64748b' }}>
+                This will be displayed in the dashboard meta bar.
+              </p>
+            )}
+          </div>
+
+          <div className="form-group" style={{ marginBottom: '16px' }}>
+            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#475569', marginBottom: '8px' }}>Affected Provinces</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+              {PROVINCE_NAMES.map(p => (
+                <button
+                  key={p}
+                  type="button"
+                  className={`province-tag ${editForm.affectedProvinces?.includes(p) ? 'active' : ''}`}
+                  onClick={() => {
+                    setEditForm(f => ({
+                      ...f,
+                      affectedProvinces: f.affectedProvinces?.includes(p)
+                        ? f.affectedProvinces.filter(x => x !== p)
+                        : [...(f.affectedProvinces || []), p]
+                    }))
+                  }}
+                  style={{
+                    padding: '6px 12px',
+                    borderRadius: '20px',
+                    border: '1px solid #e2e8f0',
+                    fontSize: '0.75rem',
+                    cursor: 'pointer',
+                    background: editForm.affectedProvinces?.includes(p) ? '#6366f1' : 'white',
+                    color: editForm.affectedProvinces?.includes(p) ? 'white' : '#64748b',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  {p}
                 </button>
-              </div>
+              ))}
+            </div>
+          </div>
 
-              <div className="modal-body" style={{ padding: '20px' }}>
-                <div className="form-group" style={{ marginBottom: '16px' }}>
-                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#475569', marginBottom: '8px' }}>Event Name</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Typhoon Kristine"
-                    value={editForm.name}
-                    onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
-                    style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }}
-                  />
-                </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+            <ModernDateTimePicker
+              label="Event Start"
+              value={editForm.startDate}
+              onChange={(e) => setEditForm((f) => ({ ...f, startDate: e.target.value }))}
+            />
+            <ModernDateTimePicker
+              label="Event End (Optional)"
+              value={editForm.endDate}
+              onChange={(e) => setEditForm((f) => ({ ...f, endDate: e.target.value }))}
+            />
+          </div>
+        </div>
+      </HeaderFooterModal>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
-                  <div className="form-group">
-                    <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#475569', marginBottom: '8px' }}>Event Type</label>
-                    <select
-                      value={editForm.eventType}
-                      onChange={(e) => setEditForm((f) => ({ ...f, eventType: e.target.value, alertLevel: '' }))}
-                      style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }}
-                    >
-                      <option value="calamity">Calamity</option>
-                      <option value="typhoon">Typhoon</option>
-                      <option value="flood">Flood</option>
-                      <option value="earthquake">Earthquake</option>
-                      <option value="fire">Fire Incident</option>
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#475569', marginBottom: '8px' }}>Theme Color</label>
-                    <input
-                      type="color"
-                      value={editForm.color}
-                      onChange={(e) => setEditForm((f) => ({ ...f, color: e.target.value }))}
-                      style={{ width: '100%', height: '42px', padding: '2px', borderRadius: '8px', border: '1px solid #e2e8f0' }}
-                    />
-                  </div>
-                </div>
-
-                {/* Alert Level / Warning Signal — options change based on selected event type */}
-                <div className="form-group" style={{ marginBottom: '16px' }}>
-                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#475569', marginBottom: '8px' }}>
-                    {editForm.eventType === 'typhoon' ? 'Typhoon Category' : 'Alert Level / Warning Signal'}
-                  </label>
-                  <select
-                    value={editForm.alertLevel || ''}
-                    onChange={(e) => setEditForm((f) => ({ ...f, alertLevel: e.target.value }))}
-                    style={{
-                      width: '100%', padding: '10px', borderRadius: '8px',
-                      border: '1px solid #e2e8f0', background: 'white', color: '#1e293b'
-                    }}
-                  >
-                    {(ALERT_LEVELS[editForm.eventType] || ALERT_LEVELS.calamity).map(opt => (
-                      <option key={opt.value} value={opt.value}>{opt.label}</option>
-                    ))}
-                  </select>
-                  {editForm.alertLevel && (
-                    <p style={{ margin: '6px 0 0', fontSize: '0.75rem', color: '#64748b' }}>
-                      This will be displayed in the dashboard meta bar.
-                    </p>
-                  )}
-                </div>
-
-                <div className="form-group" style={{ marginBottom: '16px' }}>
-                  <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#475569', marginBottom: '8px' }}>Affected Provinces</label>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                    {PROVINCE_NAMES.map(p => (
-                      <button
-                        key={p}
-                        type="button"
-                        className={`province-tag ${editForm.affectedProvinces?.includes(p) ? 'active' : ''}`}
-                        onClick={() => {
-                          setEditForm(f => ({
-                            ...f,
-                            affectedProvinces: f.affectedProvinces?.includes(p)
-                              ? f.affectedProvinces.filter(x => x !== p)
-                              : [...(f.affectedProvinces || []), p]
+      <HeaderFooterModal
+        isOpen={showLguDeploymentModal && !!selectedEventToDeploy}
+        onClose={() => setShowLguDeploymentModal(false)}
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <div style={{ background: 'rgba(99, 102, 241, 0.1)', color: '#6366f1', padding: '10px', borderRadius: '10px' }}>
+              <PaperPlaneRight size={20} />
+            </div>
+            <div>
+              <div style={{ fontSize: '1.125rem', fontWeight: 800, color: '#1e293b' }}>Deploy to LGUs</div>
+              <div style={{ fontSize: '0.8125rem', color: '#64748b', fontWeight: 400 }}>Event: {selectedEventToDeploy?.name}</div>
+            </div>
+          </div>
+        }
+        maxWidth="500px"
+        footer={
+          <>
+            <button className="btn-secondary" onClick={() => setShowLguDeploymentModal(false)} style={{ height: '42px', padding: '0 20px' }}>Cancel</button>
+            <button 
+              className="btn-primary" 
+              disabled={lguForm.cities.length === 0}
+              onClick={handleLguDeploySubmit}
+              style={{ height: '42px', padding: '0 24px' }}
+            >
+              Deploy to {lguForm.cities.length} LGUs
+            </button>
+          </>
+        }
+      >
+        <div style={{ padding: '4px' }}>
+          <div className="form-group" style={{ marginBottom: '20px' }}>
+            <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#475569', marginBottom: '12px' }}>Select Affected LGUs in {user.province}</label>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(2, 1fr)',
+              gap: '10px'
+            }}>
+              {getCitiesForProvince(user.province).map(city => {
+                const isAlreadyDeployed = eventDeployments.some(d => d.city === city && d.event_id === selectedEventToDeploy?.id)
+                return (
+                  <label key={city} style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '12px',
+                    border: '1.5px solid',
+                    borderRadius: '10px',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    fontSize: '0.875rem',
+                    background: lguForm.cities.includes(city) ? '#f5f3ff' : 'white',
+                    borderColor: lguForm.cities.includes(city) ? '#6366f1' : '#e2e8f0',
+                    color: lguForm.cities.includes(city) ? '#4338ca' : '#475569'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <input
+                        type="checkbox"
+                        checked={lguForm.cities.includes(city)}
+                        onChange={() => {
+                          setLguForm(prev => ({
+                            ...prev,
+                            cities: prev.cities.includes(city)
+                              ? prev.cities.filter(c => c !== city)
+                              : [...prev.cities, city]
                           }))
                         }}
-                        style={{
-                          padding: '6px 12px',
-                          borderRadius: '20px',
-                          border: '1px solid #e2e8f0',
-                          fontSize: '0.75rem',
-                          cursor: 'pointer',
-                          background: editForm.affectedProvinces?.includes(p) ? '#6366f1' : 'white',
-                          color: editForm.affectedProvinces?.includes(p) ? 'white' : '#64748b'
-                        }}
-                      >
-                        {p}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+                        style={{ accentColor: '#6366f1', width: '16px', height: '16px' }}
+                      />
+                      <span style={{ fontWeight: 600 }}>{city}</span>
+                    </div>
+                    {isAlreadyDeployed && (
+                      <span style={{ fontSize: '9px', background: '#dcfce7', color: '#166534', padding: '2px 6px', borderRadius: '4px', fontWeight: 800, letterSpacing: '0.025em' }}>DEPLOYED</span>
+                    )}
+                  </label>
+                )
+              })}
+            </div>
+          </div>
 
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-                  <ModernDateTimePicker
-                    label="Event Start"
-                    value={editForm.startDate}
-                    onChange={(e) => setEditForm((f) => ({ ...f, startDate: e.target.value }))}
-                  />
-                  <ModernDateTimePicker
-                    label="Event End (Optional)"
-                    value={editForm.endDate}
-                    onChange={(e) => setEditForm((f) => ({ ...f, endDate: e.target.value }))}
-                  />
-                </div>
-              </div>
+          <div style={{ display: 'flex', gap: '16px', marginBottom: '10px' }}>
+            <div className="form-group" style={{ flex: 1 }}>
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#475569', marginBottom: '8px' }}>Strength Label</label>
+              <select
+                value={lguForm.strengthLabel}
+                onChange={e => setLguForm({ ...lguForm, strengthLabel: e.target.value })}
+                style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', background: 'white', color: '#1e293b' }}
+              >
+                <option value="Rainfall">Rainfall</option>
+                <option value="Wind Signal">Wind Signal</option>
+                <option value="Intensity">Intensity</option>
+              </select>
+            </div>
+            <div className="form-group" style={{ flex: 1 }}>
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#475569', marginBottom: '8px' }}>Strength Value</label>
+              <input
+                type="text"
+                value={lguForm.strengthValue}
+                onChange={e => setLguForm({ ...lguForm, strengthValue: e.target.value })}
+                placeholder="e.g. Heavy, Signal 2"
+                style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', background: 'white', color: '#1e293b' }}
+              />
+            </div>
+          </div>
+        </div>
+      </HeaderFooterModal>
 
-              <div className="modal-footer" style={{ padding: '20px', borderTop: '1px solid #f1f5f9', display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
-                <button className="modal-btn-cancel" onClick={() => setShowEditEventModal(false)} style={{ padding: '10px 20px', borderRadius: '8px' }}>Cancel</button>
-                <button className="modal-btn-primary" onClick={async () => {
-                  const success = await updateEvent(selectedEventIdToEdit, editForm)
-                  if (success !== false) setShowEditEventModal(false)
-                }} style={{ padding: '10px 24px', borderRadius: '8px', background: '#6366f1', color: 'white', border: 'none', fontWeight: 600 }}>
-                  Save Changes
-                </button>
+      <HeaderFooterModal
+        isOpen={showSelectEventToEdit}
+        onClose={() => setShowSelectEventToEdit(false)}
+        title="Select Event"
+        maxWidth="440px"
+        footer={
+          <>
+            <button className="btn-secondary" onClick={() => setShowSelectEventToEdit(false)} style={{ height: '42px', padding: '0 20px' }}>Cancel</button>
+            <button 
+              className="btn-primary" 
+              disabled={!selectedEventIdToEdit}
+              onClick={() => {
+                const ev = events.find(e => e.id === selectedEventIdToEdit)
+                if (ev) {
+                  setShowSelectEventToEdit(false)
+                  setIsEditingExistingEvent(true)
+                  setEditForm({ ...ev, affectedProvinces: ev.affectedProvinces || [] })
+                  setShowEditEventModal(true)
+                }
+              }}
+              style={{ height: '42px', padding: '0 24px' }}
+            >
+              Continue
+            </button>
+          </>
+        }
+      >
+        <div className="event-selection-list">
+          {events.map(ev => (
+            <div
+              key={ev.id}
+              className={`event-selection-card ${selectedEventIdToEdit === ev.id ? 'active' : ''}`}
+              onClick={() => setSelectedEventIdToEdit(ev.id)}
+            >
+              <div className="event-selection-avatar" style={{ background: ev.color }}>{ev.name.charAt(0)}</div>
+              <div className="event-selection-info">
+                <span className="event-selection-name">{ev.name}</span>
               </div>
             </div>
-          </div>,
-          document.body
-        )}
+          ))}
+        </div>
+      </HeaderFooterModal>
 
-        {showLguDeploymentModal && selectedEventToDeploy && createPortal(
-          <div className="modal-overlay" onClick={() => setShowLguDeploymentModal(false)}>
-            <div className="modal-content glass-modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px', maxHeight: '90vh', display: 'flex', flexDirection: 'column' }}>
-              <div className="modal-header" style={{ flexShrink: 0 }}>
-                <div className="header-icon deployment" style={{ background: 'rgba(99, 102, 241, 0.1)', color: '#6366f1', padding: '12px', borderRadius: '12px' }}>
-                  <PaperPlaneRight size={24} />
-                </div>
-                <div className="header-text" style={{ marginLeft: '12px', flex: 1 }}>
-                  <h2 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#1e293b', margin: 0 }}>Deploy to LGUs</h2>
-                  <p style={{ fontSize: '0.875rem', color: '#64748b', margin: '2px 0 0' }}>Event: {selectedEventToDeploy.name}</p>
-                </div>
-                <button className="modal-close" onClick={() => setShowLguDeploymentModal(false)} style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }}>
-                  <X size={20} />
-                </button>
-              </div>
+      {/* Signal Details Modal (Image 2 replacement for deployment notifications) */}
+      <HeaderFooterModal
+        isOpen={showSignalDetailsModal && !!selectedEventToDeploy}
+        onClose={() => setShowSignalDetailsModal(false)}
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <div style={{ background: 'rgba(99, 102, 241, 0.1)', color: '#6366f1', padding: '10px', borderRadius: '10px' }}>
+              <Calendar size={20} />
+            </div>
+            <div>
+              <div style={{ fontSize: '1.125rem', fontWeight: 800, color: '#1e293b' }}>Event Details</div>
+              <div style={{ fontSize: '0.8125rem', color: '#64748b', fontWeight: 400 }}>Manage hierarchy and signals for this event.</div>
+            </div>
+          </div>
+        }
+        maxWidth="650px"
+        footer={
+          <>
+            <button className="btn-secondary" onClick={() => setShowSignalDetailsModal(false)} style={{ height: '42px', padding: '0 20px' }}>Cancel</button>
+            <button className="btn-primary" onClick={() => setShowSignalDetailsModal(false)} style={{ height: '42px', padding: '0 24px' }}>Done</button>
+          </>
+        }
+      >
+        <div style={{ padding: '4px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '16px' }}>
+            <div style={{ position: 'relative', flex: 1 }}>
+              <MagnifyingGlass size={16} style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+              <input 
+                type="text"
+                placeholder={`Search LGUs...`}
+                value={signalSearchTerm}
+                onChange={(e) => setSignalSearchTerm(e.target.value)}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px 10px 36px',
+                  borderRadius: '10px',
+                  border: '1px solid #e2e8f0',
+                  fontSize: '0.875rem',
+                  background: '#f8fafc',
+                  outline: 'none'
+                }}
+              />
+            </div>
+            <div style={{ display: 'flex', background: '#f1f5f9', padding: '4px', borderRadius: '8px', gap: '4px' }}>
+              <Button variant="solid" size="sm">LGUs</Button>
+            </div>
+          </div>
 
-              <form onSubmit={handleLguDeploySubmit} style={{ display: 'flex', flexDirection: 'column', flex: 1, overflow: 'hidden' }}>
-                <div className="modal-body" style={{ padding: '20px', overflowY: 'auto', flex: 1 }}>
-                  <div className="form-group" style={{ marginBottom: '20px' }}>
-                    <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#475569', marginBottom: '8px' }}>Select Affected LGUs in {user.province}</label>
-                    <div className="lgu-selection-grid" style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(2, 1fr)',
-                      gap: '8px',
-                      padding: '4px'
-                    }}>
-                      {getCitiesForProvince(user.province).map(city => {
-                        const isAlreadyDeployed = eventDeployments.some(d => d.city === city && d.event_id === selectedEventToDeploy?.id)
-                        return (
-                          <label key={city} className={`lgu-checkbox-label ${lguForm.cities.includes(city) ? 'active' : ''}`} style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'space-between',
-                            padding: '10px 12px',
-                            border: '1px solid #e2e8f0',
-                            borderRadius: '8px',
-                            cursor: 'pointer',
-                            transition: 'all 0.2s',
-                            fontSize: '0.8125rem',
-                            background: lguForm.cities.includes(city) ? '#f5f3ff' : 'white',
-                            borderColor: lguForm.cities.includes(city) ? '#6366f1' : '#e2e8f0',
-                            color: lguForm.cities.includes(city) ? '#4338ca' : '#475569'
-                          }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <input
-                                type="checkbox"
-                                checked={lguForm.cities.includes(city)}
-                                onChange={() => {
-                                  setLguForm(prev => ({
-                                    ...prev,
-                                    cities: prev.cities.includes(city)
-                                      ? prev.cities.filter(c => c !== city)
-                                      : [...prev.cities, city]
-                                  }))
-                                }}
-                                style={{ accentColor: '#6366f1' }}
-                              />
-                              <span>{city}</span>
-                            </div>
-                            {isAlreadyDeployed && (
-                              <span style={{ fontSize: '9px', background: '#dcfce7', color: '#166534', padding: '2px 6px', borderRadius: '4px', fontWeight: 700 }}>DEPLOYED</span>
-                            )}
-                          </label>
-                        )
-                      })}
-                    </div>
-                  </div>
-
-                  <div className="form-row" style={{ display: 'flex', gap: '16px', marginBottom: '10px' }}>
-                    <div className="form-group" style={{ flex: 1 }}>
-                      <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#475569', marginBottom: '8px' }}>Strength Label</label>
-                      <select
-                        value={lguForm.strengthLabel}
-                        onChange={e => setLguForm({ ...lguForm, strengthLabel: e.target.value })}
-                        style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', background: 'white', color: '#1e293b' }}
-                      >
-                        <option value="Rainfall">Rainfall</option>
-                        <option value="Wind Signal">Wind Signal</option>
-                        <option value="Intensity">Intensity</option>
-                      </select>
-                    </div>
-                    <div className="form-group" style={{ flex: 1 }}>
-                      <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#475569', marginBottom: '8px' }}>Strength Value</label>
-                      <input
-                        type="text"
-                        value={lguForm.strengthValue}
-                        onChange={e => setLguForm({ ...lguForm, strengthValue: e.target.value })}
-                        placeholder="e.g. Heavy, Signal 2"
-                        style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', background: 'white', color: '#1e293b' }}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="modal-footer" style={{ padding: '16px 20px', borderTop: '1px solid rgba(0,0,0,0.06)', display: 'flex', justifyContent: 'flex-end', gap: '12px', background: 'rgba(255,255,255,0.4)', flexShrink: 0 }}>
-                  <button type="button" className="modal-btn-cancel" onClick={() => setShowLguDeploymentModal(false)} style={{
-                    padding: '10px 20px', borderRadius: '8px', border: '1px solid #e2e8f0', background: 'white', color: '#64748b', cursor: 'pointer', fontSize: '0.875rem'
-                  }}>Cancel</button>
-                  <button type="submit" className="modal-btn-primary" disabled={lguForm.cities.length === 0} style={{
-                    padding: '10px 24px', borderRadius: '8px', border: 'none', background: '#6366f1', color: 'white', cursor: 'pointer', fontWeight: 600, fontSize: '0.875rem',
-                    opacity: lguForm.cities.length === 0 ? 0.6 : 1
-                  }}>
-                    Deploy to {lguForm.cities.length} LGUs
+          <div style={{ background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '12px', overflow: 'hidden' }}>
+            <div style={{ padding: '12px 16px', background: '#f1f5f9', borderBottom: '1px solid #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#475569', textTransform: 'uppercase' }}>LGU STATUS</span>
+              
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <span style={{ fontSize: '0.65rem', fontWeight: 700, color: '#94a3b8', textTransform: 'uppercase' }}>Apply to All:</span>
+                <div style={{ display: 'flex', gap: '4px' }}>
+                  {[1, 2, 3, 4, 5].map(s => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => bulkAssignSignals(selectedEventToDeploy?.id, user.province, getCitiesForProvince(user.province), String(s))}
+                      style={{
+                        width: '24px', height: '24px', borderRadius: '4px',
+                        background: 'white', color: '#64748b', border: '1px solid #e2e8f0',
+                        fontSize: '0.7rem', fontWeight: 800, cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center'
+                      }}
+                    >
+                      {s}
+                    </button>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => bulkAssignSignals(selectedEventToDeploy?.id, user.province, getCitiesForProvince(user.province), null)}
+                    style={{
+                      width: '24px', height: '24px', borderRadius: '4px',
+                      background: '#fee2e2', color: '#ef4444', border: '1px solid #fecaca',
+                      fontSize: '0.7rem', cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center'
+                    }}
+                  >
+                    <X size={12} weight="bold" />
                   </button>
                 </div>
-              </form>
-            </div>
-          </div>,
-          document.body
-        )}
-
-        {showSelectEventToEdit && createPortal(
-          <div className="modal-overlay" onClick={() => setShowSelectEventToEdit(false)}>
-            <div className="modal-content glass-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '440px' }}>
-              <div className="modal-header">
-                <h2>Select Event</h2>
-                <button className="modal-close" onClick={() => setShowSelectEventToEdit(false)}><X size={20} /></button>
               </div>
-              <div className="modal-body">
-                <div className="event-selection-list">
-                  {events.map(ev => (
-                    <div
-                      key={ev.id}
-                      className={`event-selection-card ${selectedEventIdToEdit === ev.id ? 'active' : ''}`}
-                      onClick={() => setSelectedEventIdToEdit(ev.id)}
-                    >
-                      <div className="event-selection-avatar" style={{ background: ev.color }}>{ev.name.charAt(0)}</div>
-                      <div className="event-selection-info">
-                        <span className="event-selection-name">{ev.name}</span>
+            </div>
+
+            <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
+              {getCitiesForProvince(user.province)
+                .filter(city => city.toLowerCase().includes(signalSearchTerm.toLowerCase()))
+                .map(city => {
+                  const signalData = eventSignals.find(s => s.city === city && !s.barangay && s.event_id === selectedEventToDeploy?.id)
+                  const currentSignal = signalData?.signal
+                  const SIGNAL_COLORS = {
+                    '1': { bg: '#eff6ff', text: '#2563eb', border: '#bfdbfe' },
+                    '2': { bg: '#fffbeb', text: '#d97706', border: '#fef3c7' },
+                    '3': { bg: '#fff1f2', text: '#e11d48', border: '#fecdd3' },
+                    '4': { bg: '#fdf2f8', text: '#db2777', border: '#fbcfe8' },
+                    '5': { bg: '#f5f3ff', text: '#7c3aed', border: '#ddd6fe' }
+                  }
+
+                  return (
+                    <div key={city} style={{ padding: '12px 16px', borderBottom: '1px solid #f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'white' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                        <div style={{ 
+                          width: '32px', height: '32px', borderRadius: '8px', 
+                          background: currentSignal ? SIGNAL_COLORS[currentSignal].bg : '#f8fafc',
+                          color: currentSignal ? SIGNAL_COLORS[currentSignal].text : '#94a3b8',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: '0.875rem', fontWeight: 800,
+                          border: currentSignal ? `1px solid ${SIGNAL_COLORS[currentSignal].border}` : '1px solid #e2e8f0'
+                        }}>
+                          {currentSignal || '-'}
+                        </div>
+                        <span style={{ fontSize: '0.875rem', fontWeight: 600, color: '#1e293b' }}>{city}</span>
+                      </div>
+                      
+                      <div style={{ display: 'flex', gap: '4px' }}>
+                        {[1, 2, 3, 4, 5].map(s => (
+                          <button
+                            key={s}
+                            type="button"
+                            onClick={() => assignSignal(selectedEventToDeploy?.id, user.province, city, null, String(s))}
+                            style={{
+                              width: '28px', height: '28px', borderRadius: '6px',
+                              background: String(s) === currentSignal ? SIGNAL_COLORS[s].bg : 'white',
+                              color: String(s) === currentSignal ? SIGNAL_COLORS[s].text : '#94a3b8',
+                              border: `1.5px solid ${String(s) === currentSignal ? SIGNAL_COLORS[s].border : '#f1f5f9'}`,
+                              fontSize: '0.75rem', fontWeight: 800, cursor: 'pointer',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              transition: 'all 0.2s'
+                            }}
+                          >
+                            {s}
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => assignSignal(selectedEventToDeploy?.id, user.province, city, null, null)}
+                          style={{
+                            width: '28px', height: '28px', borderRadius: '6px',
+                            background: 'white', color: '#ef4444', border: '1.5px solid #fee2e2',
+                            fontSize: '0.75rem', cursor: 'pointer',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center'
+                          }}
+                        >
+                          <X size={14} weight="bold" />
+                        </button>
                       </div>
                     </div>
-                  ))}
-                </div>
-              </div>
-              <div className="modal-footer">
-                <button className="modal-btn-cancel" onClick={() => setShowSelectEventToEdit(false)}>Cancel</button>
-                <button className="modal-btn-primary" onClick={() => {
-                  const ev = events.find(e => e.id === selectedEventIdToEdit)
-                  if (ev) {
-                    setShowSelectEventToEdit(false)
-                    setIsEditingExistingEvent(true)
-                    setEditForm({ ...ev, affectedProvinces: ev.affectedProvinces || [] })
-                    setShowEditEventModal(true)
-                  }
-                }} disabled={!selectedEventIdToEdit}>Continue</button>
-              </div>
+                  )
+                })
+              }
             </div>
-          </div>,
-          document.body
-        )}
+          </div>
+        </div>
+      </HeaderFooterModal>
 
-        {showDeleteConfirm && createPortal(
-          <div className="modal-overlay" onClick={() => setShowDeleteConfirm(false)}>
-            <div className="modal-content glass-modal" style={{ maxWidth: '400px' }}>
-              <div className="modal-confirm">
-                <Warning size={32} color="#ef4444" />
-                <h2>Delete Event?</h2>
-                <p>Are you sure? This cannot be undone.</p>
-                <div className="modal-confirm-footer">
-                  <button className="modal-btn-cancel" onClick={() => setShowDeleteConfirm(false)}>No</button>
-                  <button className="modal-btn-danger" onClick={async () => {
-                    await deleteEvent(currentEventId)
-                    setShowDeleteConfirm(false)
-                  }}>Yes, Delete</button>
-                </div>
-              </div>
-            </div>
-          </div>,
-          document.body
-        )}
       </div >
     </>
   );

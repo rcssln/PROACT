@@ -4,6 +4,9 @@ import { createPortal } from 'react-dom'
 import {
   Warning, CloudRain, Flame, Info, Check, Calendar, CaretRight, PlusCircle, Clock, X, CheckCircle } from '@phosphor-icons/react'
 import { supabase } from '../lib/supabase'
+import HeaderFooterModal from '../components/HeaderFooterModal'
+import ConfirmationModal from '../components/ConfirmationModal'
+import Button from '../components/Button'
 import '../styles/components/EventModal.css'
 import '../styles/components/Toast.css'
 
@@ -37,10 +40,13 @@ export function EventProvider({ children, user }) {
   const [notifications, setNotifications] = useState([])
   const [unreadCount, setUnreadCount] = useState(0)
   const [pendingUsersCount, setPendingUsersCount] = useState(0)
+  const [pendingApprovalsCount, setPendingApprovalsCount] = useState(0)
   const [eventDeployments, setEventDeployments] = useState([])
   const [successModal, setSuccessModal] = useState({ show: false, title: '', message: '' })
   const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null, confirmText: 'Confirm', cancelText: 'Cancel', type: 'danger' })
   const [toast, setToast] = useState({ show: false, title: '', message: '', type: 'info' })
+  const [eventSignals, setEventSignals] = useState([])
+  const [loadingSignals, setLoadingSignals] = useState(false)
 
   // 3. UI Utility Hooks (Must be defined before they are used in other hooks' dependencies)
   const showSuccess = useCallback((title, message) => {
@@ -99,6 +105,13 @@ export function EventProvider({ children, user }) {
     if (!supabase || !eventId) return
     try {
       let query = supabase.from('situational_reports').select('*').eq('event_id', eventId).order('report_number', { ascending: false })
+
+      // Scoping: Only Regional/Super Admins see SitReps from all provinces
+      const isRegional = user?.account_type === 'Regional Admin' || user?.account_type === 'Regional' || user?.account_type === 'Super Admin' || user?.role === 'Super Admin'
+      if (!isRegional && user?.province) {
+        query = query.eq('province', user.province)
+      }
+
       const { data, error } = await query
       if (error) throw error
       setSituationalReports(data || [])
@@ -107,7 +120,7 @@ export function EventProvider({ children, user }) {
       console.error('Error fetching situational reports:', err)
       return []
     }
-  }, [])
+  }, [user])
 
   const fetchEventDeployments = useCallback(async (eventId) => {
     if (!supabase || !eventId) return
@@ -210,7 +223,6 @@ export function EventProvider({ children, user }) {
         summary: e.summary || '',
         pingedReportTypes: e.pinged_report_types || [],
         affectedProvinces: e.affected_provinces || [],
-        gdacsId: e.gdacs_id || '',
         isDeployed: e.is_deployed || false,
         deployedAt: e.deployed_at || null,
         deployedSnapshot: e.deployed_snapshot || null
@@ -295,6 +307,33 @@ export function EventProvider({ children, user }) {
     }
   }, [user])
 
+  const fetchPendingApprovalsCount = useCallback(async () => {
+    if (!supabase || !user) return
+    // Only Provincial Approver and Super Admin can see the For Approval sidebar badge
+    const isApprover = user.account_type === 'Provincial Approver' || user.account_type === 'Super Admin' || user.role === 'Super Admin'
+    if (!isApprover) {
+      setPendingApprovalsCount(0)
+      return
+    }
+
+    try {
+      let query = supabase
+        .from('situational_reports')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'Pending Approval')
+      
+      if (user.account_type === 'Provincial Approver' && user.province) {
+        query = query.eq('province', user.province)
+      }
+
+      const { count, error } = await query
+      if (error) throw error
+      setPendingApprovalsCount(count || 0)
+    } catch (err) {
+      console.error('Error fetching pending approvals count:', err)
+    }
+  }, [user])
+
   const markNotificationAsRead = useCallback(async (notifId) => {
     if (!supabase) return
     try {
@@ -344,8 +383,9 @@ export function EventProvider({ children, user }) {
     fetchEvents()
     fetchNotifications()
     fetchPendingUsersCount()
+    fetchPendingApprovalsCount()
     if (currentEventId) fetchUserSignal(currentEventId)
-  }, [fetchEvents, fetchNotifications, fetchPendingUsersCount, currentEventId, fetchUserSignal])
+  }, [fetchEvents, fetchNotifications, fetchPendingUsersCount, fetchPendingApprovalsCount, currentEventId, fetchUserSignal])
 
   // 5. Computed State
   const defaultEvent = {
@@ -410,7 +450,6 @@ export function EventProvider({ children, user }) {
               summary: payload.new.summary || '',
               pingedReportTypes: payload.new.pinged_report_types || [],
               affectedProvinces: payload.new.affected_provinces || [],
-              gdacsId: payload.new.gdacs_id || '',
               isDeployed: payload.new.is_deployed || false,
               deployedAt: payload.new.deployed_at || null,
               deployedSnapshot: payload.new.deployed_snapshot || null
@@ -508,7 +547,7 @@ export function EventProvider({ children, user }) {
       console.log('Cleaning up event-specific subscriptions')
       supabase.removeChannel(sitRepsChannel)
     }
-  }, [user, currentEventId, fetchSituationalReports])
+  }, [user, currentEventId, fetchSituationalReports, fetchPendingApprovalsCount])
 
   useEffect(() => {
     if (events.length > 0 && !currentEventId) {
@@ -664,6 +703,37 @@ export function EventProvider({ children, user }) {
       throw err
     }
   }, [currentSituationalReport])
+  
+  const notifyAffectedUsers = useCallback(async (eventId, eventName, provinces) => {
+    if (!supabase || !provinces || provinces.length === 0) return
+    try {
+      // Find all users in affected provinces (Provincial and LGU levels)
+      const { data: usersToNotify } = await supabase
+        .from('users')
+        .select('id, province, account_type')
+        .in('province', provinces)
+        .in('account_type', ['Provincial', 'Provincial Admin', 'LGU', 'LGU Admin'])
+
+      if (usersToNotify && usersToNotify.length > 0) {
+        const notifs = usersToNotify
+          .filter(u => u.id !== user?.id) // Don't notify the person who made the change
+          .map(u => ({
+            user_id: u.id,
+            type: 'event_update',
+            title: 'Event Notification',
+            message: `Event "${eventName}" is active in your area (${u.province}).`,
+            data: { event_id: eventId }
+          }))
+        
+        if (notifs.length > 0) {
+          await supabase.from('notifications').insert(notifs)
+          console.log(`Sent notifications to ${notifs.length} affected users for event: ${eventName}`)
+        }
+      }
+    } catch (err) {
+      console.error('Error notifying affected users:', err)
+    }
+  }, [user])
 
   const addEvent = useCallback(async (event) => {
     if (!supabase) return null
@@ -705,6 +775,13 @@ export function EventProvider({ children, user }) {
         deployedSnapshot: data.deployed_snapshot || null
       }
       setEvents((prev) => [newEvent, ...prev])
+      showToast('Event Created', `Successfully created event: ${newEvent.name}`, 'success')
+
+      // Notify affected users
+      if (newEvent.affectedProvinces?.length > 0) {
+        notifyAffectedUsers(newEvent.id, newEvent.name, newEvent.affectedProvinces)
+      }
+
       return newEvent
     } catch (err) {
       console.error('Error adding event:', err)
@@ -739,6 +816,13 @@ export function EventProvider({ children, user }) {
       const { error } = await supabase.from('events').update(payload).eq('id', id)
       if (error) throw error
       setEvents((prev) => prev.map((e) => (e.id === id ? { ...e, ...updates } : e)))
+      showToast('Event Updated', `Successfully updated event details.`, 'success')
+
+      // Notify if affected provinces were updated
+      if (updates.affectedProvinces?.length > 0) {
+        const eventName = updates.name || events.find(e => e.id === id)?.name || 'Updated Event'
+        notifyAffectedUsers(id, eventName, updates.affectedProvinces)
+      }
     } catch (err) {
       console.error('Error updating event:', err)
       alert('Failed to update event: ' + err.message)
@@ -747,16 +831,20 @@ export function EventProvider({ children, user }) {
 
   const fetchEventSignals = useCallback(async (eventId) => {
     if (!supabase || !eventId) return []
+    setLoadingSignals(true)
     try {
       const { data, error } = await supabase
         .from('event_signals')
         .select('*')
         .eq('event_id', eventId)
       if (error) throw error
+      setEventSignals(data || [])
       return data || []
     } catch (err) {
       console.error('Error fetching event signals:', err)
       return []
+    } finally {
+      setLoadingSignals(false)
     }
   }, [])
 
@@ -778,6 +866,15 @@ export function EventProvider({ children, user }) {
 
         const { error } = await query
         if (error) throw error
+        
+        // Update local state
+        setEventSignals(prev => prev.filter(s => {
+          const isMatch = s.event_id === eventId && s.province === province &&
+            (city ? s.city === city : !s.city) &&
+            (barangay ? s.barangay === barangay : !s.barangay);
+          return !isMatch;
+        }))
+
         showToast('Signal Cleared', `Successfully cleared signal for ${locationName}`, 'success')
         return true
       }
@@ -805,6 +902,19 @@ export function EventProvider({ children, user }) {
         throw error
       }
 
+      // Update local state
+      if (data) {
+        setEventSignals(prev => {
+          const other = prev.filter(s => {
+            const isMatch = s.event_id === eventId && s.province === province &&
+              (city ? s.city === city : !s.city) &&
+              (barangay ? s.barangay === barangay : !s.barangay);
+            return !isMatch;
+          });
+          return [...other, data];
+        });
+      }
+
       // Notification Logic
       let targetUserType = ''
       let targetFilter = {}
@@ -827,7 +937,12 @@ export function EventProvider({ children, user }) {
       }
 
       // Fetch users to notify
-      let userQuery = supabase.from('users').select('id').eq('account_type', targetUserType)
+      let targetTypes = []
+      if (targetUserType === 'Provincial Admin') targetTypes = ['Provincial', 'Provincial Admin']
+      else if (targetUserType === 'LGU Admin' || targetUserType === 'LGU') targetTypes = ['LGU', 'LGU Admin']
+      else targetTypes = [targetUserType]
+
+      let userQuery = supabase.from('users').select('id').in('account_type', targetTypes)
       if (targetFilter.province) userQuery = userQuery.eq('province', targetFilter.province)
       if (targetFilter.city) userQuery = userQuery.eq('city', targetFilter.city)
 
@@ -835,14 +950,33 @@ export function EventProvider({ children, user }) {
       
       if (usersToNotify && usersToNotify.length > 0) {
         const event = events.find(e => e.id === eventId)
+        
+        // If targeting an LGU (city is present), we treat this as a deployment
+        const isLguDeployment = city && !barangay;
+        
         const notifications = usersToNotify.map(u => ({
           user_id: u.id,
-          type: 'event_signal',
-          title: `Signal ${signal} Assigned`,
-          message: `Event "${event?.name}": Signal ${signal} has been assigned to ${locationName}.`,
+          type: isLguDeployment ? 'event_deployment' : 'event_signal',
+          title: isLguDeployment ? 'New Event Deployment' : `Signal ${signal} Assigned`,
+          message: isLguDeployment 
+            ? `Event "${event?.name}" has been deployed to ${locationName} with Signal ${signal}.`
+            : `Event "${event?.name}": Signal ${signal} has been assigned to ${locationName}.`,
           data: { event_id: eventId, signal, province, city, barangay }
         }))
         await supabase.from('notifications').insert(notifications)
+      }
+
+      // If it's an LGU deployment, ensure it's also in the event_deployments table
+      if (city && !barangay) {
+        console.log(`Auto-deploying to ${city} due to signal assignment`);
+        await supabase.from('event_deployments').upsert({
+          event_id: eventId,
+          province,
+          city,
+          strength_label: 'Wind Signal',
+          strength_value: `Signal No. ${signal}`,
+          deployed_by: user.id
+        }, { onConflict: 'event_id, city' })
       }
 
       showToast('Signal Assigned', `Successfully assigned Signal ${signal} to ${locationName}`, 'success')
@@ -850,6 +984,93 @@ export function EventProvider({ children, user }) {
     } catch (err) {
       console.error('Caught Error in assignSignal:', err)
       showToast('Error', 'Failed to assign signal.', 'danger')
+      return false
+    }
+  }, [user, events, showToast])
+
+  const bulkAssignSignals = useCallback(async (eventId, province, locations, signal) => {
+    if (!supabase || !eventId || !user || !locations.length) return false
+    try {
+      if (signal === null) {
+        const { error } = await supabase
+          .from('event_signals')
+          .delete()
+          .eq('event_id', eventId)
+          .eq('province', province)
+          .in('city', locations)
+          .is('barangay', null)
+        
+        if (error) throw error
+        
+        setEventSignals(prev => prev.filter(s => {
+          if (s.event_id !== eventId || s.province !== province || s.barangay) return true;
+          return !locations.includes(s.city);
+        }))
+
+        showToast('Bulk Clear', `Successfully cleared signals for ${locations.length} locations.`, 'success')
+        return true
+      }
+
+      const payloads = locations.map(city => ({
+        event_id: eventId,
+        province,
+        city,
+        barangay: null,
+        signal,
+        assigned_by: user.id
+      }))
+
+      const { data: insertedSignals, error } = await supabase
+        .from('event_signals')
+        .upsert(payloads, { onConflict: 'event_id, province, city, barangay' })
+        .select()
+      
+      if (error) throw error
+
+      if (insertedSignals) {
+        setEventSignals(prev => {
+          const others = prev.filter(s => {
+            if (s.event_id !== eventId || s.province !== province || s.barangay) return true;
+            return !locations.includes(s.city);
+          });
+          return [...others, ...insertedSignals];
+        });
+      }
+
+      const event = events.find(e => e.id === eventId)
+      
+      const deployments = locations.map(loc => ({
+        event_id: eventId,
+        province,
+        city: loc,
+        strength_label: 'Wind Signal',
+        strength_value: `Signal No. ${signal}`,
+        deployed_by: user.id
+      }))
+      await supabase.from('event_deployments').upsert(deployments, { onConflict: 'event_id, city' })
+
+      const { data: usersToNotify } = await supabase
+        .from('users')
+        .select('id, city')
+        .eq('account_type', 'LGU')
+        .in('city', locations)
+
+      if (usersToNotify && usersToNotify.length > 0) {
+        const notifications = usersToNotify.map(u => ({
+          user_id: u.id,
+          type: 'event_deployment',
+          title: 'New Event Deployment',
+          message: `Event "${event?.name}" has been deployed to ${u.city} with Signal ${signal}.`,
+          data: { event_id: eventId, signal, province, city: u.city }
+        }))
+        await supabase.from('notifications').insert(notifications)
+      }
+
+      showToast('Bulk Assigned', `Successfully assigned Signal ${signal} to ${locations.length} locations.`, 'success')
+      return true
+    } catch (err) {
+      console.error('Error in bulkAssignSignals:', err)
+      showToast('Error', 'Failed to assign signals in bulk.', 'danger')
       return false
     }
   }, [user, events, showToast])
@@ -1009,35 +1230,10 @@ export function EventProvider({ children, user }) {
           return [...other, ...data]
         })
 
-        // ══════════════ NEW: NOTIFY LGU USERS ══════════════
-        console.log('Deployment to LGUs successful. Sending notifications to LGU users...')
-        try {
-          const { data: lguUsers, error: userError } = await supabase
-            .from('users')
-            .select('id, city')
-            .eq('account_type', 'LGU')
-            .in('city', deployData.cities)
-
-          if (userError) throw userError
-
-          if (lguUsers && lguUsers.length > 0) {
-            const notifPayload = lguUsers.map(u => ({
-              user_id: u.id,
-              type: 'event_deployment',
-              title: 'New Event Deployment',
-              message: `Event "${events.find(e => e.id === deployData.event_id)?.name || 'A disaster event'}" has been deployed to ${u.city}.`,
-              data: { event_id: deployData.event_id, city: u.city }
-            }))
-
-            const { error: notifError } = await supabase.from('notifications').insert(notifPayload)
-            if (notifError) console.error('Error inserting LGU notifications:', notifError)
-            else console.log(`Successfully sent ${lguUsers.length} notifications to LGU users.`)
-          }
-        } catch (notifErr) {
-          console.error('Non-fatal error sending LGU notifications:', notifErr)
-          // We don't fail the whole deployment just because notifications failed
-        }
-        // ═══════════════════════════════════════════════
+        // ══════════════ NOTIFICATION TRIGGER MOVED ══════════════
+        // Provincial notifications are now triggered by signal assignment (assignSignal)
+        // to consolidate the workflow as requested.
+        // ═════════════════════════════════════════════════════════
       }
 
       showSuccess('Success', 'Event deployed to LGUs successfully.');
@@ -1153,9 +1349,13 @@ export function EventProvider({ children, user }) {
     currentSituationalReport,
     setCurrentSituationalReport,
     fetchSituationalReports,
+    sendSituationalReport,
+    pendingApprovalsCount,
+    fetchPendingApprovalsCount,
     createSituationalReport,
     updateSituationalReport,
-    sendSituationalReport,
+    deployEvent,
+    deployToLgu,
     addEvent,
     updateEvent,
     deleteEvent,
@@ -1178,6 +1378,9 @@ export function EventProvider({ children, user }) {
     fetchPendingUsersCount,
     fetchEventSignals,
     assignSignal,
+    bulkAssignSignals,
+    eventSignals,
+    loadingSignals,
     userSignal,
     toast,
     showToast,
@@ -1188,37 +1391,26 @@ export function EventProvider({ children, user }) {
     <EventContext.Provider value={value}>
       {children}
       {showSelectEventModal && createPortal(<SelectEventModal events={events} onClose={closeSelectEventModal} onSelect={confirmSelectEvent} />, document.body)}
-      {successModal.show && createPortal(
-        <div className="modal-overlay" onClick={closeSuccess}>
-          <div className="modal-content glass-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '400px' }}>
-            <div className="modal-confirm">
-              <div className="modal-confirm-icon modal-confirm-icon--success"><CheckCircle size={32} /></div>
-              <h2 className="modal-confirm-title">{successModal.title || 'Success'}</h2>
-              <p className="modal-confirm-text">{successModal.message}</p>
-              <div className="modal-confirm-footer">
-                <button type="button" className="modal-btn-primary" onClick={closeSuccess} style={{ minWidth: '120px' }}>Close</button>
-              </div>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
-      {confirmModal.show && createPortal(
-        <div className="modal-overlay" onClick={closeConfirm}>
-          <div className="modal-content glass-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '400px' }}>
-            <div className="modal-confirm">
-              <div className={`modal-confirm-icon modal-confirm-icon--${confirmModal.type}`}>{confirmModal.type === 'danger' ? <Warning size={32} /> : <Info size={32} />}</div>
-              <h2 className="modal-confirm-title">{confirmModal.title}</h2>
-              <p className="modal-confirm-text">{confirmModal.message}</p>
-              <div className="modal-confirm-footer">
-                <button type="button" className="modal-btn-cancel" onClick={closeConfirm}>{confirmModal.cancelText}</button>
-                <button type="button" className={`modal-btn-${confirmModal.type}`} onClick={handleConfirmAction}>{confirmModal.confirmText}</button>
-              </div>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
+      <ConfirmationModal
+        isOpen={successModal.show}
+        onClose={closeSuccess}
+        title={successModal.title || 'Success'}
+        message={successModal.message}
+        type="success"
+        confirmText="Close"
+        onConfirm={closeSuccess}
+      />
+
+      <ConfirmationModal
+        isOpen={confirmModal.show}
+        onClose={closeConfirm}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        type={confirmModal.type === 'danger' ? 'danger' : 'primary'}
+        confirmText={confirmModal.confirmText}
+        cancelText={confirmModal.cancelText}
+        onConfirm={handleConfirmAction}
+      />
       {toast.show && createPortal(
         <div className="notification-toast-container">
           <div className={`notification-toast ${toast.type}`}>
@@ -1243,41 +1435,50 @@ export function EventProvider({ children, user }) {
 function SelectEventModal({ events, onClose, onSelect }) {
   const [selectedId, setSelectedId] = useState('')
   const selected = events.find((e) => e.id === selectedId)
+  
   return (
-    <div className="modal-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="select-event-modal-title">
-      <div className="modal-content glass-modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '440px' }}>
-        <div className="modal-header">
-          <h2 id="select-event-modal-title">Select Event</h2>
-          <button type="button" className="modal-close" onClick={onClose} aria-label="Close"><X size={20} /></button>
-        </div>
-        <div className="modal-body">
-          <p className="event-modal-subtitle" style={{ color: '#64748b', fontSize: '0.8125rem', marginTop: '-0.25rem', marginBottom: '0.5rem' }}>Choose an active event for this report.</p>
-          {events.length === 0 ? (
-            <div className="event-modal-empty">
-              <PlusCircle className="event-modal-empty-icon" size={32} />
-              <p style={{ fontSize: '0.8125rem' }}>No active events found.</p>
-              <button type="button" className="modal-btn-primary" onClick={onClose} style={{ margin: '1rem auto' }}>Go to Dashboard</button>
-            </div>
-          ) : (
-            <div className="event-selection-list">
-              {events.map((ev) => (
-                <div key={ev.id} className={`event-selection-card ${selectedId === ev.id ? 'active' : ''}`} onClick={() => setSelectedId(ev.id)}>
-                  <div className="event-selection-avatar">{ev.name.charAt(0).toUpperCase()}</div>
-                  <div className="event-selection-info">
-                    <span className="event-selection-name">{ev.name}</span>
-                    <div className="event-selection-meta"><Calendar size={12} /><span>{ev.startDate ? new Date(ev.startDate).toLocaleDateString() : 'No date'}</span></div>
-                  </div>
-                  <div className="event-selection-radio"><div className="event-selection-radio-inner" /></div>
-                </div>
-              ))}
-            </div>
+    <HeaderFooterModal
+      isOpen={true}
+      onClose={onClose}
+      title="Select Event"
+      subtitle="Choose an active event for this report."
+      maxWidth="440px"
+      footer={
+        <>
+          <Button variant="subtle" onClick={onClose}>Cancel</Button>
+          {events.length > 0 && (
+            <Button 
+              variant="solid" 
+              onClick={() => selected && onSelect(selected)} 
+              disabled={!selectedId}
+              rightIcon={<CaretRight size={16} />}
+            >
+              Continue
+            </Button>
           )}
+        </>
+      }
+    >
+      {events.length === 0 ? (
+        <div className="event-modal-empty">
+          <PlusCircle className="event-modal-empty-icon" size={32} />
+          <p style={{ fontSize: '0.8125rem' }}>No active events found.</p>
+          <Button variant="solid" onClick={onClose} style={{ marginTop: '1rem' }}>Go to Dashboard</Button>
         </div>
-        <div className="modal-footer">
-          <button type="button" className="modal-btn-cancel" onClick={onClose}>Cancel</button>
-          {events.length > 0 && <button type="button" className="modal-btn-primary" onClick={() => selected && onSelect(selected)} disabled={!selectedId}>Continue<CaretRight size={16} /></button>}
+      ) : (
+        <div className="event-selection-list">
+          {events.map((ev) => (
+            <div key={ev.id} className={`event-selection-card ${selectedId === ev.id ? 'active' : ''}`} onClick={() => setSelectedId(ev.id)}>
+              <div className="event-selection-avatar">{ev.name.charAt(0).toUpperCase()}</div>
+              <div className="event-selection-info">
+                <span className="event-selection-name">{ev.name}</span>
+                <div className="event-selection-meta"><Calendar size={12} /><span>{ev.startDate ? new Date(ev.startDate).toLocaleDateString() : 'No date'}</span></div>
+              </div>
+              <div className="event-selection-radio"><div className="event-selection-radio-inner" /></div>
+            </div>
+          ))}
         </div>
-      </div>
-    </div>
+      )}
+    </HeaderFooterModal>
   )
 }

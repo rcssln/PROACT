@@ -97,7 +97,9 @@ const SearchableSelect = ({
                 position: 'absolute',
                 top: `${coords.top}px`,
                 left: `${coords.left}px`,
-                width: `${coords.width}px`,
+                minWidth: `${coords.width}px`,
+                width: 'max-content',
+                maxWidth: '400px'
             }}
         >
             <div className="searchable-select-options">
