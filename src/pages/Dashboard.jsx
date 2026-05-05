@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { createPortal } from 'react-dom'
 import { useOutletContext } from 'react-router-dom'
-import { ArrowsClockwise, DotsThree, ArrowRight, TrendUp, TrendDown, CaretLeft, CaretRight, Pencil, Warning, CloudRain, Pulse, Flame, Info, Check, Calendar, Bell, X, ChartBar as BarChartIcon, ChartPie as PieChartIcon, ChartLineUp as LineChartIcon, ShieldCheck, PaperPlaneRight, MagnifyingGlass } from '@phosphor-icons/react'
+import { ArrowsClockwise, DotsThree, ArrowRight, TrendUp, TrendDown, CaretLeft, CaretRight, Pencil, Warning, CloudRain, Pulse, Flame, Info, Check, Calendar, Bell, X, ChartBar as BarChartIcon, ChartPie as PieChartIcon, ChartLineUp as LineChartIcon, ShieldCheck, PaperPlaneRight, MagnifyingGlass, Hurricane, Drop, Waveform, Waves, CloudWarning, WarningCircle } from '@phosphor-icons/react'
 import {
   ResponsiveContainer,
   BarChart,
@@ -66,6 +66,15 @@ const CATEGORY_ICONS = {
   stateOfCalamity: <Warning size={18} />,
   preEmptiveEvacuation: <ArrowRight size={18} />,
   assistanceProvided: <Check size={18} />,
+}
+
+const EVENT_TYPE_ICONS = {
+  typhoon: <Hurricane size={32} weight="duotone" />,
+  flood: <Drop size={32} weight="duotone" />,
+  earthquake: <Waveform size={32} weight="duotone" />,
+  tsunami: <Waves size={32} weight="duotone" />,
+  weather: <CloudWarning size={32} weight="duotone" />,
+  calamity: <WarningCircle size={32} weight="duotone" />,
 }
 
 const TYPHOON_NAMES = [
@@ -1742,7 +1751,11 @@ CHRONOLOGY OF EVENTS`;
                         userSignal === '4' ? '#f9a8d4' : 
                         userSignal === '5' ? '#d8b4fe' : undefined
           }}>
-            {userSignal ? <span style={{ fontSize: '2rem', fontWeight: 900, color: '#1e293b' }}>{userSignal}</span> : <Bell size={32} weight="bold" />}
+            {userSignal ? (
+              <span style={{ fontSize: '2rem', fontWeight: 900, color: '#1e293b' }}>{userSignal}</span>
+            ) : (
+              EVENT_TYPE_ICONS[currentEvent?.eventType] || <WarningCircle size={32} weight="duotone" />
+            )}
           </div>
           <div className="dash-hero-title-wrap">
             <h2 className="dash-hero-amount">
@@ -1831,20 +1844,31 @@ CHRONOLOGY OF EVENTS`;
                   {/* No Approved Data Warning */}
                   {result?.total === 0 && currentEventId !== 'default-good-day' && (
                       <div style={{
-                        background: 'rgba(245, 158, 11, 0.1)',
-                        border: '1px solid var(--border-color)',
+                        background: 'rgba(245, 158, 11, 0.05)',
+                        border: '1px solid rgba(245, 158, 11, 0.2)',
                         borderRadius: '12px',
-                        padding: '2rem',
-                        marginBottom: '2rem',
-                        textAlign: 'left'
+                        padding: '2rem 1.5rem',
+                        marginBottom: '1.5rem',
+                        textAlign: 'center',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center'
                       }}>
-                      <Warning size={32} color="#d97706" style={{ marginBottom: '1rem', opacity: 0.8 }} />
-                      <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#92400e', marginBottom: '0.5rem' }}>No Approved Reports Available</h3>
-                      <p style={{ fontSize: '0.875rem', color: '#b45309', maxWidth: '500px', margin: '0 auto' }}>
-                        The dashboard is strictly displaying data from <strong>Approved</strong> situational reports.
-                        If you have submitted data, please ensure the corresponding Situational Report is approved by a Regional Admin to see it here.
-                      </p>
-                    </div>
+                        <div style={{ 
+                          background: 'rgba(245, 158, 11, 0.1)', 
+                          padding: '0.75rem', 
+                          borderRadius: '50%', 
+                          marginBottom: '1rem' 
+                        }}>
+                          <Warning size={28} color="#d97706" style={{ display: 'block', opacity: 0.9 }} />
+                        </div>
+                        <h3 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#92400e', marginBottom: '0.5rem' }}>No Approved Reports Available</h3>
+                        <p style={{ fontSize: '0.875rem', color: '#b45309', maxWidth: '500px', margin: '0 auto', lineHeight: 1.5, opacity: 0.9 }}>
+                          The dashboard is strictly displaying data from <strong>Approved</strong> situational reports.
+                          If you have submitted data, please ensure the corresponding Situational Report is approved by a Regional Admin to see it here.
+                        </p>
+                      </div>
                   )}
                   {/* State of Calamity Alert Banner */}
                   {details.suspensions.some(s => s.type === 'stateOfCalamity') && (
@@ -2783,7 +2807,10 @@ CHRONOLOGY OF EVENTS`;
               type="text"
               placeholder="e.g. Typhoon Kristine"
               value={editForm.name}
-              onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
+              onChange={(e) => {
+                const val = e.target.value;
+                setEditForm((f) => ({ ...f, name: val.charAt(0).toUpperCase() + val.slice(1) }));
+              }}
               style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0' }}
             />
           </div>

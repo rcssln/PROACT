@@ -3,6 +3,7 @@ import { ShieldWarning, Eye, EyeClosed } from '@phosphor-icons/react'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { supabase } from '../lib/supabase'
 import { hashPassword, validatePassword, getPasswordRules } from '../lib/passwordUtils'
+import { useEvents } from '../contexts/EventContext'
 import Button from '../components/Button'
 import '../styles/pages/ForcePasswordChange.css'
 
@@ -13,6 +14,8 @@ export default function ForcePasswordChange({ user, onLogout }) {
     const [showConfirmPassword, setShowConfirmPassword] = useState(false)
     const [error, setError] = useState('')
     const [submitting, setSubmitting] = useState(false)
+
+    const { showConfirm } = useEvents()
 
     const handleSubmit = async (e) => {
         e.preventDefault()
@@ -34,38 +37,44 @@ export default function ForcePasswordChange({ user, onLogout }) {
             return
         }
 
-        setSubmitting(true)
+        showConfirm({
+            title: 'Update Password',
+            message: 'Are you sure you want to update your password? You will be logged out and need to sign in again with your new password.',
+            onConfirm: async () => {
+                setSubmitting(true)
 
-        try {
-            const hashed = await hashPassword(password, user.email)
+                try {
+                    const hashed = await hashPassword(password, user.email)
 
-            // Update password and clear must_change_password flag
-            const { error: updateError } = await supabase
-                .from('users')
-                .update({
-                    password_hash: hashed,
-                    must_change_password: false
-                })
-                .eq('id', user.id)
+                    // Update password and clear must_change_password flag
+                    const { error: updateError } = await supabase
+                        .from('users')
+                        .update({
+                            password_hash: hashed,
+                            must_change_password: false
+                        })
+                        .eq('id', user.id)
 
-            if (updateError) throw updateError
+                    if (updateError) throw updateError
 
-            // Log the action
-            await supabase
-                .from('activity_logs')
-                .insert({
-                    user_id: user.id,
-                    action: 'Changed password',
-                    details: 'Forced password change on first login'
-                })
+                    // Log the action
+                    await supabase
+                        .from('activity_logs')
+                        .insert({
+                            user_id: user.id,
+                            action: 'Changed password',
+                            details: 'Forced password change on first login'
+                        })
 
-            // Force logout on successful password change
-            onLogout()
+                    // Force logout on successful password change
+                    onLogout()
 
-        } catch (err) {
-            setError(err.message || 'Failed to update password.')
-            setSubmitting(false)
-        }
+                } catch (err) {
+                    setError(err.message || 'Failed to update password.')
+                    setSubmitting(false)
+                }
+            }
+        })
     }
 
     return (

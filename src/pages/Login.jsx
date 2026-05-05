@@ -30,13 +30,22 @@ export default function Login({ onLogin }) {
         .select('*')
         .eq('email', email.trim().toLowerCase())
         .maybeSingle()
+      
+      console.log('[Login Debug] Email:', email.trim().toLowerCase())
+      console.log('[Login Debug] User found:', !!user)
+      
       if (fetchError) throw fetchError
       if (!user) {
         setError('Invalid email or password.')
         setSubmitting(false)
         return
       }
+
       const hashed = await hashPassword(password, email.trim().toLowerCase())
+      console.log('[Login Debug] Hashed Input:', hashed)
+      console.log('[Login Debug] Stored Hash:', user.password_hash)
+      console.log('[Login Debug] Match:', hashed === user.password_hash)
+
       if (user.password_hash !== hashed) {
         setError('Invalid email or password.')
         setSubmitting(false)

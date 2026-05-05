@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useOutletContext } from 'react-router-dom'
-import { Upload, UserPlus, X, CaretDown, CaretUp, Eye, EyeClosed, WarningCircle, Plus, FileCsv, PencilSimple, Trash, MagnifyingGlass, UserCircle, Envelope, Phone, Shield, MapPin } from '@phosphor-icons/react'
+import { Upload, UserPlus, X, CaretDown, CaretUp, Eye, EyeClosed, WarningCircle, Plus, FileCsv, PencilSimple, Trash, MagnifyingGlass, UserCircle, Envelope, Phone, Shield, MapPin, Copy, Check } from '@phosphor-icons/react'
 import SearchInput from '../components/SearchInput'
 import SearchableSelect from '../components/SearchableSelect'
 import LoadingSpinner from '../components/LoadingSpinner'
@@ -13,6 +13,7 @@ import Button from '../components/Button'
 import HeaderFooterModal from '../components/HeaderFooterModal'
 import ConfirmationModal from '../components/ConfirmationModal'
 import '../styles/pages/PageStyles.css'
+import '../styles/pages/ConsolidatedReport.css'
 import '../styles/pages/Users.css'
 
 const PAGE_SIZES = [10, 25, 50]
@@ -84,8 +85,8 @@ export default function Users() {
   const [showEditPassword, setShowEditPassword] = useState(false)
   const [showEditConfirmPassword, setShowEditConfirmPassword] = useState(false)
   const [submittingEdit, setSubmittingEdit] = useState(false)
-  const [showSaveConfirm, setShowSaveConfirm] = useState(false)
   const [tempPasswordResult, setTempPasswordResult] = useState(null)
+  const [copied, setCopied] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
 
   const fetchUsers = async () => {
@@ -105,10 +106,12 @@ export default function Users() {
       // Provincial Admin → only their province
       if (isProvincialAdmin && !isSuperAdmin && !isRegionalAdmin) {
         query = query.eq('province', currentUser?.province)
+          .in('account_type', ['Provincial Admin', 'Provincial Approver', 'Provincial', 'LGU Admin', 'LGU'])
       }
       // LGU Admin → only their city
       if (isLguAdmin && !isSuperAdmin && !isRegionalAdmin && !isProvincialAdmin) {
         query = query.eq('city', currentUser?.city)
+          .in('account_type', ['LGU Admin', 'LGU'])
       }
       // Regional Admin / Super Admin → see all (no extra filter)
 
@@ -245,44 +248,56 @@ export default function Users() {
       showSuccess('Validation Error', 'Please select a Province.')
       return
     }
-    if (form.accountType === 'LGU' && !form.city) {
+    if (form.accountType?.includes('LGU') && !form.city) {
       showSuccess('Validation Error', 'Please select a City for LGU account.')
       return
     }
     if (supabase) {
-      setSubmitting(true)
-      try {
-        const url = `${supabaseUrl}/functions/v1/create-user-invite`
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${supabaseAnonKey}`,
-          },
-          body: JSON.stringify({
-            email: form.email.trim(),
-            first_name: form.firstName.trim(),
-            last_name: form.lastName.trim(),
-            account_type: form.accountType || null,
-            province: form.province || null,
-            city: form.accountType === 'LGU' ? (form.city.trim() || null) : null,
-            caller_id: currentUser?.id,
-          }),
-        })
-        const data = await res.json().catch(() => ({}))
-        if (!res.ok) {
-          const msg = typeof data?.error === 'string' ? data.error : data?.error?.message || res.statusText || 'Invite failed'
-          throw new Error(msg)
+      showConfirm({
+        title: 'Add New User',
+        message: `Are you sure you want to add ${form.email}? An invitation email will be sent.`,
+        onConfirm: async () => {
+          setSubmitting(true)
+          try {
+            const url = `${supabaseUrl}/functions/v1/create-user-invite`
+            const res = await fetch(url, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${supabaseAnonKey}`,
+                apikey: supabaseAnonKey,
+              },
+              body: JSON.stringify({
+                email: form.email.trim(),
+                first_name: form.firstName.trim(),
+                last_name: form.lastName.trim(),
+                account_type: form.accountType || null,
+                province: form.province || null,
+                city: (form.accountType?.includes('LGU') || form.accountType?.includes('Provincial')) ? (form.city.trim() || null) : null,
+                caller_id: currentUser?.id,
+              }),
+            })
+            const data = await res.json().catch(() => ({}))
+            if (!res.ok) {
+              const msg = typeof data?.error === 'string' ? data.error : data?.error?.message || res.statusText || 'Invite failed'
+              throw new Error(msg)
+            }
+            await fetchUsers()
+            if (fetchPendingUsersCount) fetchPendingUsersCount()
+            setTempPasswordResult({ 
+              email: form.email.trim(), 
+              emailSent: data.emailSent,
+              emailError: data.emailError,
+              password: data.tempPassword || null
+            })
+            closeModal()
+          } catch (err) {
+            showSuccess('Error', err.message || 'Failed to add user.')
+          } finally {
+            setSubmitting(false)
+          }
         }
-        await fetchUsers()
-        if (fetchPendingUsersCount) fetchPendingUsersCount()
-        setTempPasswordResult({ email: form.email.trim(), emailSent: true })
-        closeModal()
-      } catch (err) {
-        showSuccess('Error', err.message || 'Failed to add user.')
-      } finally {
-        setSubmitting(false)
-      }
+      })
     } else {
       showSuccess('Configuration Error', 'Database not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to .env')
     }
@@ -304,7 +319,7 @@ export default function Users() {
         showSuccess('Validation Error', 'Please select a Province.')
         return
       }
-      if (form.accountType === 'LGU' && !form.city) {
+      if (form.accountType?.includes('LGU') && !form.city) {
         showSuccess('Validation Error', 'Please select a City for LGU account.')
         return
       }
@@ -334,7 +349,12 @@ export default function Users() {
       showSuccess('Database Error', 'Database not configured.')
       return
     }
-    setShowSaveConfirm(true)
+
+    showConfirm({
+      title: 'Confirm Changes',
+      message: 'Are you sure you want to save these changes to the user account?',
+      onConfirm: handleConfirmEdit
+    })
   }
 
   const handleConfirmEdit = async () => {
@@ -352,7 +372,7 @@ export default function Users() {
       if (canCreateAccounts) {
         payload.account_type = form.accountType || null
         payload.province = form.accountType === 'Regional' ? null : (form.province || null)
-        payload.city = form.accountType === 'LGU' ? (form.city.trim() || null) : null
+        payload.city = (form.accountType?.includes('LGU') || form.accountType?.includes('Provincial')) ? (form.city.trim() || null) : null
       }
       if (form.password) {
         payload.password_hash = await hashPassword(form.password, form.email)
@@ -387,11 +407,13 @@ export default function Users() {
   }
 
   const exportCSV = () => {
-    const headers = ['Name', 'Email', 'City', 'Status']
+    const headers = ['Name', 'Email', 'Province', 'City', 'Position', 'Status']
     const rows = sortedUsers.map((u) => [
       displayName(u),
       u.email,
+      u.province || '',
       u.city || '',
+      u.account_type || '',
       u.status || 'Active',
     ])
     const csv = [headers.join(','), ...rows.map((row) => row.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(','))].join('\n')
@@ -485,19 +507,16 @@ export default function Users() {
                       </Button>
                     </th>
                     {(isSuperAdmin || isRegionalAdmin) && (
-                      <>
-                        <th>Account type</th>
-                        <th>Province</th>
-                      </>
+                      <th>Province</th>
                     )}
                     <th>
-                      <Button variant="ghost" className="consolidated-th-sort" onClick={() => handleSort('city')}>
-                        City
-                        <SortIcon columnKey="city" />
+                      <Button variant="ghost" className="consolidated-th-sort" onClick={() => handleSort('account_type')}>
+                        Position
+                        <SortIcon columnKey="account_type" />
                       </Button>
                     </th>
                     <th>Status</th>
-                    <th className="col-action" style={{ textAlign: 'center' }}>Actions</th>
+                    <th className="col-action">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -515,27 +534,26 @@ export default function Users() {
                           </td>
                           <td>{user.email}</td>
                           {(isSuperAdmin || isRegionalAdmin) && (
-                            <>
-                              <td>{user.account_type || '-'}</td>
-                              <td>{user.province || '-'}</td>
-                            </>
+                            <td>{user.province || '-'}</td>
                           )}
-                          <td>{user.city || '-'}</td>
+                          <td>{user.account_type || '-'}</td>
                           <td>
                             <span className={`users-status users-status-${(user.status || 'Active').toLowerCase()}`}>
                               {user.status || 'Active'}
                             </span>
                           </td>
-                          <td className="col-action" style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
-                            <Button
-                              variant="solid"
-                              color="info"
-                              size="sm"
-                              onClick={() => openViewDetailsModal(user)}
-                              icon={<Eye size={16} />}
-                            >
-                              View details
-                            </Button>
+                          <td className="col-action">
+                            <div className="consolidated-actions">
+                              <Button
+                                variant="solid"
+                                color="info"
+                                size="sm"
+                                onClick={() => openViewDetailsModal(user)}
+                                icon={<Eye size={16} />}
+                              >
+                                View details
+                              </Button>
+                            </div>
                           </td>
                         </tr>
                       )
@@ -672,7 +690,7 @@ export default function Users() {
                   />
                 )}
               </div>
-              {form.accountType === 'LGU' && (
+              {(form.accountType?.includes('LGU') || form.accountType?.includes('Provincial')) && (
                 <div className="users-form-group">
                   <label htmlFor="user-city-lgu">City / Municipality *</label>
                   {isLgu ? (
@@ -871,7 +889,7 @@ export default function Users() {
                     />
                   )}
                 </div>
-                {form.accountType === 'LGU' && (
+                {(form.accountType?.includes('LGU') || form.accountType?.includes('Provincial')) && (
                   <div className="users-form-group">
                     <label htmlFor="edit-user-city-lgu">City / Municipality *</label>
                     {isLgu ? (
@@ -1004,34 +1022,52 @@ export default function Users() {
         </form>
       </HeaderFooterModal>
 
-      <ConfirmationModal
-        isOpen={showSaveConfirm}
-        onClose={() => setShowSaveConfirm(false)}
-        type="warning"
-        title="Confirm Changes"
-        message="Are you sure you want to save these changes to the user account?"
-        confirmText="Confirm"
-        onConfirm={handleConfirmEdit}
-        isLoading={submittingEdit}
-      />
+
 
       <ConfirmationModal
         isOpen={!!tempPasswordResult}
-        onClose={() => setTempPasswordResult(null)}
+        onClose={() => {
+          setTempPasswordResult(null)
+          setCopied(false)
+        }}
         type="success"
-        title="User Created Successfully"
+        title={tempPasswordResult?.emailSent ? "User Created Successfully" : "User Created (Email Failed)"}
         message={tempPasswordResult ? (
-          <div>
-            <p style={{ marginBottom: '1rem' }}>
-              An email with a temporary password has been sent to <strong>{tempPasswordResult.email}</strong>. The user should change it after first login.
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+            {!tempPasswordResult.emailSent && (
+              <div style={{ 
+                background: '#fff7ed', 
+                padding: '0.875rem', 
+                borderRadius: '6px', 
+                border: '1px solid #ffedd5',
+                color: '#9a3412',
+                fontSize: '0.875rem'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', fontWeight: 600 }}>
+                  <WarningCircle size={18} />
+                  Email Delivery Failed
+                </div>
+                The account was created, but the invitation email could not be sent. 
+                {tempPasswordResult.emailError && (
+                  <div style={{ marginTop: '4px', fontSize: '0.75rem', opacity: 0.8 }}>
+                    Error: {tempPasswordResult.emailError}
+                  </div>
+                )}
+                Please check your email service configuration (Brevo) or the user's email address.
+              </div>
+            )}
+
+            <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted, #64748b)' }}>
+              The user will be required to change their password upon their first login.
             </p>
-            <p style={{ fontSize: '0.75rem', color: '#64748b', fontStyle: 'italic' }}>
-              Password rules: at least 8 characters, one uppercase, one lowercase.
-            </p>
+
           </div>
         ) : null}
-        confirmText="Got it"
-        onConfirm={() => setTempPasswordResult(null)}
+        confirmText="Done"
+        onConfirm={() => {
+          setTempPasswordResult(null)
+          setCopied(false)
+        }}
       />
     </div>
   )

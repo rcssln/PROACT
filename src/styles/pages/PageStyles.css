@@ -1006,7 +1006,7 @@
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	z-index: 1000;
+	z-index: 100001;
 	padding: 1.25rem;
 	animation: overlayFadeIn 0.2s ease;
 }
@@ -1743,7 +1743,7 @@ select:focus,
 }
 
 .searchable-select-dropdown.portal {
-	z-index: 9999;
+	z-index: 110000;
 	pointer-events: auto;
 	max-width: 450px;
 	overflow-x: hidden;
@@ -1817,6 +1817,20 @@ select:focus,
 	display: flex;
 	flex-direction: column;
 	flex-shrink: 0;
+}
+
+.modal-sidebar-footer {
+	margin-top: auto;
+	padding: 1.25rem;
+	border-top: 1px solid #e2e8f0;
+}
+
+.modal-version-text {
+	font-size: 0.6875rem;
+	font-weight: 600;
+	color: #94a3b8;
+	letter-spacing: 0.025em;
+	text-transform: uppercase;
 }
 
 .modal-sidebar-tab {

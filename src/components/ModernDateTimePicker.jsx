@@ -126,7 +126,7 @@ const ModernDateTimePicker = ({
         top: `${coords.top}px`,
         left: `${coords.left}px`,
         width: `${coords.width}px`,
-        zIndex: 9999
+        zIndex: 110000
       }}
     >
       <div className="modern-date-picker-header">

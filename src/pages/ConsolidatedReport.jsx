@@ -173,11 +173,17 @@ export default function ConsolidatedReport() {
   }
 
   const saveTextUpdate = () => {
-    if (textEditorModalData) {
-      handleRowChange(textEditorModalData.rowIndex, textEditorModalData.field, textEditorModalData.tempValue)
-    }
-    setShowTextEditorModal(false)
-    setTextEditorModalData(null)
+    showConfirm({
+      title: 'Save Changes',
+      message: 'Are you sure you want to save these text changes?',
+      onConfirm: () => {
+        if (textEditorModalData) {
+          handleRowChange(textEditorModalData.rowIndex, textEditorModalData.field, textEditorModalData.tempValue)
+        }
+        setShowTextEditorModal(false)
+        setTextEditorModalData(null)
+      }
+    })
   }
 
   const handleRowChange = (index, field, value) => {
@@ -213,11 +219,17 @@ export default function ConsolidatedReport() {
   }
 
   const handleDeleteRow = (index) => {
-    const rowToDelete = lguDetailRows[index]
-    if (rowToDelete?.id) {
-      setDeletedRowIds((prev) => [...prev, rowToDelete.id])
-    }
-    setLguDetailRows((prev) => prev.filter((_, i) => i !== index))
+    showConfirm({
+      title: 'Delete Row',
+      message: 'Are you sure you want to delete this row? This will be applied when you save changes.',
+      onConfirm: () => {
+        const rowToDelete = lguDetailRows[index]
+        if (rowToDelete?.id) {
+          setDeletedRowIds((prev) => [...prev, rowToDelete.id])
+        }
+        setLguDetailRows((prev) => prev.filter((_, i) => i !== index))
+      }
+    })
   }
 
   const handleSubmitDetails = async () => {
@@ -225,95 +237,101 @@ export default function ConsolidatedReport() {
     const tableName = CATEGORY_TO_TABLE[selectedCategory]
     if (!tableName) return
 
-    setSubmittingDetails(true)
-    try {
-      // 1. Handle Deletions
-      if (deletedRowIds.length > 0) {
-        const { error: delErr } = await supabase
-          .from(tableName === 'reports' ? 'report_rows' : tableName) // affectedPopulation uses report_rows
-          .delete()
-          .in('id', deletedRowIds)
-        if (delErr) throw delErr
-      }
-
-      // 2. Handle Upserts
-      // For 'affectedPopulation', we need to handle report_id and report_rows separately
-      if (selectedCategory === 'affectedPopulation') {
-        const { data: reports } = await supabase
-          .from('reports')
-          .select('id')
-          .eq('event_id', selectedEvent.id)
-          .eq('situational_report_id', selectedSitRep.id)
-          .limit(1)
-        
-        let reportId
-        if (reports?.length) {
-          reportId = reports[0].id
-        } else {
-          const { data: newReport, error: repErr } = await supabase
-            .from('reports')
-            .insert({ event_id: selectedEvent.id, situational_report_id: selectedSitRep.id })
-            .select('id')
-            .single()
-          if (repErr) throw repErr
-          reportId = newReport.id
-        }
-
-        const toInsert = lguDetailRows.filter(r => !r.id).map(row => {
-          const { id, city: _, ...rest } = row
-          return { ...rest, report_id: reportId }
-        })
-        const toUpdate = lguDetailRows.filter(r => r.id).map(row => {
-          const { city: _, ...rest } = row
-          return { ...rest, report_id: reportId }
-        })
-
-        if (toInsert.length > 0) {
-          const { error: insErr } = await supabase.from('report_rows').insert(toInsert)
-          if (insErr) throw insErr
-        }
-        if (toUpdate.length > 0) {
-          const { error: updErr } = await supabase.from('report_rows').upsert(toUpdate, { onConflict: 'id' })
-          if (updErr) throw updErr
-        }
-
-      } else {
-        const toInsert = lguDetailRows.filter(r => !r.id).map(row => {
-          const { id, ...rest } = row
-          return { 
-            ...rest, 
-            event_id: selectedEvent.id, 
-            situational_report_id: selectedSitRep.id 
+    showConfirm({
+      title: 'Submit Changes',
+      message: 'Are you sure you want to save all changes to this report section?',
+      onConfirm: async () => {
+        setSubmittingDetails(true)
+        try {
+          // 1. Handle Deletions
+          if (deletedRowIds.length > 0) {
+            const { error: delErr } = await supabase
+              .from(tableName === 'reports' ? 'report_rows' : tableName) // affectedPopulation uses report_rows
+              .delete()
+              .in('id', deletedRowIds)
+            if (delErr) throw delErr
           }
-        })
-        const toUpdate = lguDetailRows.filter(r => r.id).map(row => {
-          const { ...rest } = row
-          return { 
-            ...rest, 
-            event_id: selectedEvent.id, 
-            situational_report_id: selectedSitRep.id 
-          }
-        })
 
-        if (toInsert.length > 0) {
-          const { error: insErr } = await supabase.from(tableName).insert(toInsert)
-          if (insErr) throw insErr
-        }
-        if (toUpdate.length > 0) {
-          const { error: updErr } = await supabase.from(tableName).upsert(toUpdate, { onConflict: 'id' })
-          if (updErr) throw updErr
+          // 2. Handle Upserts
+          // For 'affectedPopulation', we need to handle report_id and report_rows separately
+          if (selectedCategory === 'affectedPopulation') {
+            const { data: reports } = await supabase
+              .from('reports')
+              .select('id')
+              .eq('event_id', selectedEvent.id)
+              .eq('situational_report_id', selectedSitRep.id)
+              .limit(1)
+            
+            let reportId
+            if (reports?.length) {
+              reportId = reports[0].id
+            } else {
+              const { data: newReport, error: repErr } = await supabase
+                .from('reports')
+                .insert({ event_id: selectedEvent.id, situational_report_id: selectedSitRep.id })
+                .select('id')
+                .single()
+              if (repErr) throw repErr
+              reportId = newReport.id
+            }
+
+            const toInsert = lguDetailRows.filter(r => !r.id).map(row => {
+              const { id, city: _, ...rest } = row
+              return { ...rest, report_id: reportId }
+            })
+            const toUpdate = lguDetailRows.filter(r => r.id).map(row => {
+              const { city: _, ...rest } = row
+              return { ...rest, report_id: reportId }
+            })
+
+            if (toInsert.length > 0) {
+              const { error: insErr } = await supabase.from('report_rows').insert(toInsert)
+              if (insErr) throw insErr
+            }
+            if (toUpdate.length > 0) {
+              const { error: updErr } = await supabase.from('report_rows').upsert(toUpdate, { onConflict: 'id' })
+              if (updErr) throw updErr
+            }
+
+          } else {
+            const toInsert = lguDetailRows.filter(r => !r.id).map(row => {
+              const { id, ...rest } = row
+              return { 
+                ...rest, 
+                event_id: selectedEvent.id, 
+                situational_report_id: selectedSitRep.id 
+              }
+            })
+            const toUpdate = lguDetailRows.filter(r => r.id).map(row => {
+              const { ...rest } = row
+              return { 
+                ...rest, 
+                event_id: selectedEvent.id, 
+                situational_report_id: selectedSitRep.id 
+              }
+            })
+
+            if (toInsert.length > 0) {
+              const { error: insErr } = await supabase.from(tableName).insert(toInsert)
+              if (insErr) throw insErr
+            }
+            if (toUpdate.length > 0) {
+              const { error: updErr } = await supabase.from(tableName).upsert(toUpdate, { onConflict: 'id' })
+              if (updErr) throw updErr
+            }
+          }
+
+          showSuccess('Success', 'Report details updated successfully.')
+          setDeletedRowIds([]) // Clear deletions
+          handleBack() // return to LGUs list
+        } catch (err) {
+          console.error('Submit details error:', err)
+          alert('Error saving changes: ' + err.message)
+        } finally {
+          setSubmittingDetails(false)
         }
       }
-
-      showSuccess('Success', 'Report details updated successfully.')
-      setDeletedRowIds([]) // Clear deletions
-      handleBack() // return to LGUs list
-    } catch (err) {
-      console.error('Submit details error:', err)
-      alert('Error saving changes: ' + err.message)
-    } finally {
-      setSubmittingDetails(false)
-    }
+    })
   }
 
   const navigateTo = (newView, data = {}) => {
@@ -2189,13 +2207,13 @@ export default function ConsolidatedReport() {
                       </td>
                       <td className="col-action" style={{ width: '250px' }}>
                         <div className="consolidated-actions">
-                          {v.approved_pdf_url ? (
+                          {(v.approved_pdf_url || v.pending_pdf_url) ? (
                             <Button
                               variant="solid"
                               color="info"
                               size="sm"
                               onClick={() => {
-                                setPreviewUrl(v.approved_pdf_url)
+                                setPreviewUrl(v.approved_pdf_url || v.pending_pdf_url)
                                 setShowPreviewModal(true)
                               }}
                               leftIcon={<Eye size={14} />}

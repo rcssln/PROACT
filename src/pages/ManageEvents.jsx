@@ -92,8 +92,6 @@ export default function ManageEvents() {
   const [sortAsc, setSortAsc] = useState(false)
 
   const [showModal, setShowModal] = useState(false)
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-  const [deletingId, setDeletingId] = useState(null)
   const [editingId, setEditingId] = useState(null)
   const [form, setForm] = useState({
     name: '',
@@ -229,52 +227,58 @@ export default function ManageEvents() {
       return null
     }
     
-    // Auto-generate summary if empty
-    let finalSummary = form.summary
-    if (!finalSummary) {
-      if (form.eventType === 'typhoon') {
-        finalSummary = `**TYPHOON ${form.name.toUpperCase()}**\n\n* **Category**: ${form.typhoonCategory || 'Monitoring'}\n* **Status**: ${form.alertStatus.toUpperCase()}`
-      } else if (form.eventType === 'earthquake') {
-        finalSummary = `**EARTHQUAKE: ${form.name}**\n\n* **Magnitude**: ${form.magnitude || '—'}\n* **Intensity**: Intensity ${form.intensity || '—'}\n* **Status**: ${form.alertStatus.toUpperCase()}`
-      } else if (form.eventType === 'tsunami') {
-        finalSummary = `**TSUNAMI: ${form.name}**\n\n* **Alert Level**: ${form.tsunamiAlert || 'Monitoring'}\n* **Wave Height**: ${form.waveHeight ? form.waveHeight + 'm' : '—'}\n* **Status**: ${form.alertStatus.toUpperCase()}`
-      } else if (form.eventType === 'flood') {
-        finalSummary = `**FLOODING: ${form.name}**\n\n* **Flood Level**: ${form.floodLevel || '—'}\n* **Rainfall**: ${form.rainfall || '—'}\n* **Status**: ${form.alertStatus.toUpperCase()}`
-      } else if (form.eventType === 'weather') {
-        finalSummary = `**WEATHER ALERT: ${form.name}**\n\n* **Alert**: ${form.alertLevel || 'Monitoring'}\n* **Status**: ${form.alertStatus.toUpperCase()}`
-      } else {
-        finalSummary = `**EVENT: ${form.name}**\n\n* **Type**: ${form.eventType.toUpperCase()}\n* **Level**: ${form.alertLevel || 'Active'}\n* **Status**: ${form.alertStatus.toUpperCase()}`
-      }
-    }
-
-    const payload = {
-      ...form,
-      summary: finalSummary
-    }
-
-    // If typhoon, sync alertLevel with category to reflect on dashboard meta bar
-    if (form.eventType === 'typhoon') {
-      payload.alertLevel = form.typhoonCategory || 'Monitoring'
-    }
-
-    let result = null
-    if (editingId) {
-      await updateEvent(editingId, payload)
-      result = editingId
-    } else {
-      const newEvent = await addEvent(payload)
-      result = newEvent?.id
-      
-      // Batch assign pending signals
-      if (result && form.pendingSignals) {
-        for (const [prov, sig] of Object.entries(form.pendingSignals)) {
-          await assignSignal(result, prov, '', '', sig)
+    showConfirm({
+      title: editingId ? 'Update Event' : 'Create Event',
+      message: `Are you sure you want to ${editingId ? 'save changes to' : 'create'} the event "${form.name}"?`,
+      onConfirm: async () => {
+        // Auto-generate summary if empty
+        let finalSummary = form.summary
+        if (!finalSummary) {
+          if (form.eventType === 'typhoon') {
+            finalSummary = `**TYPHOON ${form.name.toUpperCase()}**\n\n* **Category**: ${form.typhoonCategory || 'Monitoring'}\n* **Status**: ${form.alertStatus.toUpperCase()}`
+          } else if (form.eventType === 'earthquake') {
+            finalSummary = `**EARTHQUAKE: ${form.name}**\n\n* **Magnitude**: ${form.magnitude || '—'}\n* **Intensity**: Intensity ${form.intensity || '—'}\n* **Status**: ${form.alertStatus.toUpperCase()}`
+          } else if (form.eventType === 'tsunami') {
+            finalSummary = `**TSUNAMI: ${form.name}**\n\n* **Alert Level**: ${form.tsunamiAlert || 'Monitoring'}\n* **Wave Height**: ${form.waveHeight ? form.waveHeight + 'm' : '—'}\n* **Status**: ${form.alertStatus.toUpperCase()}`
+          } else if (form.eventType === 'flood') {
+            finalSummary = `**FLOODING: ${form.name}**\n\n* **Flood Level**: ${form.floodLevel || '—'}\n* **Rainfall**: ${form.rainfall || '—'}\n* **Status**: ${form.alertStatus.toUpperCase()}`
+          } else if (form.eventType === 'weather') {
+            finalSummary = `**WEATHER ALERT: ${form.name}**\n\n* **Alert**: ${form.alertLevel || 'Monitoring'}\n* **Status**: ${form.alertStatus.toUpperCase()}`
+          } else {
+            finalSummary = `**EVENT: ${form.name}**\n\n* **Type**: ${form.eventType.toUpperCase()}\n* **Level**: ${form.alertLevel || 'Active'}\n* **Status**: ${form.alertStatus.toUpperCase()}`
+          }
         }
+
+        const payload = {
+          ...form,
+          summary: finalSummary
+        }
+
+        // If typhoon, sync alertLevel with category to reflect on dashboard meta bar
+        if (form.eventType === 'typhoon') {
+          payload.alertLevel = form.typhoonCategory || 'Monitoring'
+        }
+
+        let resultId = null
+        if (editingId) {
+          await updateEvent(editingId, payload)
+          resultId = editingId
+        } else {
+          const newEvent = await addEvent(payload)
+          resultId = newEvent?.id
+          
+          // Batch assign pending signals
+          if (resultId && form.pendingSignals) {
+            for (const [prov, sig] of Object.entries(form.pendingSignals)) {
+              await assignSignal(resultId, prov, '', '', sig)
+            }
+          }
+        }
+        
+        if (shouldClose) setShowModal(false)
       }
-    }
-    
-    if (shouldClose) setShowModal(false)
-    return result
+    })
+    return null
   }
 
   const handleToggleProvince = (prov) => {
@@ -339,9 +343,15 @@ export default function ManageEvents() {
   }
 
   const confirmDelete = async () => {
-    if (deletingId) await deleteEvent(deletingId)
-    setShowDeleteConfirm(false)
-    setDeletingId(null)
+    showConfirm({
+      title: 'Delete Event?',
+      message: `Are you sure you want to delete "${form.name}"? This action cannot be undone and all associated report data will be permanently removed.`,
+      confirmText: 'Yes, Delete',
+      onConfirm: async () => {
+        if (editingId) await deleteEvent(editingId)
+        setShowModal(false)
+      }
+    })
   }
 
   const handleDeploy = (event) => {
@@ -539,7 +549,7 @@ export default function ManageEvents() {
                  <Button 
                    variant="outline" 
                    color="danger"
-                   onClick={() => { setDeletingId(editingId); setShowDeleteConfirm(true) }}
+                   onClick={confirmDelete}
                    style={{ height: '42px', padding: '0 16px' }}
                    leftIcon={<Trash size={16} />}
                  >
@@ -706,7 +716,10 @@ export default function ManageEvents() {
                     type="text"
                     placeholder="e.g. Typhoon EGAY (DOKSURI)"
                     value={form.name}
-                    onChange={e => setForm({ ...form, name: e.target.value })}
+                    onChange={e => {
+                      const val = e.target.value;
+                      setForm({ ...form, name: val.charAt(0).toUpperCase() + val.slice(1) });
+                    }}
                     style={INPUT_STYLE}
                     disabled={editingId && user.account_type !== 'Regional Admin' && user.account_type !== 'Super Admin'}
                   />
@@ -1008,16 +1021,6 @@ export default function ManageEvents() {
         </div>
       </HeaderFooterModal>
 
-      {/* DELETE CONFIRM */}
-      <ConfirmationModal
-        isOpen={showDeleteConfirm}
-        onClose={() => setShowDeleteConfirm(false)}
-        type="danger"
-        title="Delete Event?"
-        message="Are you sure you want to delete this event? This action cannot be undone and all associated report data will be permanently removed."
-        confirmLabel="Yes, Delete"
-        onConfirm={confirmDelete}
-      />
     </div>
   )
 }

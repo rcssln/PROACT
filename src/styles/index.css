@@ -49,6 +49,30 @@
 	--status-danger: #ef4444;
 	--status-info: #3b82f6;
 
+	--status-success-bg: rgba(16, 185, 129, 0.1);
+	--status-success-text: #059669;
+	--status-success-border: rgba(16, 185, 129, 0.2);
+
+	--status-danger-bg: rgba(239, 68, 68, 0.1);
+	--status-danger-text: #dc2626;
+	--status-danger-border: rgba(239, 68, 68, 0.2);
+
+	--status-warning-bg: rgba(245, 158, 11, 0.1);
+	--status-warning-text: #d97706;
+	--status-warning-border: rgba(245, 158, 11, 0.2);
+
+	--status-info-bg: rgba(59, 130, 246, 0.1);
+	--status-info-text: #2563eb;
+	--status-info-border: rgba(59, 130, 246, 0.2);
+
+	--status-neutral-bg: rgba(100, 116, 139, 0.1);
+	--status-neutral-text: #475569;
+	--status-neutral-border: rgba(100, 116, 139, 0.2);
+
+	--status-pending-bg: rgba(234, 179, 8, 0.1);
+	--status-pending-text: #ca8a04;
+	--status-pending-border: rgba(234, 179, 8, 0.2);
+
 	--glass-bg: rgba(255, 255, 255, 0.45);
 	--glass-border: rgba(255, 255, 255, 0.5);
 	--glass-blur: 24px;
@@ -400,4 +424,19 @@ body {
   letter-spacing: 0.05em;
   font-weight: 700;
   text-transform: uppercase;
+}
+
+/* Spinner Utilities */
+.spinner-small {
+    width: 18px;
+    height: 18px;
+    border: 2px solid rgba(0, 0, 0, 0.1);
+    border-top: 2px solid var(--accent);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
 }

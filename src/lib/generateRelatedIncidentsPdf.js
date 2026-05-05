@@ -30,19 +30,24 @@ export function generateRelatedIncidentsPdf({
   signatories = [],
   reportTitle = '',
 }) {
-  const n = (v) => Number(v ?? 0) || 0
-  // Consistent row highlight colors (match Related Incidents table)
-  const ROW_COLORS = {
-    grandTotal: [255, 255, 160],  // yellow
-    region: [170, 255, 240],     // light green
-    province: [255, 220, 230],   // light pink
-    city: [240, 240, 240],       // gray
-  }
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
-  const margin = 16
-  const pageW = doc.internal.pageSize.getWidth()
-  const pageH = doc.internal.pageSize.getHeight()
-  let y = margin
+  console.log('DEBUG: generateRelatedIncidentsPdf called', { eventName, province, citiesCount: cities?.length, hasCategoryTotals: !!categoryTotals })
+  try {
+    const n = (v) => Number(v ?? 0) || 0
+    const cityList = Array.isArray(cities) ? cities : []
+    
+    // Consistent row highlight colors (match Related Incidents table)
+    const ROW_COLORS = {
+      grandTotal: [255, 255, 160],  // yellow
+      region: [170, 255, 240],     // light green
+      province: [255, 220, 230],   // light pink
+      city: [240, 240, 240],       // gray
+    }
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' })
+    const margin = 16
+    const pageW = doc.internal.pageSize.getWidth()
+    const pageH = doc.internal.pageSize.getHeight()
+    let y = margin
+
 
   // --- Intro Page / Summary Section ---
   if (summaryText) {
@@ -90,19 +95,19 @@ export function generateRelatedIncidentsPdf({
       doc.setFontSize(10)
 
       if (signatories.preparedBy?.length > 0) {
-        const names = signatories.preparedBy.map(s => s.name).join(' AND ')
+        const names = signatories.preparedBy.map(s => s?.name || '').join(' AND ')
         doc.setFont('helvetica', 'normal')
         doc.text(`Prepared by: ${names}`, rightX, y, { align: 'right' })
         y += 15
       }
 
-      if (signatories.notedBy) {
+      if (signatories.notedBy?.name) {
         doc.setFont('helvetica', 'normal')
         doc.text(`Noted by: ${signatories.notedBy.name}`, rightX, y, { align: 'right' })
         y += 15
       }
 
-      if (signatories.approvedBy) {
+      if (signatories.approvedBy?.name) {
         doc.setFont('helvetica', 'normal')
         doc.text(`Approved by: ${signatories.approvedBy.name}`, rightX, y, { align: 'right' })
         y += 15
@@ -120,7 +125,7 @@ export function generateRelatedIncidentsPdf({
     doc.setFillColor(255, 243, 128) // light yellow
     doc.rect(margin, y - 6, pageW - margin * 2, headerH, 'F')
 
-    doc.setFont(undefined, 'bold')
+    doc.setFont('helvetica', 'bold')
     doc.setFontSize(13)
     doc.setTextColor(0, 0, 0)
     doc.text(title, pageW / 2, y, { align: 'center' })
@@ -158,7 +163,7 @@ export function generateRelatedIncidentsPdf({
   if (riTotals.total > 0) {
     addYellowHeader(`${eventName || 'TYPHOON'} - RELATED INCIDENTS`)
 
-    doc.setFont(undefined, 'normal')
+    doc.setFont('helvetica', 'normal')
     doc.setFontSize(9)
     doc.text(
       `The following incidents were reported in some areas of ${province || 'the province'}.`,
@@ -179,7 +184,7 @@ export function generateRelatedIncidentsPdf({
       Number(riTotals.stormSurge || 0),
       Number(riTotals.other || 0),
     ])
-    for (const city of cities) {
+    for (const city of cityList) {
       const cityRi = byCityCategory?.[city]?.relatedIncidents || { total: 0, ongoing: 0, resolved: 0 }
       if (cityRi.total <= 0) continue
       body.push([
@@ -240,7 +245,7 @@ export function generateRelatedIncidentsPdf({
     ensureSpace(50)
     addYellowHeader('AFFECTED POPULATION')
 
-    doc.setFont(undefined, 'normal')
+    doc.setFont('helvetica', 'normal')
     doc.setFontSize(9)
     doc.text(
       `A total of ${affectedFamilies.toLocaleString()} families or ${affectedPersons.toLocaleString()} persons were affected.`,
@@ -282,7 +287,7 @@ export function generateRelatedIncidentsPdf({
       apTotals.out_fam_now || 0,
       apTotals.out_per_now || 0
     ])
-    for (const city of cities) {
+    for (const city of cityList) {
       const cityAp = byCityCategory?.[city]?.affectedPopulation || {}
       const fam = Number(cityAp.families || 0)
       const per = Number(cityAp.persons || 0)
@@ -334,7 +339,7 @@ export function generateRelatedIncidentsPdf({
     ensureSpace(45)
     addYellowHeader('ROADS AND BRIDGES')
 
-    doc.setFont(undefined, 'normal')
+    doc.setFont('helvetica', 'normal')
     doc.setFontSize(9)
     doc.text(
       `A total of ${roadsOnly.toLocaleString()} road sections and ${bridgesOnly.toLocaleString()} bridges were affected.`,
@@ -360,17 +365,17 @@ export function generateRelatedIncidentsPdf({
 
     const rbTotals = categoryTotals?.roadsAndBridges || { total: 0, roads: 0, bridges: 0, passable: 0, notPassable: 0 }
     const rbBody = []
-    rbBody.push(['GRAND TOTAL', rbTotals.roads, rbTotals.bridges, rbTotals.passable, 0]) // Passable column in summary usually refers to roads?
+    rbBody.push(['GRAND TOTAL', rbTotals.roads || 0, rbTotals.bridges || 0, rbTotals.passable || 0, rbTotals.notPassable || 0]) // Passable column in summary usually refers to roads?
     // Wait, the summary table header says:
     // NOT PASSABLE: ROADS | BRIDGES
     // PASSABLE: ROADS | BRIDGES
     // So I should separate them if I have the data.
     // For now I'll just use the total passable/notPassable if that's what we have.
     // Actually, I'll update the summary to be more accurate.
-    for (const city of cities) {
+    for (const city of cityList) {
       const cityRb = byCityCategory?.[city]?.roadsAndBridges || { total: 0, roads: 0, bridges: 0, passable: 0, notPassable: 0 }
       if (cityRb.total <= 0) continue
-      rbBody.push([city === 'N/A' ? 'All areas' : city, cityRb.roads || 0, cityRb.bridges || 0, cityRb.passable || 0, 0])
+      rbBody.push([city === 'N/A' ? 'All areas' : city, cityRb.roads || 0, cityRb.bridges || 0, cityRb.passable || 0, cityRb.notPassable || 0])
     }
 
     autoTable(doc, {
@@ -401,7 +406,7 @@ export function generateRelatedIncidentsPdf({
     ensureSpace(45)
     addYellowHeader('POWER')
 
-    doc.setFont(undefined, 'normal')
+    doc.setFont('helvetica', 'normal')
     doc.setFontSize(9)
     doc.text(
       `A total of ${powerTotal.toLocaleString()} power interruption/outage and ${powerRestored.toLocaleString()} restored.`,
@@ -424,7 +429,7 @@ export function generateRelatedIncidentsPdf({
 
     const prBody = []
     prBody.push(['GRAND TOTAL', powerTotal, powerRestored])
-    for (const city of cities) {
+    for (const city of cityList) {
       const cityP = byCityCategory?.[city]?.power || { total: 0, interrupted: 0, restored: 0 }
       if (cityP.total <= 0) continue
       prBody.push([city === 'N/A' ? 'All areas' : city, cityP.total, cityP.restored])
@@ -456,7 +461,7 @@ export function generateRelatedIncidentsPdf({
     ensureSpace(45)
     addYellowHeader('WATER SUPPLY')
 
-    doc.setFont(undefined, 'normal')
+    doc.setFont('helvetica', 'normal')
     doc.setFontSize(9)
     doc.text(
       `A total of ${waterTotal.toLocaleString()} water interruption/outage and ${waterRestored.toLocaleString()} restored.`,
@@ -479,7 +484,7 @@ export function generateRelatedIncidentsPdf({
 
     const wsBody = []
     wsBody.push(['GRAND TOTAL', waterTotal, waterRestored])
-    for (const city of cities) {
+    for (const city of cityList) {
       const cityW = byCityCategory?.[city]?.waterSupply || { total: 0, interrupted: 0, restored: 0 }
       if (cityW.total <= 0) continue
       wsBody.push([city === 'N/A' ? 'All areas' : city, cityW.total, cityW.restored])
@@ -511,7 +516,7 @@ export function generateRelatedIncidentsPdf({
     ensureSpace(45)
     addYellowHeader('COMMUNICATION LINES')
 
-    doc.setFont(undefined, 'normal')
+    doc.setFont('helvetica', 'normal')
     doc.setFontSize(9)
     doc.text(
       `A total of ${commTotal.toLocaleString()} communication interruption/outage and ${commRestored.toLocaleString()} restored.`,
@@ -534,7 +539,7 @@ export function generateRelatedIncidentsPdf({
 
     const clBody = []
     clBody.push(['GRAND TOTAL', commTotal, commRestored])
-    for (const city of cities) {
+    for (const city of cityList) {
       const cityC = byCityCategory?.[city]?.communicationLines || { total: 0, interrupted: 0, restored: 0 }
       if (cityC.total <= 0) continue
       clBody.push([city === 'N/A' ? 'All areas' : city, cityC.total, cityC.restored])
@@ -569,7 +574,7 @@ export function generateRelatedIncidentsPdf({
     ensureSpace(45)
     addYellowHeader('DAMAGED HOUSES')
 
-    doc.setFont(undefined, 'normal')
+    doc.setFont('helvetica', 'normal')
     doc.setFontSize(9)
     doc.text(
       `A total of ${damagedTotal.toLocaleString()} houses were damaged: ${totallyDamaged.toLocaleString()} totally and ${partiallyDamaged.toLocaleString()} partially.`,
@@ -590,7 +595,7 @@ export function generateRelatedIncidentsPdf({
     const dhTotals = categoryTotals?.damagedHouses || { total: 0, totally: 0, partially: 0, amount: 0 }
     const dhBody = []
     dhBody.push(['GRAND TOTAL', dhTotals.totally, dhTotals.partially, dhTotals.total, dhTotals.amount])
-    for (const city of cities) {
+    for (const city of cityList) {
       const cityH = byCityCategory?.[city]?.damagedHouses || { total: 0, totally: 0, partially: 0, amount: 0 }
       if (cityH.total <= 0) continue
       dhBody.push([city === 'N/A' ? 'All areas' : city, cityH.totally, cityH.partially, cityH.total, cityH.amount])
@@ -622,7 +627,7 @@ export function generateRelatedIncidentsPdf({
     ensureSpace(45)
     addYellowHeader('CLASS SUSPENSION')
 
-    doc.setFont(undefined, 'normal')
+    doc.setFont('helvetica', 'normal')
     doc.setFontSize(9)
     doc.text('Classes were suspended in the following regions:', pageW / 2, y, { align: 'center' })
     y += 8
@@ -639,7 +644,7 @@ export function generateRelatedIncidentsPdf({
 
     const csBody = []
     csBody.push(['GRAND TOTAL', classTotal])
-    for (const city of cities) {
+    for (const city of cityList) {
       const n = Number(byCityCategory?.[city]?.classSuspension || 0)
       if (n <= 0) continue
       csBody.push([city === 'N/A' ? 'All areas' : city, n])
@@ -668,7 +673,7 @@ export function generateRelatedIncidentsPdf({
     ensureSpace(45)
     addYellowHeader('WORK SUSPENSION')
 
-    doc.setFont(undefined, 'normal')
+    doc.setFont('helvetica', 'normal')
     doc.setFontSize(9)
     doc.text('Work were suspended in the following regions:', pageW / 2, y, { align: 'center' })
     y += 8
@@ -683,7 +688,7 @@ export function generateRelatedIncidentsPdf({
 
     const wsuspBody = []
     wsuspBody.push(['GRAND TOTAL', workTotal])
-    for (const city of cities) {
+    for (const city of cityList) {
       const n = Number(byCityCategory?.[city]?.workSuspension || 0)
       if (n <= 0) continue
       wsuspBody.push([city === 'N/A' ? 'All areas' : city, n])
@@ -711,7 +716,7 @@ export function generateRelatedIncidentsPdf({
     ensureSpace(45)
     addYellowHeader('DECLARATION OF STATE OF CALAMITY')
 
-    doc.setFont(undefined, 'normal')
+    doc.setFont('helvetica', 'normal')
     doc.setFontSize(9)
     doc.text(
       `A total of ${socTotal.toLocaleString()} cities/municipalities were declared under the State of Calamity.`,
@@ -728,7 +733,7 @@ export function generateRelatedIncidentsPdf({
 
     const socBody = []
     socBody.push(['GRAND TOTAL', socTotal])
-    for (const city of cities) {
+    for (const city of cityList) {
       const n = Number(byCityCategory?.[city]?.stateOfCalamity || 0)
       if (n <= 0) continue
       socBody.push([city === 'N/A' ? 'All areas' : city, n])
@@ -757,7 +762,7 @@ export function generateRelatedIncidentsPdf({
     addYellowHeader('PRE-EMPTIVE EVACUATION')
 
     // const evacPersons = evacFamilies * 5
-    doc.setFont(undefined, 'normal')
+    doc.setFont('helvetica', 'normal')
     doc.setFontSize(9)
     doc.text(
       `A total of ${evacFamilies.toLocaleString()} families or ${evacPersons.toLocaleString()} persons were pre-emptively evacuated:`,
@@ -775,7 +780,7 @@ export function generateRelatedIncidentsPdf({
 
     const peBody = []
     peBody.push(['GRAND TOTAL', evacFamilies, evacPersons])
-    for (const city of cities) {
+    for (const city of cityList) {
       const cityPe = byCityCategory?.[city]?.preEmptiveEvacuation || { families: 0, persons: 0 }
       if (cityPe.families <= 0 && cityPe.persons <= 0) continue
       peBody.push([city === 'N/A' ? 'All areas' : city, cityPe.families, cityPe.persons])
@@ -808,7 +813,7 @@ export function generateRelatedIncidentsPdf({
     ensureSpace(55)
     addYellowHeader('ASSISTANCE PROVIDED TO AFFECTED FAMILIES')
 
-    doc.setFont(undefined, 'normal')
+    doc.setFont('helvetica', 'normal')
     doc.setFontSize(9)
     doc.text(
       `A total of ${assistanceTotal.toLocaleString()} instances of assistance were provided with a total cost of PHP ${costTotal.toLocaleString()}.`,
@@ -842,7 +847,7 @@ export function generateRelatedIncidentsPdf({
       apvBody.push(['GRAND TOTAL', requiring, fmtMoney(cost), assisted, fmtPct(pct)])
     }
 
-    for (const city of cities) {
+    for (const city of cityList) {
       const cityAs = byCityCategory?.[city]?.assistanceProvided || { total: 0, cost: 0 }
       const requiring = cityAs.total
       if (requiring <= 0) continue
@@ -880,14 +885,14 @@ export function generateRelatedIncidentsPdf({
   if (alTotal > 0) {
     ensureSpace(45)
     addYellowHeader('ASSISTANCE FROM LGUS/AGENCIES')
-    doc.setFont(undefined, 'normal')
+    doc.setFont('helvetica', 'normal')
     doc.setFontSize(9)
     doc.text(`A total of ${alTotal} assistance records from LGUs/Agencies with a total amount of PHP ${alTotalAmount.toLocaleString()}.`, pageW / 2, y, { align: 'center' })
     y += 10
 
     const alHead = [['PROVINCE', 'RECORDS', 'TOTAL AMOUNT']]
     const alBody = [['GRAND TOTAL', alTotal, alTotalAmount.toLocaleString()]]
-    for (const city of cities) {
+    for (const city of cityList) {
       const cityDetails = assistanceLgusDetails.filter(r => r.city === city || (city === 'N/A' && r.city === 'Unknown'))
       if (cityDetails.length === 0) continue
       const cityAmt = cityDetails.reduce((s, r) => s + (Number(r.amount) || 0), 0)
@@ -908,14 +913,14 @@ export function generateRelatedIncidentsPdf({
   if (agricultureDamageDetails.length > 0) {
     ensureSpace(45)
     addYellowHeader('AGRICULTURE DAMAGE')
-    doc.setFont(undefined, 'normal')
+    doc.setFont('helvetica', 'normal')
     doc.setFontSize(9)
     doc.text(`Affected farmers: ${adTotalFarmers.toLocaleString()}. Total production loss: PHP ${adTotalLoss.toLocaleString()}.`, pageW / 2, y, { align: 'center' })
     y += 10
 
     const adHead = [['PROVINCE', 'FARMERS AFFECTED', 'LOSS VALUE']]
     const adBody = [['GRAND TOTAL', adTotalFarmers.toLocaleString(), adTotalLoss.toLocaleString()]]
-    for (const city of cities) {
+    for (const city of cityList) {
       const cityDetails = agricultureDamageDetails.filter(r => r.city === city || (city === 'N/A' && r.city === 'Unknown'))
       if (cityDetails.length === 0) continue
       const cityFarmers = cityDetails.reduce((s, r) => s + (Number(r.farmers_affected) || 0), 0)
@@ -936,14 +941,14 @@ export function generateRelatedIncidentsPdf({
   if (infrastructureDamageDetails.length > 0) {
     ensureSpace(45)
     addYellowHeader('INFRASTRUCTURE DAMAGE')
-    doc.setFont(undefined, 'normal')
+    doc.setFont('helvetica', 'normal')
     doc.setFontSize(9)
     doc.text(`Total estimated cost of infrastructure damage: PHP ${idTotalCost.toLocaleString()}.`, pageW / 2, y, { align: 'center' })
     y += 10
 
     const idHead = [['PROVINCE', 'ITEMS DAMAGED', 'TOTAL COST']]
     const idBody = [['GRAND TOTAL', infrastructureDamageDetails.length, idTotalCost.toLocaleString()]]
-    for (const city of cities) {
+    for (const city of cityList) {
       const cityDetails = infrastructureDamageDetails.filter(r => r.city === city || (city === 'N/A' && r.city === 'Unknown'))
       if (cityDetails.length === 0) continue
       const cityCost = cityDetails.reduce((s, r) => s + (Number(r.cost) || 0), 0)
@@ -973,7 +978,7 @@ export function generateRelatedIncidentsPdf({
 
   // Landscape title at top left (consistent with Affected Population)
   const addLandscapeTitle = (title, startY) => {
-    doc.setFont(undefined, 'bold')
+    doc.setFont('helvetica', 'bold')
     doc.setFontSize(13)
     doc.setTextColor(0, 0, 0)
     doc.text(title, margin, startY)
@@ -1801,7 +1806,7 @@ export function generateRelatedIncidentsPdf({
     })
 
     ly = doc.lastAutoTable.finalY + 6
-    doc.setFont(undefined, 'normal')
+    doc.setFont('helvetica', 'normal')
     doc.setFontSize(8)
     doc.text(`Source: PDRRMO ${province || ''}`, margin, ly)
     lastLandscapePageNumber = doc.internal.getCurrentPageInfo().pageNumber
@@ -1960,7 +1965,7 @@ export function generateRelatedIncidentsPdf({
     })
 
     ly = doc.lastAutoTable.finalY + 6
-    doc.setFont(undefined, 'normal')
+    doc.setFont('helvetica', 'normal')
     doc.setFontSize(8)
     doc.text('Source: PDRRMOs', margin, ly)
     lastLandscapePageNumber = doc.internal.getCurrentPageInfo().pageNumber
@@ -3303,6 +3308,14 @@ export function generateRelatedIncidentsPdf({
 
   addPageNumbers()
 
-  return doc
+    return doc
+  } catch (err) {
+    console.error('CRITICAL ERROR in generateRelatedIncidentsPdf:', err)
+    // Return a minimal PDF with error message instead of crashing
+    const errorDoc = new jsPDF()
+    errorDoc.text('An error occurred while generating the PDF report.', 20, 30)
+    errorDoc.text('Error: ' + (err.message || String(err)), 20, 40)
+    return errorDoc
+  }
 }
 

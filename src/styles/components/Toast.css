@@ -3,7 +3,7 @@
   position: fixed;
   top: 32px;
   right: 32px;
-  z-index: 99999;
+  z-index: 120000;
   display: flex;
   flex-direction: column;
   gap: 16px;

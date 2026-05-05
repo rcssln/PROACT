@@ -61,7 +61,8 @@ async function sendBrevoEmail(
 ): Promise<void> {
   const senderEmail = Deno.env.get('BREVO_SENDER_EMAIL')
   if (!senderEmail || !senderEmail.includes('@')) {
-    throw new Error('BREVO_SENDER_EMAIL not set. Add a verified sender email in Edge Function secrets.')
+    console.error('BREVO_SENDER_EMAIL is missing or invalid')
+    throw new Error('BREVO_SENDER_EMAIL not set or invalid. Add a verified sender email in Edge Function secrets.')
   }
   const senderName = Deno.env.get('BREVO_SENDER_NAME') || 'PROACT'
 
@@ -94,31 +95,46 @@ async function sendBrevoEmail(
   })
 
   if (!res.ok) {
-    const err = await res.text()
-    throw new Error(`Brevo error ${res.status}: ${err}`)
+    const errText = await res.text()
+    let errorMessage = `Brevo error ${res.status}`
+    try {
+      const errJson = JSON.parse(errText)
+      errorMessage += `: ${errJson.message || errText}`
+    } catch {
+      errorMessage += `: ${errText}`
+    }
+    throw new Error(errorMessage)
   }
 }
 
 // ---------------------------------------------------------------------------
-// CORS — restrict to your deployed app origin.
-// Set the APP_ORIGIN secret in Supabase: supabase secrets set APP_ORIGIN=https://your-domain.com
+// CORS — dynamically allow the request origin to support local IPs and dev environments.
+// For production, you can still restrict this via the APP_ORIGIN secret.
 // ---------------------------------------------------------------------------
-const ALLOWED_ORIGIN = Deno.env.get('APP_ORIGIN') || 'http://localhost:5173'
+const APP_ORIGIN = Deno.env.get('APP_ORIGIN')
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Max-Age': '86400',
+function getCorsHeaders(req: Request) {
+  const origin = req.headers.get('Origin')
+  const allowedOrigin = APP_ORIGIN || origin || '*'
+  
+  return {
+    'Access-Control-Allow-Origin': allowedOrigin,
+    'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Max-Age': '86400',
+  }
 }
 
 // ---------------------------------------------------------------------------
 // Main handler
 // ---------------------------------------------------------------------------
 Deno.serve(async (req: Request) => {
+  const corsHeaders = getCorsHeaders(req)
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: corsHeaders })
   }
+
 
   if (req.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), {
@@ -214,14 +230,6 @@ Deno.serve(async (req: Request) => {
       )
     }
 
-    const brevoKey = Deno.env.get('BREVO_API_KEY')
-    if (!brevoKey) {
-      return new Response(
-        JSON.stringify({ error: 'Email service not configured.' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-
     const tempPassword = generateTemporaryPassword()
     // Per-user salt: use the new user's email (mirrors client-side hashPassword logic)
     const passwordHash = await hashPassword(tempPassword, email)
@@ -231,7 +239,7 @@ Deno.serve(async (req: Request) => {
       first_name: firstName,
       last_name: lastName,
       phone: null,
-      city: accountType === 'LGU' ? (city || null) : null,
+      city: (accountType === 'LGU' || String(accountType || '').includes('Provincial')) ? (city || null) : null,
       password_hash: passwordHash,
       account_type: accountType,
       province,
@@ -251,16 +259,42 @@ Deno.serve(async (req: Request) => {
       )
     }
 
-    await sendBrevoEmail(brevoKey, email, `${firstName} ${lastName}`.trim() || email, tempPassword)
+    let emailSent = false
+    let emailError = null
+
+    // -------------------------------------------------------------------------
+    // Optional: Email notification via Brevo
+    // -------------------------------------------------------------------------
+    const brevoKey = Deno.env.get('BREVO_API_KEY')
+    if (brevoKey) {
+      try {
+        await sendBrevoEmail(brevoKey, email, `${firstName} ${lastName}`.trim() || email, tempPassword)
+        emailSent = true
+      } catch (err) {
+        console.error('sendBrevoEmail failed:', err)
+        emailError = err instanceof Error ? err.message : String(err)
+      }
+    } else {
+      console.warn('BREVO_API_KEY is missing. Email skipped.')
+      emailError = 'Email service not configured (missing BREVO_API_KEY secret).'
+    }
 
     return new Response(
-      JSON.stringify({ success: true, message: 'User created and email sent' }),
+      JSON.stringify({ 
+        success: true, 
+        message: emailSent ? 'User created and email sent' : 'User created (email service unconfigured)',
+        emailSent,
+        emailError
+      }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
+
+
   } catch (err) {
     console.error('create-user-invite error:', err)
+    const errMsg = err instanceof Error ? err.message : 'An unexpected error occurred.'
     return new Response(
-      JSON.stringify({ error: 'An unexpected error occurred.' }),
+      JSON.stringify({ error: errMsg }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
   }

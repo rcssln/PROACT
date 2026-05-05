@@ -43,7 +43,17 @@ export function EventProvider({ children, user }) {
   const [pendingApprovalsCount, setPendingApprovalsCount] = useState(0)
   const [eventDeployments, setEventDeployments] = useState([])
   const [successModal, setSuccessModal] = useState({ show: false, title: '', message: '' })
-  const [confirmModal, setConfirmModal] = useState({ show: false, title: '', message: '', onConfirm: null, confirmText: 'Confirm', cancelText: 'Cancel', type: 'danger' })
+  const [confirmModal, setConfirmModal] = useState({ 
+    show: false, 
+    title: '', 
+    message: '', 
+    onConfirm: null, 
+    confirmText: 'Confirm', 
+    cancelText: 'Cancel', 
+    type: 'danger',
+    isLoading: false,
+    onCancel: null
+  })
   const [toast, setToast] = useState({ show: false, title: '', message: '', type: 'info' })
   const [eventSignals, setEventSignals] = useState([])
   const [loadingSignals, setLoadingSignals] = useState(false)
@@ -75,7 +85,8 @@ export function EventProvider({ children, user }) {
       onConfirm: options.onConfirm || null,
       confirmText: String(options.confirmText || 'Confirm'),
       cancelText: String(options.cancelText || 'Cancel'),
-      type: options.type || 'danger'
+      type: options.type || 'danger',
+      onCancel: options.onCancel || null
     })
   }, [])
 
@@ -95,8 +106,26 @@ export function EventProvider({ children, user }) {
     setToast(prev => ({ ...prev, show: false }))
   }, [])
 
-  const handleConfirmAction = useCallback(() => {
-    if (confirmModal.onConfirm) confirmModal.onConfirm()
+  const handleConfirmAction = useCallback(async () => {
+    if (!confirmModal.onConfirm) {
+      closeConfirm()
+      return
+    }
+    
+    setConfirmModal(prev => ({ ...prev, isLoading: true }))
+    try {
+      await confirmModal.onConfirm()
+      closeConfirm()
+    } catch (err) {
+      console.error('Confirm action failed:', err)
+      setConfirmModal(prev => ({ ...prev, isLoading: false }))
+    }
+  }, [confirmModal, closeConfirm])
+
+  const handleCancelAction = useCallback(() => {
+    if (confirmModal.onCancel) {
+      confirmModal.onCancel()
+    }
     closeConfirm()
   }, [confirmModal, closeConfirm])
 
@@ -282,8 +311,10 @@ export function EventProvider({ children, user }) {
       // Scope the count to match each admin's visibility:
       if (user.account_type === 'Provincial Admin') {
         query = query.eq('province', user.province)
+          .in('account_type', ['Provincial Admin', 'Provincial Approver', 'Provincial', 'LGU Admin', 'LGU'])
       } else if (user.account_type === 'LGU Admin') {
         query = query.eq('city', user.city)
+          .in('account_type', ['LGU Admin', 'LGU'])
       }
       // Regional Admin / Super Admin → count all (no extra filter)
 
@@ -730,8 +761,12 @@ export function EventProvider({ children, user }) {
   const addEvent = useCallback(async (event) => {
     if (!supabase) return null
     try {
+      const capitalizedName = event.name 
+        ? event.name.charAt(0).toUpperCase() + event.name.slice(1) 
+        : 'Untitled Event'
+
       const payload = {
-        name: event.name || 'Untitled Event',
+        name: capitalizedName,
         color: event.color || '#6366f1',
         start_date: event.startDate || null,
         end_date: event.endDate || null,
@@ -786,7 +821,11 @@ export function EventProvider({ children, user }) {
     if (!supabase) return
     try {
       const payload = {}
-      if (updates.name !== undefined) payload.name = updates.name
+      if (updates.name !== undefined) {
+        payload.name = updates.name 
+          ? updates.name.charAt(0).toUpperCase() + updates.name.slice(1) 
+          : 'Untitled Event'
+      }
       if (updates.color !== undefined) payload.color = updates.color
       if (updates.startDate !== undefined) payload.start_date = updates.startDate || null
       if (updates.endDate !== undefined) payload.end_date = updates.endDate || null
@@ -1426,13 +1465,14 @@ export function EventProvider({ children, user }) {
 
       <ConfirmationModal
         isOpen={confirmModal.show}
-        onClose={closeConfirm}
+        onClose={handleCancelAction}
         title={confirmModal.title}
         message={confirmModal.message}
-        type={confirmModal.type === 'danger' ? 'danger' : 'primary'}
         confirmText={confirmModal.confirmText}
         cancelText={confirmModal.cancelText}
         onConfirm={handleConfirmAction}
+        type={confirmModal.type === 'danger' ? 'danger' : 'primary'}
+        isLoading={confirmModal.isLoading}
       />
       {toast.show && createPortal(
         <div className="notification-toast-container">

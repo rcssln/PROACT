@@ -137,7 +137,7 @@ export default function Sidebar({ user, onLogout, onUserUpdate, isCollapsed, onT
             </NavLink>
           </div>
         )}
-        {!isRegional && (
+        {!isRegional && accountType !== 'Provincial Approver' && (
           <NavLink
             to="/add-report"
             className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}

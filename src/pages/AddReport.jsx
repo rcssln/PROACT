@@ -40,6 +40,24 @@ const CATEGORY_NAMES = Object.keys(CATEGORY_LABELS).map(key => ({
   label: CATEGORY_LABELS[key]
 }))
 
+const CATEGORY_TO_TABLE = {
+  evacuation: 'reports',
+  assistance_lgus: 'assistance_lgus_agencies_reports',
+  agriculture: 'agriculture_damage_reports',
+  infrastructure: 'infrastructure_damage_reports',
+  power: 'power_reports',
+  water: 'water_supply_reports',
+  roads: 'roads_and_bridges',
+  communication: 'communication_lines_reports',
+  incidents: 'related_incidents',
+  houses: 'damaged_houses_reports',
+  class: 'class_suspension_reports',
+  work: 'work_suspension_reports',
+  calamity: 'declaration_state_of_calamity_reports',
+  preemptive: 'pre_emptive_evacuation_reports',
+  assistance: 'assistance_provided_reports'
+}
+
 
 const PAGE_SIZES = [10, 25, 50]
 
@@ -125,12 +143,14 @@ const rowToDb = (row) => ({
   outside_persons_cum: parseInt(row.outsidePersonsCum) || 0,
   outside_persons_now: parseInt(row.outsidePersonsNow) || 0,
   status: row.status || '',
+  remarks: row.remarks || '',
 })
 
 // Convert DB row to app format
 const dbRowToApp = (row, category = 'evacuation') => {
   const base = {
     id: row.id,
+    report_id: row.report_id, // Preserve for Affected Population
     city: row.city || getCityForBarangay(row.barangay) || '',
     barangay: row.barangay || '',
     remarks: row.remarks || ''
@@ -452,6 +472,7 @@ export default function AddReport() {
   const [textEditorModalData, setTextEditorModalData] = useState(null)
   const [showTextEditorModal, setShowTextEditorModal] = useState(false)
   const [editingItemId, setEditingItemId] = useState(null)
+  const [deletedRowIds, setDeletedRowIds] = useState([])
 
   // New Sit Rep Modal State
   const [showNewSitRepModal, setShowNewSitRepModal] = useState(false)
@@ -496,6 +517,7 @@ export default function AddReport() {
   const isLGU = user?.account_type === 'LGU' || user?.account_type === 'LGU Admin'
   const isProvincialApprover = user?.account_type === 'Provincial Approver'
   const isRegional = user?.account_type === 'Regional' || user?.account_type === 'Regional Admin'
+  console.log('DEBUG: AddReport Render', { view, showPdfEditModal, hasData: !!generatedSummaryData })
   const isSuperAdmin = user?.account_type === 'Super Admin' || user?.role === 'Super Admin'
   
   const userProvince = useMemo(() => {
@@ -553,118 +575,109 @@ export default function AddReport() {
       }
 
       const allPromises = tables.map(async (t) => {
-        if (t.name === 'report_rows') {
-          const { data: reportsData } = await supabase.from('reports').select('id, submitted_at').eq('situational_report_id', currentSituationalReport.id)
-          if (!reportsData?.length) return []
-          const { data: rowsData } = await supabase.from('report_rows').select('*').in('report_id', reportsData.map(r => r.id))
-          return (rowsData || []).map(r => {
-            const city = getCityForBarangay(r.barangay)
-            return {
+        try {
+          if (t.name === 'report_rows') {
+            const { data: reportsData, error: reportsError } = await supabase
+              .from('reports')
+              .select('*')
+              .eq('situational_report_id', currentSituationalReport.id)
+            
+            if (reportsError) throw reportsError
+            if (!reportsData?.length) return []
+            
+            const reportIds = reportsData.map(r => r.id)
+            const { data: rowsData, error: rowsError } = await supabase
+              .from('report_rows')
+              .select('*')
+              .in('report_id', reportIds)
+            
+            if (rowsError) throw rowsError
+
+            return reportsData.map(r => {
+              const rows = (rowsData || []).filter(row => row.report_id === r.id)
+              if (rows.length === 0) return null
+              
+              const firstRow = rows[0]
+              const city = getCityForBarangay(firstRow.barangay)
+              const barangays = [...new Set(rows.map(row => row.barangay).filter(Boolean))]
+              
+              return {
+                id: r.id,
+                category: t.cat,
+                categoryLabel: t.label,
+                tableName: 'reports',
+                city: city,
+                barangay: firstRow.barangay,
+                location: barangays.length > 1 
+                  ? `${city || ''}: ${barangays.length} Barangays` 
+                  : (city ? `${city}: ${firstRow.barangay}` : firstRow.barangay),
+                classification: 'Affected Population',
+                summary: `${rows.reduce((sum, row) => sum + (row.affected_families || 0), 0)} Families Affected`,
+                timestamp: r.submitted_at || r.created_at,
+                status: 'Reported',
+                all_rows: rows.map(row => ({ ...row, report_id: r.id }))
+              }
+            }).filter(Boolean)
+          } else if (t.name === 'roads_and_bridges') {
+            const { data, error } = await supabase
+              .from(t.name)
+              .select('*')
+              .eq('situational_report_id', currentSituationalReport.id)
+            
+            if (error) throw error
+            if (!data?.length) return []
+
+            const { data: sectionsData } = await supabase
+              .from('roads_and_bridges_sections')
+              .select('*')
+              .in('report_id', data.map(r => r.id))
+
+            const rowsWithSections = data.map(r => ({
               ...r,
-              category: t.cat,
-              categoryLabel: t.label,
-              tableName: 'report_rows',
-              location: city ? `${city}: ${r.barangay}` : r.barangay,
-              classification: 'Affected Pop',
-              summary: `Families: ${r.affected_families || 0}, Persons: ${r.affected_persons || 0}`,
-              timestamp: reportsData.find(rep => rep.id === r.report_id)?.submitted_at,
-              status: r.status || 'Resolved'
-            }
-          })
-        } else if (t.name === 'roads_and_bridges') {
-          const { data } = await supabase.from(t.name).select('*, roads_and_bridges_sections(name)').eq('situational_report_id', currentSituationalReport.id)
-          return (data || []).map(r => {
-            const city = r.city || getCityForBarangay(r.barangay)
-            return {
-              ...r,
+              roads_and_bridges_sections: (sectionsData || []).filter(s => s.report_id === r.id)
+            }))
+
+            return [{
+              id: `group-${t.cat}`,
               category: t.cat,
               categoryLabel: t.label,
               tableName: t.name,
-              location: city ? `${city}: ${r.barangay}` : r.barangay,
-              classification: r.classification,
-              summary: getSectionNames(r),
-              timestamp: r.created_at || r.submitted_at,
-              status: r.status || 'Resolved'
-            }
-          })
-        } else {
-          const { data } = await supabase.from(t.name).select('*').eq('situational_report_id', currentSituationalReport.id)
-          return (data || []).map(r => {
-            const city = r.city || getCityForBarangay(r.barangay)
-            let loc = city ? `${city}: ${r.barangay}` : (r.barangay || r.location || 'N/A')
-            let cls = ''
-            let sum = ''
+              city: data[0].city || getCityForBarangay(data[0].barangay),
+              barangay: data[0].barangay,
+              location: [...new Set(data.map(r => r.city || getCityForBarangay(r.barangay)).filter(Boolean))].join(', ') || 'Multiple Locations',
+              classification: 'Infrastructure',
+              summary: `${data.length} Roads/Bridges Reported`,
+              timestamp: data[0].created_at,
+              status: data[0].status || 'Ongoing',
+              all_rows: rowsWithSections
+            }]
+          } else {
+            const { data, error } = await supabase
+              .from(t.name)
+              .select('*')
+              .eq('situational_report_id', currentSituationalReport.id)
+            
+            if (error) throw error
+            if (!data?.length) return []
 
-            switch (t.cat) {
-              case 'power':
-                cls = r.service_provider || 'N/A'
-                sum = `${r.status || 'N/A'} (Outage: ${r.date_time_interruption || 'N/A'}, Restored: ${r.date_time_restored || 'N/A'})`
-                break
-              case 'water':
-                cls = r.service_provider || 'N/A'
-                sum = `${r.status || 'N/A'} (Interruption: ${r.date_time_interruption || 'N/A'}, Restored: ${r.date_time_restored || 'N/A'})`
-                break
-              case 'communication':
-                cls = r.telecompany || 'N/A'
-                sum = `${r.status_of_communication || 'N/A'} (2G: ${r.pct_coverage_2g}%, 3G: ${r.pct_coverage_3g}%, 4G: ${r.pct_coverage_4g}%)`
-                break
-              case 'incidents':
-                cls = r.type_of_incident || 'N/A'
-                sum = `${r.description || 'N/A'} - Actions: ${r.actions_taken || 'N/A'}`
-                break
-              case 'houses':
-                cls = 'Residential'
-                sum = `Totally: ${r.totally_damaged || 0}, Partially: ${r.partially_damaged || 0}, Total: ${r.grand_total || 0}, Cost: PHP ${r.amount_php || 0}`
-                break
-              case 'class':
-                cls = r.level_from || 'N/A'
-                sum = `${r.type || 'N/A'} Suspension (Resumed: ${r.date_resumed || 'N/A'})`
-                break
-              case 'work':
-                cls = r.office_level || 'N/A' 
-                sum = `${r.type || 'N/A'} Suspension (Resumed: ${r.date_resumed || 'N/A'})`
-                break
-              case 'calamity':
-                cls = `Reso: ${r.resolution_number || 'N/A'}`
-                sum = `${r.type || 'N/A'} (Date: ${r.resolution_date || 'N/A'}, Count: ${r.count_soc || 0})`
-                break
-              case 'preemptive':
-                cls = 'Evacuation'
-                sum = `Families: ${r.families || 0}, Persons: ${r.total || 0} (M: ${r.male_count || 0}, F: ${r.female_count || 0})`
-                break
-              case 'assistance':
-                cls = r.needs || 'N/A'
-                sum = `Assisted: ${r.no_families_assisted || 0} families, Total Cost: PHP ${r.fnfi_amount || 0} (${r.fnfi_qty || 0} ${r.fnfi_unit || ''} from ${r.fnfi_source || 'N/A'})`
-                break
-              case 'assistance_lgus':
-                cls = r.source || 'N/A'
-                sum = `${r.type || 'N/A'} - Qty: ${r.qty || 0} ${r.unit || ''} @ ${r.cost_per_unit || 0} (Total: ${r.amount || 0})`
-                break
-              case 'agriculture':
-                cls = r.classification || 'N/A'
-                sum = `${r.commodity_type || 'N/A'} - Farmers Affected: ${r.farmers_affected || 0}, Total Area: ${r.area_total || 0}ha, Value Loss: PHP ${r.production_loss_value || 0}`
-                break
-              case 'infrastructure':
-                cls = r.type || 'N/A'
-                sum = `${r.infrastructure_name || 'N/A'} - Status: ${r.status || 'Ongoing'}, Damaged: ${r.number_damaged || 0}, Cost: PHP ${r.cost || 0}`
-                break
-              default:
-                cls = 'N/A'
-                sum = r.subject || 'N/A'
-            }
-
-            return {
-              ...r,
+            return [{
+              id: `group-${t.cat}`,
               category: t.cat,
               categoryLabel: t.label,
               tableName: t.name,
-              location: loc,
-              classification: cls,
-              summary: sum,
-              timestamp: r.created_at || r.submitted_at,
-              status: r.status || 'Resolved'
-            }
-          })
+              city: data[0].city || getCityForBarangay(data[0].barangay),
+              barangay: data[0].barangay,
+              location: [...new Set(data.map(r => r.city || getCityForBarangay(r.barangay)).filter(Boolean))].join(', ') || 'Multiple Locations',
+              classification: t.label,
+              summary: `${data.length} Entries`,
+              timestamp: data[0].created_at || data[0].submitted_at,
+              status: data[0].status || 'Reported',
+              all_rows: data
+            }]
+          }
+        } catch (err) {
+          console.error(`Error fetching category ${t.cat}:`, err)
+          return []
         }
       })
 
@@ -676,24 +689,20 @@ export default function AddReport() {
       const lguCity = user?.city
       let finalReports = merged
       if (isLgu && lguCity) {
-        // Build a set of valid barangays for this LGU's city
+        const lguCityLow = lguCity.toLowerCase()
         const lguBarangays = new Set(
           getBarangaysForCity(lguCity).map(b => b.toLowerCase())
         )
-        if (lguBarangays.size > 0) {
-          // Filter by barangay membership
-          finalReports = merged.filter(r => {
-            const brgy = (r.barangay || '').toLowerCase()
-            return brgy && lguBarangays.has(brgy)
-          })
-        } else {
-          // Fallback: compare city names case-insensitively
-          const lguCityLow = lguCity.toLowerCase()
-          finalReports = merged.filter(r => {
-            const reportCity = (r.city || getCityForBarangay(r.barangay) || '').toLowerCase()
-            return reportCity === lguCityLow
-          })
-        }
+        
+        finalReports = merged.filter(r => {
+          // 1. Check if city matches directly (for grouped entries or city-wide reports)
+          const reportCity = (r.city || getCityForBarangay(r.barangay) || '').toLowerCase()
+          if (reportCity === lguCityLow) return true
+          
+          // 2. Check if barangay belongs to the city
+          const brgy = (r.barangay || '').toLowerCase()
+          return brgy && lguBarangays.has(brgy)
+        })
       }
 
       setSubmittedReports(finalReports)
@@ -710,12 +719,16 @@ export default function AddReport() {
     // Reset if Approved, Pending Approval, or has rejection remarks
     if (['Approved', 'Pending Approval'].includes(currentSituationalReport.status) || currentSituationalReport.rejection_remarks) {
       try {
+        // Keep approved_pdf_url intact so the last approved PDF stays visible
+        // in Consolidated Reports while the report is being edited in Draft.
+        // It will only be replaced when a new PDF is approved.
         const { error: updateError } = await supabase
           .from('situational_reports')
           .update({ 
             status: 'Draft', 
-            approved_pdf_url: null,
+            pending_pdf_url: null,
             rejection_remarks: null 
+            // approved_pdf_url is intentionally NOT cleared here
           })
           .eq('id', currentSituationalReport.id)
         
@@ -724,8 +737,9 @@ export default function AddReport() {
         setCurrentSituationalReport(prev => ({ 
           ...prev, 
           status: 'Draft', 
-          approved_pdf_url: null,
-          rejection_remarks: null 
+          pending_pdf_url: null,
+          rejection_remarks: null
+          // approved_pdf_url intentionally preserved
         }))
         
         if (selectedEvent) {
@@ -739,19 +753,23 @@ export default function AddReport() {
 
   const deleteReport = async (item) => {
     try {
-      const { error: deleteError } = await supabase.from(item.tableName).delete().eq('id', item.id)
+      const { error: deleteError } = item.tableName === 'reports'
+        ? await supabase.from('reports').delete().eq('id', item.id)
+        : await supabase.from(item.tableName).delete().eq('situational_report_id', currentSituationalReport.id)
+      
       if (deleteError) throw deleteError
       
       await resetSitRepStatus()
       showSuccess('Success', 'Report deleted successfully')
       fetchReports()
     } catch (err) {
+      console.error('Delete error:', err)
       showSuccess('Error', err.message || 'Failed to delete report')
     }
   }
 
   const fetchFullSitRepData = async (sitRep) => {
-    if (!sitRep || !selectedEvent) return null
+    if (!sitRep) return null
 
     const tables = [
       { id: 'relatedIncidents', table: 'related_incidents' },
@@ -771,7 +789,15 @@ export default function AddReport() {
     ]
 
     try {
-      const qParams = { eventId: selectedEvent.id, sitRepId: sitRep.id }
+      if (!selectedEvent) {
+        console.warn('DEBUG: selectedEvent is null in fetchFullSitRepData')
+      }
+      const qParams = { 
+        eventId: selectedEvent?.id || sitRep.event_id, 
+        sitRepId: sitRep.id 
+      }
+      console.log('DEBUG: qParams:', qParams)
+
       
       // 1. Fetch all detailed tables + reports header table in parallel
       const results = await Promise.all([
@@ -837,28 +863,163 @@ export default function AddReport() {
       }
 
       // 3. Totals and Aggregation
+      // 3. Totals and Aggregation (Robust implementation for PDF summary tables)
       const categoryTotals = {}
       const byCityCategory = {}
       const allDetailLists = { ...dataMap, affectedPopulation: affectedPopulationDetails }
 
-      Object.keys(CATEGORY_LABELS).forEach(cat => {
-        categoryTotals[cat] = (allDetailLists[cat] || []).length
-      })
+      const numVal = (v) => Number(v ?? 0) || 0
+      console.log('DEBUG: allDetailLists keys:', Object.keys(allDetailLists))
+
 
       Object.entries(allDetailLists).forEach(([cat, list]) => {
         list.forEach(item => {
           const city = item.city || (item.barangay ? getCityForBarangay(item.barangay) : 'Unknown')
           if (!byCityCategory[city]) byCityCategory[city] = {}
-          byCityCategory[city][cat] = (byCityCategory[city][cat] || 0) + 1
+          
+          // Category-specific aggregation for summary tables
+          if (cat === 'affectedPopulation') {
+            if (!byCityCategory[city][cat]) byCityCategory[city][cat] = { families: 0, persons: 0, brgy_count: 0, ecs_now: 0, in_fam_now: 0, in_per_now: 0, out_fam_now: 0, out_per_now: 0 }
+            byCityCategory[city][cat].families += numVal(item.families)
+            byCityCategory[city][cat].persons += numVal(item.persons)
+            byCityCategory[city][cat].brgy_count++
+            byCityCategory[city][cat].ecs_now += numVal(item.ecs_now)
+            byCityCategory[city][cat].in_fam_now += numVal(item.inside_families_now)
+            byCityCategory[city][cat].in_per_now += numVal(item.inside_persons_now)
+            byCityCategory[city][cat].out_fam_now += numVal(item.outside_families_now)
+            byCityCategory[city][cat].out_per_now += numVal(item.outside_persons_now)
+          } 
+          else if (cat === 'relatedIncidents') {
+            if (!byCityCategory[city][cat]) byCityCategory[city][cat] = { total: 0, flooded: 0, subsided: 0, receding: 0, fallenDebris: 0, stormSurge: 0, other: 0 }
+            byCityCategory[city][cat].total++
+            const type = (item.type_of_incident || '').toLowerCase()
+            if (type.includes('flood')) byCityCategory[city][cat].flooded++
+            else if (type.includes('debris') || type.includes('tree')) byCityCategory[city][cat].fallenDebris++
+            else if (type.includes('surge')) byCityCategory[city][cat].stormSurge++
+            else byCityCategory[city][cat].other++
+            
+            if ((item.status || '').toLowerCase().includes('subsided')) byCityCategory[city][cat].subsided++
+            if ((item.status || '').toLowerCase().includes('receding')) byCityCategory[city][cat].receding++
+          }
+          else if (cat === 'roadsAndBridges') {
+            if (!byCityCategory[city][cat]) byCityCategory[city][cat] = { total: 0, roads: 0, bridges: 0, passable: 0, notPassable: 0 }
+            byCityCategory[city][cat].total++
+            if (item.type === 'Bridge') byCityCategory[city][cat].bridges++
+            else byCityCategory[city][cat].roads++
+            if ((item.status || '').toLowerCase().includes('passable')) byCityCategory[city][cat].passable++
+            else byCityCategory[city][cat].notPassable++
+          }
+          else if (['power', 'waterSupply', 'communicationLines'].includes(cat)) {
+            if (!byCityCategory[city][cat]) byCityCategory[city][cat] = { total: 0, interrupted: 0, restored: 0 }
+            byCityCategory[city][cat].total++
+            byCityCategory[city][cat].interrupted++
+            if (item.date_restored || item.date_restoration || (item.status || '').toLowerCase().includes('restored')) {
+              byCityCategory[city][cat].restored++
+            }
+          }
+          else if (cat === 'damagedHouses') {
+            if (!byCityCategory[city][cat]) byCityCategory[city][cat] = { total: 0, totally: 0, partially: 0, amount: 0 }
+            const t = numVal(item.totally_damaged)
+            const p = numVal(item.partially_damaged)
+            byCityCategory[city][cat].total += (t + p)
+            byCityCategory[city][cat].totally += t
+            byCityCategory[city][cat].partially += p
+            byCityCategory[city][cat].amount += numVal(item.amount_php || item.amount)
+          }
+          else if (cat === 'preEmptiveEvacuation') {
+            if (!byCityCategory[city][cat]) byCityCategory[city][cat] = { total: 0, families: 0, persons: 0 }
+            byCityCategory[city][cat].total++
+            byCityCategory[city][cat].families += numVal(item.families)
+            // Use 'total' or 'persons' property from the record
+            byCityCategory[city][cat].persons += numVal(item.total || item.persons || (numVal(item.families) * 5))
+          }
+          else if (cat === 'assistanceProvided') {
+            if (!byCityCategory[city][cat]) byCityCategory[city][cat] = { total: 0, cost: 0 }
+            byCityCategory[city][cat].total++
+            byCityCategory[city][cat].cost += numVal(item.amount || item.cost_php || item.fnfi_amount)
+          }
+          else {
+            byCityCategory[city][cat] = (byCityCategory[city][cat] || 0) + 1
+          }
         })
+      })
+
+      // Calculate Category Totals from byCityCategory
+      const categoriesList = [
+        'relatedIncidents', 'affectedPopulation', 'roadsAndBridges', 'power', 'waterSupply', 
+        'communicationLines', 'damagedHouses', 'classSuspension', 'workSuspension', 
+        'stateOfCalamity', 'preEmptiveEvacuation', 'assistanceProvided'
+      ]
+
+      categoriesList.forEach(cat => {
+        if (cat === 'affectedPopulation') {
+          categoryTotals[cat] = Object.values(byCityCategory).reduce((s, c) => ({
+            families: s.families + (c[cat]?.families || 0),
+            persons: s.persons + (c[cat]?.persons || 0),
+            brgy_count: s.brgy_count + (c[cat]?.brgy_count || 0),
+            ecs_now: s.ecs_now + (c[cat]?.ecs_now || 0),
+            in_fam_now: s.in_fam_now + (c[cat]?.in_fam_now || 0),
+            in_per_now: s.in_per_now + (c[cat]?.in_per_now || 0),
+            out_fam_now: s.out_fam_now + (c[cat]?.out_fam_now || 0),
+            out_per_now: s.out_per_now + (c[cat]?.out_per_now || 0)
+          }), { families: 0, persons: 0, brgy_count: 0, ecs_now: 0, in_fam_now: 0, in_per_now: 0, out_fam_now: 0, out_per_now: 0 })
+        } else if (cat === 'relatedIncidents') {
+          categoryTotals[cat] = Object.values(byCityCategory).reduce((s, c) => ({
+            total: s.total + (c[cat]?.total || 0),
+            flooded: s.flooded + (c[cat]?.flooded || 0),
+            subsided: s.subsided + (c[cat]?.subsided || 0),
+            receding: s.receding + (c[cat]?.receding || 0),
+            fallenDebris: s.fallenDebris + (c[cat]?.fallenDebris || 0),
+            stormSurge: s.stormSurge + (c[cat]?.stormSurge || 0),
+            other: s.other + (c[cat]?.other || 0)
+          }), { total: 0, flooded: 0, subsided: 0, receding: 0, fallenDebris: 0, stormSurge: 0, other: 0 })
+        } else if (cat === 'roadsAndBridges') {
+          categoryTotals[cat] = Object.values(byCityCategory).reduce((s, c) => ({
+            total: s.total + (c[cat]?.total || 0),
+            roads: s.roads + (c[cat]?.roads || 0),
+            bridges: s.bridges + (c[cat]?.bridges || 0),
+            passable: s.passable + (c[cat]?.passable || 0),
+            notPassable: s.notPassable + (c[cat]?.notPassable || 0)
+          }), { total: 0, roads: 0, bridges: 0, passable: 0, notPassable: 0 })
+        } else if (['power', 'waterSupply', 'communicationLines'].includes(cat)) {
+          categoryTotals[cat] = Object.values(byCityCategory).reduce((s, c) => ({
+            total: s.total + (c[cat]?.total || 0),
+            interrupted: s.interrupted + (c[cat]?.interrupted || 0),
+            restored: s.restored + (c[cat]?.restored || 0)
+          }), { total: 0, interrupted: 0, restored: 0 })
+        } else if (cat === 'damagedHouses') {
+          categoryTotals[cat] = Object.values(byCityCategory).reduce((s, c) => ({
+            total: s.total + (c[cat]?.total || 0),
+            totally: s.totally + (c[cat]?.totally || 0),
+            partially: s.partially + (c[cat]?.partially || 0),
+            amount: s.amount + (c[cat]?.amount || 0)
+          }), { total: 0, totally: 0, partially: 0, amount: 0 })
+        } else if (cat === 'preEmptiveEvacuation') {
+          categoryTotals[cat] = Object.values(byCityCategory).reduce((s, c) => ({
+            families: s.families + (c[cat]?.families || 0),
+            persons: s.persons + (c[cat]?.persons || 0)
+          }), { families: 0, persons: 0 })
+        } else if (cat === 'assistanceProvided') {
+          categoryTotals[cat] = Object.values(byCityCategory).reduce((s, c) => ({
+            total: s.total + (c[cat]?.total || 0),
+            cost: s.cost + (c[cat]?.cost || 0)
+          }), { total: 0, cost: 0 })
+        } else {
+          categoryTotals[cat] = Object.values(byCityCategory).reduce((s, c) => s + (c[cat] || 0), 0)
+        }
       })
 
       const summaryData = { categoryTotals, byCityCategory, details: allDetailLists }
       const cities = Object.keys(byCityCategory).sort()
+      console.log('DEBUG: Aggregation Complete. Cities:', cities)
+      console.log('DEBUG: categoryTotals.affectedPopulation:', categoryTotals.affectedPopulation)
+
+
 
       return {
-        province: userProvince || 'Region 1',
-        eventName: selectedEvent.name,
+        province: userProvince || sitRep.province || 'Region 1',
+        eventName: selectedEvent?.name || 'SITUATIONAL REPORT',
+
         reportTitle: sitRep.title,
         cities,
         categoryTotals,
@@ -959,9 +1120,15 @@ export default function AddReport() {
     }
   }
 
-  const handleDownloadClick = async (sr) => {
+  const handleDownloadClick = (sr) => {
+    console.log('DEBUG: handleDownloadClick called', { id: sr?.id, title: sr?.title, status: sr?.status })
+    if (!sr) {
+      console.warn('DEBUG: handleDownloadClick called with null sr')
+      return
+    }
     // If a signed PDF is already uploaded and approved, ask if they want that or a new one
     if (sr.approved_pdf_url && sr.status === 'Approved') {
+      console.log('DEBUG: Approved PDF exists, showing confirmation...')
       showConfirm({
         title: 'Download Report',
         message: 'An approved signed PDF is already available for this report. Would you like to download the official signed PDF or generate a new one based on the current data?',
@@ -969,6 +1136,7 @@ export default function AddReport() {
         cancelText: 'Generate New PDF',
         type: 'info',
         onConfirm: () => {
+          console.log('DEBUG: User chose to download Official PDF')
           setProcessingExportId(sr.id)
           try {
             const link = document.createElement('a')
@@ -986,6 +1154,7 @@ export default function AddReport() {
           }
         },
         onCancel: () => {
+          console.log('DEBUG: User chose to Generate New PDF')
           // If they click cancel (Generate New PDF), we proceed with the normal generation flow
           startReportGeneration(sr)
         }
@@ -993,42 +1162,57 @@ export default function AddReport() {
       return
     }
 
+    console.log('DEBUG: Proceeding to startReportGeneration...')
     startReportGeneration(sr)
   }
 
   const startReportGeneration = async (sr) => {
-    setProcessingExportId(sr.id)
-    const data = await fetchFullSitRepData(sr)
-    if (data) {
-      const summaryPlaceholder = sr.summary || 'Generating AI Summary... Please wait.'
-      setAiGeneratedSummaryText(summaryPlaceholder)
-      setGeneratedSummaryData({ pdfParams: data, event: selectedEvent, situationalReportId: sr.id })
-      
-      // Generate initial PDF preview blob immediately
-      const blobUrl = generatePdfBlobUrl(data, summaryPlaceholder, { preparedBy: [], notedBy: null, approvedBy: null })
-      setPdfPreviewBlobUrl(blobUrl)
-      
-      // Background AI summary generation if needed
-      if (!sr.summary) {
-        generateAISummary(data.summaryData, selectedEvent, data.relatedIncidentsDetails || [])
-          .then(text => {
-            if (text) {
-              setAiGeneratedSummaryText(text)
-              // Update the preview automatically
-              const newUrl = generatePdfBlobUrl(data, text, { preparedBy: [], notedBy: null, approvedBy: null })
-              setPdfPreviewBlobUrl(newUrl)
-            }
-          })
-          .catch(err => {
-            console.error('Background AI summary failed:', err)
-            setAiGeneratedSummaryText('AI summary unavailable. Using rule-based fallback.')
-          })
-      }
+    console.log('DEBUG: startReportGeneration called for sr.id:', sr?.id)
+    setProcessingExportId(sr?.id)
+    try {
+      const data = await fetchFullSitRepData(sr)
+      console.log('DEBUG: fetchFullSitRepData result:', !!data)
+      if (data) {
+        const summaryPlaceholder = sr.summary || 'Generating AI Summary... Please wait.'
+        setAiGeneratedSummaryText(summaryPlaceholder)
+        setGeneratedSummaryData({ pdfParams: data, event: selectedEvent, situationalReportId: sr.id })
+        
+        console.log('DEBUG: Generating initial PDF preview...')
+        // Generate initial PDF preview blob immediately
+        const blobUrl = generatePdfBlobUrl(data, summaryPlaceholder, { preparedBy: [], notedBy: null, approvedBy: null })
+        console.log('DEBUG: blobUrl created:', !!blobUrl)
+        setPdfPreviewBlobUrl(blobUrl)
+        
+        // Background AI summary generation if needed
+        if (!sr.summary) {
+          console.log('DEBUG: Starting background AI summary generation...')
+          generateAISummary(data.summaryData, selectedEvent, data.relatedIncidentsDetails || [])
+            .then(text => {
+              if (text) {
+                console.log('DEBUG: AI Summary generated')
+                setAiGeneratedSummaryText(text)
+                const newUrl = generatePdfBlobUrl(data, text, { preparedBy, notedBy, approvedBy })
+                setPdfPreviewBlobUrl(newUrl)
+              }
+            })
+            .catch(err => {
+              console.error('Background AI summary failed:', err)
+              setAiGeneratedSummaryText('AI summary unavailable. Using rule-based fallback.')
+            })
+        }
 
-      fetchSignatories()
-      setShowPdfEditModal(true)
+        console.log('DEBUG: Fetching signatories and opening modal...')
+        fetchSignatories()
+        setShowPdfEditModal(true)
+      } else {
+        console.warn('DEBUG: fetchFullSitRepData returned null')
+      }
+    } catch (err) {
+      console.error('CRITICAL ERROR in startReportGeneration:', err)
+      setError('An error occurred while preparing the report data.')
+    } finally {
+      setProcessingExportId(null)
     }
-    setProcessingExportId(null)
   }
 
   const handleConfirmDownload = () => {
@@ -1473,21 +1657,37 @@ export default function AddReport() {
   }
 
   const saveTextUpdate = () => {
-    if (textEditorModalData) {
-      handleRowChange(textEditorModalData.rowIndex, textEditorModalData.field, textEditorModalData.tempValue)
-    }
-    setShowTextEditorModal(false)
-    setTextEditorModalData(null)
+    showConfirm({
+      title: 'Save Changes',
+      message: 'Are you sure you want to save these text changes?',
+      onConfirm: () => {
+        if (textEditorModalData) {
+          handleRowChange(textEditorModalData.rowIndex, textEditorModalData.field, textEditorModalData.tempValue)
+        }
+        setShowTextEditorModal(false)
+        setTextEditorModalData(null)
+      }
+    })
   }
 
   const addRow = () => {
     const defaultRowCity = isLGU ? user.city : defaultCity
-    setRows((prev) => [...prev, emptyRow(defaultRowCity)])
+    setRows((prev) => [...prev, emptyRow(activeCategoryModal, defaultRowCity)])
   }
 
   const removeRow = (index) => {
+    const rowToRemove = rows[index]
     if (rows.length > 1) {
-      setRows((prev) => prev.filter((_, i) => i !== index))
+      showConfirm({
+        title: 'Remove Row',
+        message: 'Are you sure you want to remove this row? This change will be applied when you submit the report.',
+        onConfirm: () => {
+          if (rowToRemove.id) {
+            setDeletedRowIds(prev => [...prev, rowToRemove.id])
+          }
+          setRows((prev) => prev.filter((_, i) => i !== index))
+        }
+      })
     }
   }
 
@@ -1498,9 +1698,18 @@ export default function AddReport() {
   const handleCategorySelect = async (catId) => {
     setShowCategoryModal(false)
 
+    // Check if an entry for this category already exists in the current situational report
+    const existingEntry = submittedReports.find(r => r.category === catId)
+    if (existingEntry) {
+      handleEditReport(existingEntry)
+      return
+    }
+
     setActiveCategoryModal(catId)
     const defaultRowCity = isLGU ? user.city : defaultCity
     setRows([emptyRow(catId, defaultRowCity)])
+    setEditingItemId(null)
+    setDeletedRowIds([])
   }
 
   const handleCreateSitRep = async () => {
@@ -1509,27 +1718,33 @@ export default function AddReport() {
       return
     }
 
-    try {
-      setSubmitting(true)
-      const newSR = await createSituationalReport(selectedEvent.id, newSitRepTitle.trim(), {
-        pingedReportTypes: pingedCategories,
-        targetLgus: targetLgus
-      })
-      if (newSR) {
-        setCurrentSituationalReport(newSR)
-        setShowNewSitRepModal(false)
-        setNewSitRepTitle('')
-        setPingedCategories([])
-        setView('entries')
-      } else {
-        showSuccess('Error', 'Failed to create Situation Report.')
+    showConfirm({
+      title: 'Create Situational Report',
+      message: `Are you sure you want to create "${newSitRepTitle.trim()}"?`,
+      onConfirm: async () => {
+        try {
+          setSubmitting(true)
+          const newSR = await createSituationalReport(selectedEvent.id, newSitRepTitle.trim(), {
+            pingedReportTypes: pingedCategories,
+            targetLgus: targetLgus
+          })
+          if (newSR) {
+            setCurrentSituationalReport(newSR)
+            setShowNewSitRepModal(false)
+            setNewSitRepTitle('')
+            setPingedCategories([])
+            setView('entries')
+          } else {
+            showSuccess('Error', 'Failed to create Situation Report.')
+          }
+        } catch (err) {
+          console.error('Error in handleCreateSitRep:', err)
+          showSuccess('Error Creating Sit Rep', err?.message || 'An unexpected error occurred.')
+        } finally {
+          setSubmitting(false)
+        }
       }
-    } catch (err) {
-      console.error('Error in handleCreateSitRep:', err)
-      showSuccess('Error Creating Sit Rep', err?.message || 'An unexpected error occurred.')
-    } finally {
-      setSubmitting(false)
-    }
+    })
   }
 
   const handleOpenEditSitRepModal = (sr) => {
@@ -1545,26 +1760,32 @@ export default function AddReport() {
       return
     }
 
-    try {
-      setSubmitting(true)
-      const updatedSR = await updateSituationalReport(editingSitRep.id, {
-        title: newSitRepTitle.trim(),
-        targetLgus: targetLgus
-      })
-      
-      if (updatedSR) {
-        setShowEditSitRepModal(false)
-        setEditingSitRep(null)
-        setNewSitRepTitle('')
-        setTargetLgus([])
-        showSuccess('Success', 'Situational report updated successfully.')
+    showConfirm({
+      title: 'Update Situational Report',
+      message: `Are you sure you want to update this situational report to "${newSitRepTitle.trim()}"?`,
+      onConfirm: async () => {
+        try {
+          setSubmitting(true)
+          const updatedSR = await updateSituationalReport(editingSitRep.id, {
+            title: newSitRepTitle.trim(),
+            targetLgus: targetLgus
+          })
+          
+          if (updatedSR) {
+            setShowEditSitRepModal(false)
+            setEditingSitRep(null)
+            setNewSitRepTitle('')
+            setTargetLgus([])
+            showSuccess('Success', 'Situational report updated successfully.')
+          }
+        } catch (err) {
+          console.error('Error in handleUpdateSitRep:', err)
+          showSuccess('Error Updating Sit Rep', err?.message || 'An unexpected error occurred.')
+        } finally {
+          setSubmitting(false)
+        }
       }
-    } catch (err) {
-      console.error('Error in handleUpdateSitRep:', err)
-      showSuccess('Error Updating Sit Rep', err?.message || 'An unexpected error occurred.')
-    } finally {
-      setSubmitting(false)
-    }
+    })
   }
 
   const handleCloseActiveModal = () => {
@@ -1576,7 +1797,12 @@ export default function AddReport() {
 
   const handleEditReport = (item) => {
     setActiveCategoryModal(item.category)
-    setRows([dbRowToApp(item, item.category)])
+    setDeletedRowIds([])
+    if (item.all_rows) {
+      setRows(item.all_rows.map(r => dbRowToApp(r, item.category)))
+    } else {
+      setRows([dbRowToApp(item, item.category)])
+    }
     setEditingItemId(item.id)
   }
 
@@ -1606,299 +1832,334 @@ export default function AddReport() {
       return
     }
 
-    setSubmitting(true)
-    try {
-      const validRows = rows.filter((r) => r.barangay || (activeCategoryModal === 'roads' && r.roadBridgeName))
-      if (validRows.length === 0) {
-        showSuccess('Error', 'Please fill in at least one row with a barangay or name.')
-        setSubmitting(false)
-        return
-      }
+    const categoryTitle = REPORT_CATEGORIES.find(c => c.id === activeCategoryModal)?.title || 'Report'
+    
+    showConfirm({
+      title: 'Submit Report',
+      message: `Are you sure you want to submit this ${categoryTitle}?`,
+      onConfirm: async () => {
+        setSubmitting(true)
+        try {
+          const validRows = rows.filter((r) => r.barangay || (activeCategoryModal === 'roads' && r.roadBridgeName))
+          
+          if (activeCategoryModal === 'evacuation') {
+            let reportId = null
+            if (editingItemId) {
+              reportId = editingItemId
+            }
 
-      if (activeCategoryModal === 'evacuation') {
-        if (editingItemId) {
-          const { error } = await supabase
-            .from('report_rows')
-            .update(rowToDb(validRows[0]))
-            .eq('id', editingItemId)
-          if (error) throw error
-        } else {
-          const { data: reportData, error: reportError } = await supabase
-            .from('reports')
-            .insert({
-              event_id: selectedEvent?.id,
-              situational_report_id: currentSituationalReport.id
-            })
-            .select('id')
-            .single()
+            if (!reportId) {
+              const { data: reportData, error: reportError } = await supabase
+                .from('reports')
+                .insert({
+                  event_id: selectedEvent?.id,
+                  situational_report_id: currentSituationalReport.id
+                })
+                .select('id')
+                .single()
 
-          if (reportError) throw reportError
+              if (reportError) throw reportError
+              reportId = reportData.id
+            }
 
-          const rowsToInsert = validRows.map((row) => ({
-            report_id: reportData.id,
-            ...rowToDb(row),
-          }))
+            // Handle Deletions
+            if (deletedRowIds.length > 0) {
+              await supabase.from('report_rows').delete().in('id', deletedRowIds)
+            }
 
-          const { error: rowsError } = await supabase
-            .from('report_rows')
-            .insert(rowsToInsert)
+            if (validRows.length === 0 && deletedRowIds.length > 0) {
+              // If all rows deleted, maybe delete parent?
+              // For now just keep parent.
+            } else if (validRows.length === 0) {
+              showSuccess('Error', 'Please fill in at least one row.')
+              setSubmitting(false)
+              return
+            }
 
-          if (rowsError) throw rowsError
-        }
-        showSuccess('Success', 'Affected population report updated successfully!')
-      } else {
-        // Handle all other 11 categories as multi-row inserts
-        for (const row of validRows) {
-          let table = ''
-          let payload = {
-            event_id: selectedEvent?.id,
-            situational_report_id: currentSituationalReport.id,
-            city: row.city,
-            barangay: row.barangay,
-            remarks: row.remarks || ''
-          }
-
-          switch (activeCategoryModal) {
-            case 'power':
-              table = 'power_reports'
-              payload = {
-                ...payload,
-                type: row.type,
-                service_provider: row.serviceProvider,
-                date_of_interruption: row.dateInterruption || null,
-                time_of_interruption: row.timeInterruption || null,
-                date_restored: row.dateRestored || null,
-                time_restored: row.timeRestored || null,
-                status: row.status || 'Ongoing'
+            for (const row of validRows) {
+              const rowPayload = {
+                report_id: reportId,
+                ...rowToDb(row),
               }
-              break
-            case 'water':
-              table = 'water_supply_reports'
-              payload = {
-                ...payload,
-                type: row.type,
-                service_provider: row.serviceProvider,
-                date_of_interruption: row.dateInterruption || null,
-                time_of_interruption: row.timeInterruption || null,
-                date_restored: row.dateRestored || null,
-                time_restored: row.timeRestored || null,
-                status: row.status || 'Ongoing'
-              }
-              break
-            case 'roads':
-              const roadPayload = {
-                ...payload,
-                classification: row.classification,
-                status: row.status,
-                date_reported_passable: row.datePassable || null,
-                time_reported_passable: row.timePassable || null,
-                date_reported_not_passable: row.dateNotPassable || null,
-                time_reported_not_passable: row.timeNotPassable || null
-              }
-
-              let roadId = editingItemId
-              if (editingItemId) {
-                const { error: roadError } = await supabase
-                  .from('roads_and_bridges')
-                  .update(roadPayload)
-                  .eq('id', editingItemId)
-                if (roadError) throw roadError
+              
+              if (row.id) {
+                const { error } = await supabase
+                  .from('report_rows')
+                  .update(rowPayload)
+                  .eq('id', row.id)
+                if (error) throw error
               } else {
-                const { data: roadData, error: roadError } = await supabase
-                  .from('roads_and_bridges')
-                  .insert(roadPayload)
-                  .select()
-                  .single()
-                if (roadError) throw roadError
-                roadId = roadData.id
+                const { error } = await supabase
+                  .from('report_rows')
+                  .insert(rowPayload)
+                if (error) throw error
+              }
+            }
+            showSuccess('Success', 'Affected population report(s) updated successfully!')
+          } else {
+            const table = CATEGORY_TO_TABLE[activeCategoryModal]
+            if (deletedRowIds.length > 0) {
+              await supabase.from(table).delete().in('id', deletedRowIds)
+            }
+
+            if (validRows.length === 0) {
+              // All rows deleted
+            } else {
+              // Handle all other 11 categories as multi-row inserts/updates
+              for (const row of validRows) {
+              let table = ''
+              let payload = {
+                event_id: selectedEvent?.id,
+                situational_report_id: currentSituationalReport.id,
+                city: row.city,
+                barangay: row.barangay,
+                remarks: row.remarks || ''
               }
 
-              if (row.roadBridgeName) {
-                if (editingItemId) {
-                  await supabase.from('roads_and_bridges_sections').delete().eq('report_id', editingItemId)
-                }
-                const { error: sectionError } = await supabase
-                  .from('roads_and_bridges_sections')
-                  .insert({ report_id: roadId, name: row.roadBridgeName })
-                if (sectionError) throw sectionError
+              switch (activeCategoryModal) {
+                case 'power':
+                  table = 'power_reports'
+                  payload = {
+                    ...payload,
+                    type: row.type,
+                    service_provider: row.serviceProvider,
+                    date_of_interruption: row.dateInterruption || null,
+                    time_of_interruption: row.timeInterruption || null,
+                    date_restored: row.dateRestored || null,
+                    time_restored: row.timeRestored || null,
+                    status: row.status || 'Ongoing'
+                  }
+                  break
+                case 'water':
+                  table = 'water_supply_reports'
+                  payload = {
+                    ...payload,
+                    type: row.type,
+                    service_provider: row.serviceProvider,
+                    date_of_interruption: row.dateInterruption || null,
+                    time_of_interruption: row.timeInterruption || null,
+                    date_restored: row.dateRestored || null,
+                    time_restored: row.timeRestored || null,
+                    status: row.status || 'Ongoing'
+                  }
+                  break
+                case 'roads':
+                  const roadPayload = {
+                    ...payload,
+                    classification: row.classification,
+                    status: row.status,
+                    date_reported_passable: row.datePassable || null,
+                    time_reported_passable: row.timePassable || null,
+                    date_reported_not_passable: row.dateNotPassable || null,
+                    time_reported_not_passable: row.timeNotPassable || null
+                  }
+
+                  let roadId = row.id
+                  if (row.id) {
+                    const { error: roadError } = await supabase
+                      .from('roads_and_bridges')
+                      .update(roadPayload)
+                      .eq('id', row.id)
+                    if (roadError) throw roadError
+                  } else {
+                    const { data: roadData, error: roadError } = await supabase
+                      .from('roads_and_bridges')
+                      .insert(roadPayload)
+                      .select()
+                      .single()
+                    if (roadError) throw roadError
+                    roadId = roadData.id
+                  }
+
+                  if (row.roadBridgeName) {
+                    if (row.id) {
+                      await supabase.from('roads_and_bridges_sections').delete().eq('report_id', row.id)
+                    }
+                    const { error: sectionError } = await supabase
+                      .from('roads_and_bridges_sections')
+                      .insert({ report_id: roadId, name: row.roadBridgeName })
+                    if (sectionError) throw sectionError
+                  }
+                  continue // Road handled via unique logic
+                case 'communication':
+                  table = 'communication_lines_reports'
+                  payload = {
+                    ...payload,
+                    telecompany: row.telecompany,
+                    status_of_communication: row.statusOfCommunication,
+                    date_interruption: row.dateInterruption || null,
+                    time_interruption: row.timeInterruption || null,
+                    date_restoration: row.dateRestoration || null,
+                    time_restoration: row.timeRestoration || null,
+                    site_count_2g: row.siteCount2g ? Number(row.siteCount2g) : null,
+                    with_coverage_2g: row.withCoverage2g ? Number(row.withCoverage2g) : null,
+                    pct_coverage_2g: row.pctCoverage2g ? Number(row.pctCoverage2g) : null,
+                    site_count_3g: row.siteCount3g ? Number(row.siteCount3g) : null,
+                    with_coverage_3g: row.withCoverage3g ? Number(row.withCoverage3g) : null,
+                    pct_coverage_3g: row.pctCoverage3g ? Number(row.pctCoverage3g) : null,
+                    site_count_4g: row.siteCount4g ? Number(row.siteCount4g) : null,
+                    with_coverage_4g: row.withCoverage4g ? Number(row.withCoverage4g) : null,
+                    pct_coverage_4g: row.pctCoverage4g ? Number(row.pctCoverage4g) : null,
+                    status: row.status || 'Operational'
+                  }
+                  break
+                case 'incidents':
+                  table = 'related_incidents'
+                  payload = {
+                    ...payload,
+                    type_of_incident: row.typeOfIncident,
+                    date_of_occurrence: row.dateOfOccurrence || null,
+                    time_of_occurrence: row.timeOfOccurrence || null,
+                    description: row.description || '',
+                    actions_taken: row.actionsTaken || '',
+                    status: row.status || 'Ongoing'
+                  }
+                  break
+                case 'houses':
+                  table = 'damaged_houses_reports'
+                  payload = {
+                    ...payload,
+                    totally_damaged: Number(row.totallyDamaged || 0),
+                    grand_total: Number(row.grandTotal || 0),
+                    amount_php: row.amountPhp ? parseFloat(row.amountPhp) : 0,
+                    status: row.status || 'Reported'
+                  }
+                  break
+                case 'class':
+                  table = 'class_suspension_reports'
+                  payload = {
+                    ...payload,
+                    level_from: row.level,
+                    type: row.typeOfSuspension,
+                    date_of_suspension: row.dateOfSuspension || null,
+                    time_of_suspension: row.timeOfSuspension || null,
+                    date_resumed: row.dateOfResumption || null,
+                    time_resumed: row.timeOfResumption || null,
+                    status: row.status || 'Ongoing'
+                  }
+                  break
+                case 'work':
+                  table = 'work_suspension_reports'
+                  payload = {
+                    ...payload,
+                    type: row.typeOfSuspension,
+                    date_of_suspension: row.dateOfSuspension || null,
+                    time_of_suspension: row.timeOfSuspension || null,
+                    date_resumed: row.dateOfResumption || null,
+                    time_resumed: row.timeOfResumption || null,
+                    status: row.status || 'Ongoing'
+                  }
+                  break
+                case 'calamity':
+                  table = 'declaration_state_of_calamity_reports'
+                  payload = {
+                    ...payload,
+                    type: row.type,
+                    count_soc: row.count_soc ? parseInt(row.count_soc) : null,
+                    resolution_number: row.resolutionNo,
+                    resolution_date: row.resolutionDate || null,
+                    status: row.status || 'Declared'
+                  }
+                  break
+                case 'preemptive':
+                  table = 'pre_emptive_evacuation_reports'
+                  payload = {
+                    ...payload,
+                    families: Number(row.families || 0),
+                    male_count: Number(row.maleCount || 0),
+                    female_count: Number(row.femaleCount || 0),
+                    total: Number(row.total || 0),
+                    status: row.status || 'Completed'
+                  }
+                  break
+                case 'assistance':
+                  table = 'assistance_provided_reports'
+                  payload = {
+                    ...payload,
+                    no_families_affected: Number(row.noFamiliesAffected || 0),
+                    no_families_requiring_assistance: Number(row.noFamiliesRequiringAssistance || 0),
+                    needs: row.needs,
+                    fnfi_qty: row.fnfiQty ? parseFloat(row.fnfiQty) : null,
+                    fnfi_unit: row.fnfiUnit,
+                    fnfi_cost_per_unit: row.fnfiCostPerUnit ? parseFloat(row.fnfiCostPerUnit) : null,
+                    fnfi_amount: Number(row.fnfiAmount || 0),
+                    fnfi_source: row.fnfiSource,
+                    no_families_assisted: Number(row.noFamiliesAssisted || 0),
+                    pct_families_assisted: row.pctFamiliesAssisted || 0,
+                    status: row.status || 'Ongoing'
+                  }
+                  break
+                case 'assistance_lgus':
+                  table = 'assistance_lgus_agencies_reports'
+                  payload = {
+                    ...payload,
+                    type: row.type,
+                    qty: row.qty ? parseFloat(row.qty) : null,
+                    unit: row.unit,
+                    cost_per_unit: row.costPerUnit ? parseFloat(row.costPerUnit) : null,
+                    amount: row.amount ? parseFloat(row.amount) : null,
+                    source: row.source,
+                    status: row.status || 'Ongoing'
+                  }
+                  break
+                case 'agriculture':
+                  table = 'agriculture_damage_reports'
+                  payload = {
+                    ...payload,
+                    classification: row.classification,
+                    type: row.type,
+                    farmers_affected: row.farmersAffected ? parseInt(row.farmersAffected) : 0,
+                    area_totally_damaged: row.areaTotally ? parseFloat(row.areaTotally) : 0,
+                    area_partially_damaged: row.areaPartially ? parseFloat(row.areaPartially) : 0,
+                    area_total: row.areaTotal ? parseFloat(row.areaTotal) : 0,
+                    infra_totally_damaged: row.infraTotally ? parseFloat(row.infraTotally) : 0,
+                    infra_partially_damaged: row.infraPartially ? parseFloat(row.infraPartially) : 0,
+                    infra_total: row.infraTotal ? parseFloat(row.infraTotal) : 0,
+                    production_loss_volume: row.volumeLoss ? parseFloat(row.volumeLoss) : 0,
+                    production_loss_value: row.valueLoss ? parseFloat(row.valueLoss) : 0,
+                    status: row.status || 'Ongoing'
+                  }
+                  break
+                case 'infrastructure':
+                  table = 'infrastructure_damage_reports'
+                  payload = {
+                    ...payload,
+                    type: row.type,
+                    classification: row.classification,
+                    infrastructure_name: row.infrastructureName,
+                    number_damaged: row.numberDamaged ? parseInt(row.numberDamaged) : 0,
+                    unit: row.unit,
+                    quantity: row.quantity ? parseFloat(row.quantity) : 0,
+                    cost: row.cost ? parseFloat(row.cost) : 0,
+                    status: row.status || 'Ongoing'
+                  }
+                  break
               }
-              continue // Road handled via unique logic
-            case 'communication':
-              table = 'communication_lines_reports'
-              payload = {
-                ...payload,
-                telecompany: row.telecompany,
-                status_of_communication: row.statusOfCommunication,
-                date_interruption: row.dateInterruption || null,
-                time_interruption: row.timeInterruption || null,
-                date_restoration: row.dateRestoration || null,
-                time_restoration: row.timeRestoration || null,
-                site_count_2g: row.siteCount2g ? Number(row.siteCount2g) : null,
-                with_coverage_2g: row.withCoverage2g ? Number(row.withCoverage2g) : null,
-                pct_coverage_2g: row.pctCoverage2g ? Number(row.pctCoverage2g) : null,
-                site_count_3g: row.siteCount3g ? Number(row.siteCount3g) : null,
-                with_coverage_3g: row.withCoverage3g ? Number(row.withCoverage3g) : null,
-                pct_coverage_3g: row.pctCoverage3g ? Number(row.pctCoverage3g) : null,
-                site_count_4g: row.siteCount4g ? Number(row.siteCount4g) : null,
-                with_coverage_4g: row.withCoverage4g ? Number(row.withCoverage4g) : null,
-                pct_coverage_4g: row.pctCoverage4g ? Number(row.pctCoverage4g) : null,
-                status: row.status || 'Operational'
-              }
-              break
-            case 'incidents':
-              table = 'related_incidents'
-              payload = {
-                ...payload,
-                type_of_incident: row.typeOfIncident,
-                date_of_occurrence: row.dateOfOccurrence || null,
-                time_of_occurrence: row.timeOfOccurrence || null,
-                description: row.description || '',
-                actions_taken: row.actionsTaken || '',
-                status: row.status || 'Ongoing'
-              }
-              break
-            case 'houses':
-              table = 'damaged_houses_reports'
-              payload = {
-                ...payload,
-                totally_damaged: Number(row.totallyDamaged || 0),
-                grand_total: Number(row.grandTotal || 0),
-                amount_php: row.amountPhp ? parseFloat(row.amountPhp) : 0,
-                status: row.status || 'Reported'
-              }
-              break
-            case 'class':
-              table = 'class_suspension_reports'
-              payload = {
-                ...payload,
-                level_from: row.level,
-                type: row.typeOfSuspension,
-                date_of_suspension: row.dateOfSuspension || null,
-                time_of_suspension: row.timeOfSuspension || null,
-                date_resumed: row.dateOfResumption || null,
-                time_resumed: row.timeOfResumption || null,
-                status: row.status || 'Ongoing'
-              }
-              break
-            case 'work':
-              table = 'work_suspension_reports'
-              payload = {
-                ...payload,
-                type: row.typeOfSuspension,
-                date_of_suspension: row.dateOfSuspension || null,
-                time_of_suspension: row.timeOfSuspension || null,
-                date_resumed: row.dateOfResumption || null,
-                time_resumed: row.timeOfResumption || null,
-                status: row.status || 'Ongoing'
-              }
-              break
-            case 'calamity':
-              table = 'declaration_state_of_calamity_reports'
-              payload = {
-                ...payload,
-                type: row.type,
-                count_soc: row.countSoc ? parseInt(row.countSoc) : null,
-                resolution_number: row.resolutionNo,
-                resolution_date: row.resolutionDate || null,
-                status: row.status || 'Declared'
-              }
-              break
-            case 'preemptive':
-              table = 'pre_emptive_evacuation_reports'
-              payload = {
-                ...payload,
-                families: Number(row.families || 0),
-                male_count: Number(row.maleCount || 0),
-                female_count: Number(row.femaleCount || 0),
-                total: Number(row.total || 0),
-                status: row.status || 'Completed'
-              }
-              break
-            case 'assistance':
-              table = 'assistance_provided_reports'
-              payload = {
-                ...payload,
-                no_families_affected: Number(row.noFamiliesAffected || 0),
-                no_families_requiring_assistance: Number(row.noFamiliesRequiringAssistance || 0),
-                needs: row.needs,
-                fnfi_qty: row.fnfiQty ? parseFloat(row.fnfiQty) : null,
-                fnfi_unit: row.fnfiUnit,
-                fnfi_cost_per_unit: row.fnfiCostPerUnit ? parseFloat(row.fnfiCostPerUnit) : null,
-                fnfi_amount: Number(row.fnfiAmount || 0),
-                fnfi_source: row.fnfiSource,
-                no_families_assisted: Number(row.noFamiliesAssisted || 0),
-                pct_families_assisted: row.pctFamiliesAssisted || 0,
-                status: row.status || 'Ongoing'
-              }
-              break
-            case 'assistance_lgus':
-              table = 'assistance_lgus_agencies_reports'
-              payload = {
-                ...payload,
-                type: row.type,
-                qty: row.qty ? parseFloat(row.qty) : null,
-                unit: row.unit,
-                cost_per_unit: row.costPerUnit ? parseFloat(row.costPerUnit) : null,
-                amount: row.amount ? parseFloat(row.amount) : null,
-                source: row.source,
-                status: row.status || 'Ongoing'
-              }
-              break
-            case 'agriculture':
-              table = 'agriculture_damage_reports'
-              payload = {
-                ...payload,
-                classification: row.classification,
-                type: row.type,
-                farmers_affected: row.farmersAffected ? parseInt(row.farmersAffected) : 0,
-                area_totally_damaged: row.areaTotally ? parseFloat(row.areaTotally) : 0,
-                area_partially_damaged: row.areaPartially ? parseFloat(row.areaPartially) : 0,
-                area_total: row.areaTotal ? parseFloat(row.areaTotal) : 0,
-                infra_totally_damaged: row.infraTotally ? parseFloat(row.infraTotally) : 0,
-                infra_partially_damaged: row.infraPartially ? parseFloat(row.infraPartially) : 0,
-                infra_total: row.infraTotal ? parseFloat(row.infraTotal) : 0,
-                production_loss_volume: row.volumeLoss ? parseFloat(row.volumeLoss) : 0,
-                production_loss_value: row.valueLoss ? parseFloat(row.valueLoss) : 0,
-                status: row.status || 'Ongoing'
-              }
-              break
-            case 'infrastructure':
-              table = 'infrastructure_damage_reports'
-              payload = {
-                ...payload,
-                type: row.type,
-                classification: row.classification,
-                infrastructure_name: row.infrastructureName,
-                number_damaged: row.numberDamaged ? parseInt(row.numberDamaged) : 0,
-                unit: row.unit,
-                quantity: row.quantity ? parseFloat(row.quantity) : 0,
-                cost: row.cost ? parseFloat(row.cost) : 0,
-                status: row.status || 'Ongoing'
-              }
-              break
+
+              const { error } = row.id
+                ? await supabase.from(table).update(payload).eq('id', row.id)
+                : await supabase.from(table).insert(payload)
+
+              if (error) throw error
+            }
+            showSuccess('Success', `${REPORT_CATEGORIES.find(c => c.id === activeCategoryModal)?.title} report(s) updated!`)
           }
-
-          const { error } = editingItemId
-            ? await supabase.from(table).update(payload).eq('id', editingItemId)
-            : await supabase.from(table).insert(payload)
-
-          if (error) throw error
         }
-        showSuccess('Success', `${REPORT_CATEGORIES.find(c => c.id === activeCategoryModal)?.title} report(s) submitted!`)
-      }
 
-      await resetSitRepStatus()
-      await fetchReports()
-      // Auto-mark notifications for this SitRep as read since the user has now "acted" on it
-      if (currentSituationalReport?.id) {
-        await markSitRepNotificationsAsRead(currentSituationalReport.id)
+          await resetSitRepStatus()
+          await fetchReports()
+          // Auto-mark notifications for this SitRep as read since the user has now "acted" on it
+          if (currentSituationalReport?.id) {
+            await markSitRepNotificationsAsRead(currentSituationalReport.id)
+          }
+          handleCloseActiveModal()
+        } catch (err) {
+          showSuccess('Error', err.message || 'Failed to submit report')
+        } finally {
+          setSubmitting(false)
+        }
       }
-      handleCloseActiveModal()
-    } catch (err) {
-      showSuccess('Error', err.message || 'Failed to submit report')
-    } finally {
-      setSubmitting(false)
-    }
+    })
   }
 
   const renderUnifiedForm = () => {
@@ -2126,7 +2387,7 @@ export default function AddReport() {
           <td className="col-barangay">
             <SearchableSelect
               value={row.barangay}
-              options={getBarangaysForCity(row.city)}
+              options={getBarangaysForCity(row.city || user?.city)}
               onChange={(e) => handleRowChange(index, 'barangay', e.target.value)}
               placeholder="Select..."
             />
@@ -2642,7 +2903,7 @@ export default function AddReport() {
                         color="warning"
                         onClick={() => handleOpenEditSitRepModal(currentSituationalReport)}
                         title="Edit Report Details"
-                        style={{ height: '42px', padding: '0 16px' }}
+                        className="toolbar-action-btn"
                         leftIcon={<PencilSimple size={16} />}
                       >
                         Edit Report
@@ -2653,7 +2914,7 @@ export default function AddReport() {
                       color="success"
                       onClick={() => handleDownloadClick(currentSituationalReport)}
                       disabled={processingExportId === currentSituationalReport?.id}
-                      style={{ height: '42px', padding: '0 16px' }}
+                      className="toolbar-action-btn"
                       leftIcon={processingExportId === currentSituationalReport?.id ? <LoadingSpinner size={14} /> : <Download size={16} />}
                     >
                       Download Report
@@ -2677,7 +2938,7 @@ export default function AddReport() {
                       }
                     }} 
                     leftIcon={<Plus size={18} />}
-                    style={{ height: '42px', padding: '0 24px' }}
+                    className="toolbar-action-btn add-entry-btn"
                   >
                     {view === 'versions' ? 'Make Report' : 'Add Entry'}
                   </Button>
@@ -3163,7 +3424,7 @@ export default function AddReport() {
                     <td className="col-barangay">
                       <SearchableSelect
                         value={row.barangay}
-                        options={getBarangaysForCity(row.city)}
+                        options={getBarangaysForCity(row.city || user?.city)}
                         onChange={(e) =>
                           handleRowChange(rowIndex, 'barangay', e.target.value)
                         }
@@ -3838,7 +4099,7 @@ export default function AddReport() {
       </HeaderFooterModal>
 
       <HeaderFooterModal
-        isOpen={showPdfEditModal && !!generatedSummaryData}
+        isOpen={showPdfEditModal}
         onClose={() => setShowPdfEditModal(false)}
         title="Finalize PDF Report"
         subtitle={generatedSummaryData?.pdfParams?.reportTitle}

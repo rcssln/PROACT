@@ -90,55 +90,67 @@ export default function ForApproval() {
 
   const handleApprove = async () => {
     if (!reviewSitRep) return
-    setProcessingReview(true)
-    try {
-      const { error } = await supabase
-        .from('situational_reports')
-        .update({ 
-          status: 'Approved', 
-          rejection_remarks: null,
-          approved_pdf_url: reviewSitRep.pending_pdf_url || reviewSitRep.approved_pdf_url,
-          pending_pdf_url: null
-        })
-        .eq('id', reviewSitRep.id)
-      
-      if (error) throw error
-
-      // Notify Provincial users in the same province
-      try {
-        const reportProvince = reviewSitRep.province || user?.province
-        if (reportProvince) {
-          const { data: provincialUsers } = await supabase
-            .from('users')
-            .select('id')
-            .eq('province', reportProvince)
-            .eq('account_type', 'Provincial')
+    showConfirm({
+      title: 'Approve Report',
+      message: `Are you sure you want to approve "${reviewSitRep.title}"?`,
+      onConfirm: async () => {
+        setProcessingReview(true)
+        try {
+          const { data: updateData, error } = await supabase
+            .from('situational_reports')
+            .update({ 
+              status: 'Approved', 
+              rejection_remarks: null,
+              approved_pdf_url: reviewSitRep.pending_pdf_url || reviewSitRep.approved_pdf_url,
+              pending_pdf_url: null
+            })
+            .eq('id', reviewSitRep.id)
+            .select()
           
-          if (provincialUsers?.length > 0) {
-            const notifications = provincialUsers.map(u => ({
-              user_id: u.id,
-              type: 'sitrep_approval',
-              title: 'Situational Report Approved',
-              message: `Your report "${reviewSitRep.title}" has been approved.`,
-              data: { sitrep_id: reviewSitRep.id, event_id: reviewSitRep.event_id }
-            }))
-            await supabase.from('notifications').insert(notifications)
-          }
-        }
-      } catch (notifErr) {
-        console.error('Failed to send approval notifications:', notifErr)
-      }
+          if (error) throw error
 
-      showSuccess('Approved', `"${reviewSitRep.title}" has been approved successfully.`)
-      setShowReviewModal(false)
-      await markSitRepNotificationsAsRead(reviewSitRep.id)
-      fetchPendingSitreps()
-      fetchPendingApprovalsCount()
-    } catch (err) {
-      showSuccess('Error', err.message || 'Failed to approve report.')
-    } finally {
-      setProcessingReview(false)
-    }
+          // Immediately remove from local state — do NOT re-fetch right away
+          // to avoid a race condition where the DB hasn't committed yet
+          setSitreps(prev => prev.filter(s => s.id !== reviewSitRep.id))
+          setShowReviewModal(false)
+
+          // Notify Provincial users in the same province
+          try {
+            const reportProvince = reviewSitRep.province || user?.province
+            if (reportProvince) {
+              const { data: provincialUsers } = await supabase
+                .from('users')
+                .select('id')
+                .eq('province', reportProvince)
+                .eq('account_type', 'Provincial')
+              
+              if (provincialUsers?.length > 0) {
+                const notifications = provincialUsers.map(u => ({
+                  user_id: u.id,
+                  type: 'sitrep_approval',
+                  title: 'Situational Report Approved',
+                  message: `Your report "${reviewSitRep.title}" has been approved.`,
+                  data: { sitrep_id: reviewSitRep.id, event_id: reviewSitRep.event_id }
+                }))
+                await supabase.from('notifications').insert(notifications)
+              }
+            }
+          } catch (notifErr) {
+            console.error('Failed to send approval notifications:', notifErr)
+          }
+
+          showSuccess('Approved', `"${reviewSitRep.title}" has been approved successfully.`)
+          await markSitRepNotificationsAsRead(reviewSitRep.id)
+          fetchPendingApprovalsCount()
+          // Delay re-fetch so DB has time to commit before we query again
+          setTimeout(() => fetchPendingSitreps(), 1000)
+        } catch (err) {
+          showSuccess('Error', err.message || 'Failed to approve report.')
+        } finally {
+          setProcessingReview(false)
+        }
+      }
+    })
   }
 
   const handleReject = async () => {
@@ -146,54 +158,61 @@ export default function ForApproval() {
       showSuccess('Required', 'Please enter remarks before rejecting.')
       return
     }
-    setProcessingReview(true)
-    try {
-      const { error } = await supabase
-        .from('situational_reports')
-        .update({ 
-          status: 'Draft', 
-          rejection_remarks: rejectRemarks.trim(),
-          pending_pdf_url: null 
-        })
-        .eq('id', reviewSitRep.id)
-      
-      if (error) throw error
-
-      // Notify Provincial users
-      try {
-        const reportProvince = reviewSitRep.province || user?.province
-        if (reportProvince) {
-          const { data: provincialUsers } = await supabase
-            .from('users')
-            .select('id')
-            .eq('province', reportProvince)
-            .eq('account_type', 'Provincial')
+    showConfirm({
+      title: 'Reject Report',
+      message: `Are you sure you want to reject "${reviewSitRep.title}"? The team will need to revise it based on your remarks.`,
+      type: 'danger',
+      onConfirm: async () => {
+        setProcessingReview(true)
+        try {
+          const { error } = await supabase
+            .from('situational_reports')
+            .update({ 
+              status: 'Draft', 
+              rejection_remarks: rejectRemarks.trim(),
+              pending_pdf_url: null 
+            })
+            .eq('id', reviewSitRep.id)
           
-          if (provincialUsers?.length > 0) {
-            const notifications = provincialUsers.map(u => ({
-              user_id: u.id,
-              type: 'sitrep_rejection',
-              title: 'Situational Report Rejected',
-              message: `Your report "${reviewSitRep.title}" was rejected. Remarks: ${rejectRemarks.trim()}`,
-              data: { sitrep_id: reviewSitRep.id, event_id: reviewSitRep.event_id, remarks: rejectRemarks.trim() }
-            }))
-            await supabase.from('notifications').insert(notifications)
-          }
-        }
-      } catch (notifErr) {
-        console.error('Failed to send rejection notifications:', notifErr)
-      }
+          if (error) throw error
 
-      showSuccess('Rejected', `"${reviewSitRep.title}" has been rejected.`)
-      setShowReviewModal(false)
-      await markSitRepNotificationsAsRead(reviewSitRep.id)
-      fetchPendingSitreps()
-      fetchPendingApprovalsCount()
-    } catch (err) {
-      showSuccess('Error', err.message || 'Failed to reject report.')
-    } finally {
-      setProcessingReview(false)
-    }
+          // Notify Provincial users
+          try {
+            const reportProvince = reviewSitRep.province || user?.province
+            if (reportProvince) {
+              const { data: provincialUsers } = await supabase
+                .from('users')
+                .select('id')
+                .eq('province', reportProvince)
+                .eq('account_type', 'Provincial')
+              
+              if (provincialUsers?.length > 0) {
+                const notifications = provincialUsers.map(u => ({
+                  user_id: u.id,
+                  type: 'sitrep_rejection',
+                  title: 'Situational Report Rejected',
+                  message: `Your report "${reviewSitRep.title}" was rejected. Remarks: ${rejectRemarks.trim()}`,
+                  data: { sitrep_id: reviewSitRep.id, event_id: reviewSitRep.event_id, remarks: rejectRemarks.trim() }
+                }))
+                await supabase.from('notifications').insert(notifications)
+              }
+            }
+          } catch (notifErr) {
+            console.error('Failed to send rejection notifications:', notifErr)
+          }
+
+          showSuccess('Rejected', `"${reviewSitRep.title}" has been rejected.`)
+          setShowReviewModal(false)
+          await markSitRepNotificationsAsRead(reviewSitRep.id)
+          fetchPendingSitreps()
+          fetchPendingApprovalsCount()
+        } catch (err) {
+          showSuccess('Error', err.message || 'Failed to reject report.')
+        } finally {
+          setProcessingReview(false)
+        }
+      }
+    })
   }
 
   const handleDownloadPdf = (sr) => {

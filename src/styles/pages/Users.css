@@ -235,9 +235,15 @@
 }
 
 .users-status.users-status-inactive {
-	background: var(--status-neutral-bg);
-	color: var(--status-neutral-text);
-	border-color: var(--status-neutral-border);
+	background: var(--status-danger-bg);
+	color: var(--status-danger-text);
+	border-color: var(--status-danger-border);
+}
+
+.users-status.users-status-pending {
+	background: var(--status-pending-bg);
+	color: var(--status-pending-text);
+	border-color: var(--status-pending-border);
 }
 
 .users-col-action {
