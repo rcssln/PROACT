@@ -101,6 +101,17 @@ router.patch('/:id', authenticate, async (req, res) => {
 
   const jsonFields = ['pinged_report_types', 'deployed_snapshot'];
 
+  // --- ONE EVENT DEPLOYMENT ONLY LOGIC ---
+  // If this event is being deployed, undeploy all others first
+  if (fields.is_deployed === true) {
+    try {
+      await pool.query('UPDATE events SET is_deployed = FALSE WHERE id <> $1', [req.params.id]);
+    } catch (err) {
+      console.error('[Events/PATCH] Failed to undeploy other events:', err);
+      return res.status(500).json({ error: 'Failed to undeploy other events' });
+    }
+  }
+
   for (const [key, val] of Object.entries(fields)) {
     if (allowed.includes(key)) {
       setClauses.push(`${key} = $${idx}`);
@@ -121,7 +132,12 @@ router.patch('/:id', authenticate, async (req, res) => {
     if (!rows.length) return res.status(404).json({ error: 'Event not found' });
 
     const io = req.app.locals.io;
+    // Notify clients that other events might have been undeployed too
     io.emit('events:updated', rows[0]);
+    // We should probably broadcast to all clients to refresh their list if we undeployed others
+    if (fields.is_deployed === true) {
+      io.emit('events:refresh_needed'); 
+    }
 
     res.json(rows[0]);
   } catch (err) {

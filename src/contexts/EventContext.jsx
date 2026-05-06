@@ -321,12 +321,29 @@ export function EventProvider({ children, user }) {
 
     // Events
     socket.on('events:created', (event) => {
-      setEvents(prev => [mapEvent(event), ...prev])
+      const mapped = mapEvent(event)
+      setEvents(prev => {
+        if (prev.some(e => e.id === mapped.id)) return prev
+        return [mapped, ...prev]
+      })
     })
     socket.on('events:updated', (event) => {
       const mapped = mapEvent(event)
-      setEvents(prev => prev.map(e => e.id === mapped.id ? mapped : e))
+      setEvents(prev => {
+        // Use a map to ensure we don't have duplicates and preserve order
+        const exists = prev.some(e => e.id === mapped.id)
+        if (!exists) return [mapped, ...prev]
+
+        if (mapped.isDeployed) {
+          return prev.map(e => e.id === mapped.id ? mapped : { ...e, isDeployed: false })
+        }
+        return prev.map(e => e.id === mapped.id ? mapped : e)
+      })
       if (mapped.isDeployed) setCurrentEventId(mapped.id)
+    })
+    socket.on('events:refresh_needed', () => {
+      console.log('[Socket.io] Refresh needed, fetching events...')
+      fetchEvents()
     })
     socket.on('events:deleted', ({ id }) => {
       setEvents(prev => prev.filter(e => e.id !== id))
@@ -491,7 +508,7 @@ export function EventProvider({ children, user }) {
       
       const { data } = await api.post('/api/events', payload)
       const newEvent = mapEvent(data)
-      setEvents((prev) => [newEvent, ...prev])
+      // Removed manual setEvents call - handled by socket events:created
       showToast('Event Created', `Successfully created event: ${newEvent.name}`, 'success')
 
       return newEvent
@@ -525,7 +542,7 @@ export function EventProvider({ children, user }) {
 
       const { data } = await api.patch(`/api/events/${id}`, payload)
       const updated = mapEvent(data)
-      setEvents((prev) => prev.map((e) => (e.id === id ? updated : e)))
+      // Removed manual setEvents call - handled by socket events:updated
       showToast('Event Updated', `Successfully updated event details.`, 'success')
     } catch (err) {
       console.error('Error updating event:', err)
@@ -720,7 +737,7 @@ export function EventProvider({ children, user }) {
   const deleteEvent = useCallback(async (id) => {
     try {
       await api.delete(`/api/events/${id}`)
-      setEvents((prev) => prev.filter((e) => e.id !== id))
+      // Removed manual setEvents call - handled by socket events:deleted
       if (currentEventId === id) setCurrentEventId(null)
       showToast('Event Deleted', 'The event and all its associated data have been removed.', 'success')
     } catch (err) {
