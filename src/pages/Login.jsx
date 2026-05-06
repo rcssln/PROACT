@@ -1,9 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { FileText, Eye, EyeClosed } from '@phosphor-icons/react'
-import LoadingSpinner from '../components/LoadingSpinner'
-import { supabase } from '../lib/supabase'
-import { hashPassword } from '../lib/passwordUtils'
+import api from '../lib/api'
 import Button from '../components/Button'
 import '../styles/pages/Login.css'
 
@@ -19,57 +17,28 @@ export default function Login({ onLogin }) {
     e.preventDefault()
     setError('')
     if (!email?.trim() || !password) return
-    if (!supabase) {
-      setError('Database not configured.')
-      return
-    }
     setSubmitting(true)
     try {
-      const { data: user, error: fetchError } = await supabase
-        .from('users')
-        .select('*')
-        .eq('email', email.trim().toLowerCase())
-        .maybeSingle()
-      
-      console.log('[Login Debug] Email:', email.trim().toLowerCase())
-      console.log('[Login Debug] User found:', !!user)
-      
-      if (fetchError) throw fetchError
-      if (!user) {
-        setError('Invalid email or password.')
-        setSubmitting(false)
-        return
-      }
-
-      const hashed = await hashPassword(password, email.trim().toLowerCase())
-      console.log('[Login Debug] Hashed Input:', hashed)
-      console.log('[Login Debug] Stored Hash:', user.password_hash)
-      console.log('[Login Debug] Match:', hashed === user.password_hash)
-
-      if (user.password_hash !== hashed) {
-        setError('Invalid email or password.')
-        setSubmitting(false)
-        return
-      }
-      if (user.status === 'Inactive') {
-        setError('Account is inactive.')
-        setSubmitting(false)
-        return
-      }
-      // Log successful login
-      await supabase.from('activity_logs').insert({
-        user_id: user.id,
-        action: 'Logged in',
-        details: 'User authenticated successfully'
+      const { data } = await api.post('/api/auth/login', {
+        email: email.trim().toLowerCase(),
+        password
       })
 
-      // Strip sensitive fields before storing in session
-      const { password_hash: _ph, ...safeUser } = user
-      onLogin?.(safeUser)
+      // Store JWT and user in localStorage
+      localStorage.setItem('proact_token', data.token)
+      localStorage.setItem('proact_user', JSON.stringify(data.user))
+
+      // Log successful login (fire and forget)
+      api.post('/api/activity-logs', {
+        action: 'Logged in',
+        details: 'User authenticated successfully'
+      }).catch(() => {})
+
+      onLogin?.(data.user)
       navigate('/dashboard', { replace: true })
     } catch (err) {
-      console.error('[Login] error:', err)
-      setError('Login failed. Please try again.')
+      const msg = err.response?.data?.error || 'Login failed. Please try again.'
+      setError(msg)
     } finally {
       setSubmitting(false)
     }

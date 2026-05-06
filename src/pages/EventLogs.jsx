@@ -3,7 +3,7 @@ import { useOutletContext } from 'react-router-dom'
 import { ClockCounterClockwise, CaretDown, CaretUp, Upload } from '@phosphor-icons/react'
 import SearchInput from '../components/SearchInput'
 import LoadingSpinner from '../components/LoadingSpinner'
-import { supabase } from '../lib/supabase'
+import api from '../lib/api'
 import '../styles/pages/PageStyles.css'
 import '../styles/pages/EventLogs.css'
 import Button from '../components/Button'
@@ -25,53 +25,12 @@ export default function EventLogs() {
 
     useEffect(() => {
         const fetchEventLogs = async () => {
-            if (!supabase || !user) return
+            if (!user) return
             setLoading(true)
             setError(null)
             try {
-                // Fetch up to 1000 logs for decent pagination
-                const { data: logData, error: logError } = await supabase
-                    .from('activity_logs')
-                    .select(`
-                        *,
-                        users:user_id (
-                            id,
-                            first_name,
-                            last_name,
-                            email,
-                            account_type,
-                            province,
-                            city
-                        )
-                    `)
-                    .order('created_at', { ascending: false })
-                    .limit(1000)
-
-                if (logError) throw logError
-
-                let filteredLogs = []
-                if (logData) {
-                    const accountType = user.account_type || user.role
-
-                    if (accountType === 'Super Admin' || accountType === 'Regional') {
-                        filteredLogs = logData
-                    } else if (accountType === 'Provincial') {
-                        filteredLogs = logData.filter(log => {
-                            const creatorType = log.users?.account_type
-                            return creatorType === 'Provincial' || creatorType === 'LGU'
-                        })
-                    } else if (accountType === 'LGU') {
-                        filteredLogs = logData.filter(log => {
-                            const creatorType = log.users?.account_type
-                            return creatorType === 'LGU'
-                        })
-                    } else {
-                        filteredLogs = logData.filter(log => log.user_id === user.id)
-                    }
-                }
-
-                setLogs(filteredLogs)
-
+                const { data } = await api.get('/api/activity-logs', { params: { limit: 1000 } })
+                setLogs(data || [])
             } catch (err) {
                 console.error('Failed to load event logs:', err)
                 setError('Failed to fetch logs. Please try again.')

@@ -12,19 +12,10 @@ import ManageEvents from './pages/ManageEvents'
 import ForApproval from './pages/ForApproval'
 import Manual from './pages/Manual'
 import { EventProvider } from './contexts/EventContext'
-
 import MeshBackground from './components/MeshGradient'
 import LoadingSpinner from './components/LoadingSpinner'
-import { supabase } from './lib/supabase'
+import api from './lib/api'
 import './styles/App.css'
-
-/** Strip any sensitive fields before we write the user to sessionStorage. */
-function sanitizeUser(user) {
-  if (!user) return null
-  // eslint-disable-next-line no-unused-vars
-  const { password_hash, ...safe } = user
-  return safe
-}
 
 function App() {
   const [user, setUser] = useState(null)
@@ -32,44 +23,32 @@ function App() {
 
   useEffect(() => {
     const restoreSession = async () => {
-      const saved = sessionStorage.getItem('report_system_user')
-      if (!saved) {
+      const token = localStorage.getItem('proact_token')
+      const savedUser = localStorage.getItem('proact_user')
+
+      if (!token || !savedUser) {
         setIsLoading(false)
         return
       }
 
-      let parsed
       try {
-        parsed = JSON.parse(saved)
-      } catch {
-        sessionStorage.removeItem('report_system_user')
-        setIsLoading(false)
-        return
-      }
-
-      // Re-validate against the DB so a tampered role/status is never trusted
-      if (supabase && parsed?.id) {
-        const { data: fresh, error } = await supabase
-          .from('users')
-          .select('id, email, first_name, last_name, role, status, account_type, province, city, must_change_password, created_at, theme')
-          .eq('id', parsed.id)
-          .maybeSingle()
-
-        if (error || !fresh || fresh.status === 'Inactive') {
-          // Session is stale or account deactivated — force logout
-          sessionStorage.removeItem('report_system_user')
+        // Re-validate against the backend so tampered roles are never trusted
+        const { data: fresh } = await api.get('/api/auth/me')
+        if (!fresh || fresh.status === 'Inactive') {
+          localStorage.removeItem('proact_token')
+          localStorage.removeItem('proact_user')
           setIsLoading(false)
           return
         }
-
-        const sanitized = sanitizeUser(fresh)
-        sessionStorage.setItem('report_system_user', JSON.stringify(sanitized))
-        setUser(sanitized)
-      } else {
-        setUser(sanitizeUser(parsed))
+        localStorage.setItem('proact_user', JSON.stringify(fresh))
+        setUser(fresh)
+      } catch {
+        // Token expired or invalid
+        localStorage.removeItem('proact_token')
+        localStorage.removeItem('proact_user')
+      } finally {
+        setIsLoading(false)
       }
-
-      setIsLoading(false)
     }
 
     restoreSession()
@@ -79,26 +58,25 @@ function App() {
 
   const handleLogin = (loggedInUser) => {
     if (loggedInUser) {
-      const sanitized = sanitizeUser(loggedInUser)
-      sessionStorage.setItem('report_system_user', JSON.stringify(sanitized))
-      setUser(sanitized)
+      setUser(loggedInUser)
     } else {
-      sessionStorage.removeItem('report_system_user')
+      localStorage.removeItem('proact_token')
+      localStorage.removeItem('proact_user')
       setUser(null)
     }
   }
 
   const handleLogout = () => {
-    sessionStorage.removeItem('report_system_user')
+    localStorage.removeItem('proact_token')
+    localStorage.removeItem('proact_user')
+    localStorage.removeItem('selectedEventId')
     setUser(null)
   }
 
   const handleUserUpdate = (updatedUser) => {
-    const sanitized = sanitizeUser(updatedUser)
-    sessionStorage.setItem('report_system_user', JSON.stringify(sanitized))
-    setUser(sanitized)
+    localStorage.setItem('proact_user', JSON.stringify(updatedUser))
+    setUser(updatedUser)
   }
-
 
   if (isLoading) {
     return <LoadingSpinner label="Authenticating session..." />
@@ -106,9 +84,8 @@ function App() {
 
   return (
     <BrowserRouter>
-
-        <MeshBackground />
-        <EventProvider user={user}>
+      <MeshBackground />
+      <EventProvider user={user}>
         <Routes>
           <Route
             path="/login"
@@ -126,7 +103,6 @@ function App() {
               isAuthenticated ? (
                 <Layout user={user} onLogout={handleLogout} onUserUpdate={handleUserUpdate} />
               ) : (
-
                 <Navigate to="/login" replace />
               )
             }
@@ -144,8 +120,7 @@ function App() {
           <Route path="*" element={<Navigate to={isAuthenticated ? '/dashboard' : '/login'} replace />} />
         </Routes>
       </EventProvider>
-
-  </BrowserRouter>
+    </BrowserRouter>
   )
 }
 

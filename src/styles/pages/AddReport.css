@@ -867,8 +867,8 @@
 
 /* Submitted reports display table */
 .submitted-reports-section {
-	margin-top: 2rem;
-	padding: 1.75rem 2.25rem;
+	margin-top: 1.5rem;
+	padding: 1.25rem 1.75rem;
 	max-width: 100%;
 	background: var(--glass-bg);
 	backdrop-filter: blur(var(--glass-blur)) saturate(180%);
@@ -904,7 +904,7 @@
 }
 
 .report-table-display thead th {
-	padding: 1.25rem 1.25rem;
+	padding: 0.75rem 1rem;
 	font-size: 0.6875rem;
 	font-weight: 700;
 	color: var(--text-muted);
@@ -928,7 +928,7 @@
 }
 
 .report-table-display tbody td {
-	padding: 1rem 1.25rem;
+	padding: 0.625rem 1rem;
 	text-align: left;
 	transition: background 0.2s ease;
 	overflow: hidden;

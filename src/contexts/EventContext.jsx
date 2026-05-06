@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import { createPortal } from 'react-dom'
 import {
   Warning, CloudRain, Flame, Info, Check, Calendar, CaretRight, PlusCircle, Clock, X, CheckCircle } from '@phosphor-icons/react'
-import { supabase } from '../lib/supabase'
+import api from '../lib/api'
+import { io } from 'socket.io-client'
 import HeaderFooterModal from '../components/HeaderFooterModal'
 import ConfirmationModal from '../components/ConfirmationModal'
 import Button from '../components/Button'
@@ -23,6 +24,7 @@ export function EventProvider({ children, user }) {
   
   // 1. Fundamental State
   const [events, setEvents] = useState([])
+  const socketRef = useRef(null)
   const [currentEventId, setCurrentEventId] = useState(() => {
     return localStorage.getItem('selectedEventId') || null
   })
@@ -129,20 +131,31 @@ export function EventProvider({ children, user }) {
     closeConfirm()
   }, [confirmModal, closeConfirm])
 
+  // Helper: normalize raw DB event row to camelCase shape
+  const mapEvent = (e) => ({
+    id: e.id,
+    name: e.name,
+    color: e.color,
+    startDate: e.start_date,
+    endDate: e.end_date,
+    eventType: e.event_type,
+    alertStatus: e.alert_status,
+    alertLevel: e.alert_level || '',
+    approvalStatus: e.approval_status || 'Pending',
+    approvedPdfUrl: e.approved_pdf_url || null,
+    summary: e.summary || '',
+    pingedReportTypes: e.pinged_report_types || [],
+    affectedProvinces: e.affected_provinces || [],
+    isDeployed: e.is_deployed || false,
+    deployedAt: e.deployed_at || null,
+    deployedSnapshot: e.deployed_snapshot || null
+  })
+
   // 4. Data Fetching Hooks
   const fetchSituationalReports = useCallback(async (eventId) => {
-    if (!supabase || !eventId) return
+    if (!eventId) return
     try {
-      let query = supabase.from('situational_reports').select('*').eq('event_id', eventId).order('report_number', { ascending: false })
-
-      // Scoping: Only Regional/Super Admins see SitReps from all provinces
-      const isRegional = user?.account_type === 'Regional Admin' || user?.account_type === 'Regional' || user?.account_type === 'Super Admin' || user?.role === 'Super Admin'
-      if (!isRegional && user?.province) {
-        query = query.eq('province', user.province)
-      }
-
-      const { data, error } = await query
-      if (error) throw error
+      const { data } = await api.get('/api/situational-reports', { params: { event_id: eventId } })
       setSituationalReports(data || [])
       return data
     } catch (err) {
@@ -152,13 +165,9 @@ export function EventProvider({ children, user }) {
   }, [user])
 
   const fetchEventDeployments = useCallback(async (eventId) => {
-    if (!supabase || !eventId) return
+    if (!eventId) return
     try {
-      const { data, error } = await supabase
-        .from('event_deployments')
-        .select('*')
-        .eq('event_id', eventId)
-      if (error) throw error
+      const { data } = await api.get('/api/deployments', { params: { event_id: eventId } })
       setEventDeployments(data || [])
       return data
     } catch (err) {
@@ -168,24 +177,9 @@ export function EventProvider({ children, user }) {
   }, [])
 
   const fetchUserSignal = useCallback(async (eventId) => {
-    if (!supabase || !user || !eventId) {
-      setUserSignal(null)
-      return
-    }
+    if (!user || !eventId) { setUserSignal(null); return }
     try {
-      let query = supabase.from('event_signals').select('signal').eq('event_id', eventId)
-      
-      if (user.account_type === 'Provincial Admin') {
-        query = query.eq('province', user.province).is('city', null)
-      } else if (user.account_type === 'LGU Admin' || user.account_type === 'LGU') {
-        query = query.eq('city', user.city).is('barangay', null)
-      } else {
-        setUserSignal(null)
-        return
-      }
-
-      const { data, error } = await query.maybeSingle()
-      if (error) throw error
+      const { data } = await api.get('/api/signals/user', { params: { event_id: eventId } })
       setUserSignal(data?.signal || null)
     } catch (err) {
       console.error('Error fetching user signal:', err)
@@ -194,75 +188,20 @@ export function EventProvider({ children, user }) {
   }, [user])
 
   const fetchEvents = useCallback(async () => {
-    if (!supabase) return
+    if (!user) return
     try {
-      let query = supabase.from('events').select('*')
-      
-      if (user) {
-        if (user.account_type === 'Regional Admin' || user.account_type === 'Super Admin' || user.role === 'Super Admin') {
-          // Regional/Super Admins see all events
-        } else if (user.account_type === 'Provincial Admin') {
-          // Provincial Admins see events where their province is assigned a signal OR it's deployed
-          const { data: signals } = await supabase
-            .from('event_signals')
-            .select('event_id')
-            .eq('province', user.province)
-            .is('city', null)
-          
-          const assignedEventIds = (signals || []).map(s => s.event_id)
-          query = query.or(`id.in.(${assignedEventIds.join(',') || '00000000-0000-0000-0000-000000000000'}),is_deployed.eq.true`)
-        } else if (user.account_type === 'LGU Admin' || user.account_type === 'LGU') {
-          // LGU Admins see events where their city is assigned a signal OR it's deployed
-          const { data: signals } = await supabase
-            .from('event_signals')
-            .select('event_id')
-            .eq('city', user.city)
-            .is('barangay', null)
-          
-          const assignedEventIds = (signals || []).map(s => s.event_id)
-          query = query.or(`id.in.(${assignedEventIds.join(',') || '00000000-0000-0000-0000-000000000000'}),is_deployed.eq.true`)
-        }
-      }
-      // All users can see the deployed event
-
-      const { data, error } = await query.order('start_date', { ascending: false })
-      if (error) throw error
-
-      const mappedEvents = (data || []).map(e => ({
-        id: e.id,
-        name: e.name,
-        color: e.color,
-        startDate: e.start_date,
-        endDate: e.end_date,
-        eventType: e.event_type,
-        alertStatus: e.alert_status,
-        alertLevel: e.alert_level || '',
-        approvalStatus: e.approval_status || 'Pending',
-        approvedPdfUrl: e.approved_pdf_url || null,
-        summary: e.summary || '',
-        pingedReportTypes: e.pinged_report_types || [],
-        affectedProvinces: e.affected_provinces || [],
-        isDeployed: e.is_deployed || false,
-        deployedAt: e.deployed_at || null,
-        deployedSnapshot: e.deployed_snapshot || null
-      }));
-      console.log('Fetched Events from Supabase:', mappedEvents);
+      const { data } = await api.get('/api/events')
+      const mappedEvents = (data || []).map(mapEvent)
+      console.log('[EventContext] Fetched events:', mappedEvents.length)
       setEvents(mappedEvents)
 
-      // If we have a currentEventId, check if it still exists or if a new one is deployed
       const activeEvent = mappedEvents.find(e => e.isDeployed)
       if (activeEvent && activeEvent.id !== currentEventId) {
-        console.log('New active event detected, switching to:', activeEvent.name)
         setCurrentEventId(activeEvent.id)
       }
-
-      // Auto-initialize active event for Regional/Super Admin users if none selected
       if (!currentEventId && mappedEvents.length > 0) {
         const firstDeployed = mappedEvents.find(e => e.isDeployed) || mappedEvents[0]
-        if (firstDeployed) {
-          console.log('Auto-initializing active event to:', firstDeployed.name)
-          setCurrentEventId(firstDeployed.id)
-        }
+        if (firstDeployed) setCurrentEventId(firstDeployed.id)
       }
     } catch (err) {
       console.error('Error fetching events:', err)
@@ -272,19 +211,12 @@ export function EventProvider({ children, user }) {
   }, [user])
 
   const fetchNotifications = useCallback(async () => {
-    if (!supabase || !user) return
+    if (!user) return
     try {
-      const { data, error } = await supabase
-        .from('notifications')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false })
-      if (error) throw error
+      const { data } = await api.get('/api/notifications')
       setNotifications(data || [])
-      const unread = data?.filter(n => !n.is_read) || []
+      const unread = (data || []).filter(n => !n.is_read)
       setUnreadCount(unread.length)
-
-      // Show summary toast on initial load if there are unread notifications
       if (!hasShownInitialToast.current && unread.length > 0) {
         hasShownInitialToast.current = true
         showToast(
@@ -299,70 +231,34 @@ export function EventProvider({ children, user }) {
   }, [user])
 
   const fetchPendingUsersCount = useCallback(async () => {
-    if (!supabase || !user) return
-    // Only admin types can see the Users sidebar badge
+    if (!user) return
     const adminTypes = ['Regional Admin', 'Provincial Admin', 'LGU Admin', 'Super Admin']
-    const canManageUsers = adminTypes.includes(user.account_type) || user.role === 'Super Admin'
-    if (!canManageUsers) return
-
+    if (!adminTypes.includes(user.account_type) && user.role !== 'Super Admin') return
     try {
-      let query = supabase.from('users').select('id', { count: 'exact', head: true })
-      
-      // Scope the count to match each admin's visibility:
-      if (user.account_type === 'Provincial Admin') {
-        query = query.eq('province', user.province)
-          .in('account_type', ['Provincial Admin', 'Provincial Approver', 'Provincial', 'LGU Admin', 'LGU'])
-      } else if (user.account_type === 'LGU Admin') {
-        query = query.eq('city', user.city)
-          .in('account_type', ['LGU Admin', 'LGU'])
-      }
-      // Regional Admin / Super Admin → count all (no extra filter)
-
-      // Count those who are Pending OR must change password
-      const { count, error } = await query.or('status.eq.Pending,must_change_password.eq.true')
-      
-      if (error) throw error
-      setPendingUsersCount(count || 0)
+      const { data } = await api.get('/api/users/pending-count')
+      setPendingUsersCount(data?.count || 0)
     } catch (err) {
       console.error('Error fetching pending users count:', err)
     }
   }, [user])
 
   const fetchPendingApprovalsCount = useCallback(async () => {
-    if (!supabase || !user) return
-    // Only Provincial Approver and Super Admin can see the For Approval sidebar badge
+    if (!user) return
     const isApprover = user.account_type === 'Provincial Approver' || user.account_type === 'Super Admin' || user.role === 'Super Admin'
-    if (!isApprover) {
-      setPendingApprovalsCount(0)
-      return
-    }
-
+    if (!isApprover) { setPendingApprovalsCount(0); return }
     try {
-      let query = supabase
-        .from('situational_reports')
-        .select('id', { count: 'exact', head: true })
-        .eq('status', 'Pending Approval')
-      
-      if (user.account_type === 'Provincial Approver' && user.province) {
-        query = query.eq('province', user.province)
-      }
-
-      const { count, error } = await query
-      if (error) throw error
-      setPendingApprovalsCount(count || 0)
+      const { data } = await api.get('/api/situational-reports', {
+        params: { status: 'Pending Approval', count_only: true, event_id: 'all' }
+      })
+      setPendingApprovalsCount(Array.isArray(data) ? data.length : (data?.count || 0))
     } catch (err) {
       console.error('Error fetching pending approvals count:', err)
     }
   }, [user])
 
   const markNotificationAsRead = useCallback(async (notifId) => {
-    if (!supabase) return
     try {
-      const { error } = await supabase
-        .from('notifications')
-        .update({ is_read: true })
-        .eq('id', notifId)
-      if (error) throw error
+      await api.patch(`/api/notifications/${notifId}/read`)
       setNotifications(prev => prev.map(n => n.id === notifId ? { ...n, is_read: true } : n))
       setUnreadCount(prev => Math.max(0, prev - 1))
     } catch (err) {
@@ -371,42 +267,33 @@ export function EventProvider({ children, user }) {
   }, [])
 
   const markSitRepNotificationsAsRead = useCallback(async (sitRepId) => {
-    if (!supabase || !user || !sitRepId) return
+    if (!user || !sitRepId) return
     try {
-      // Find unread notifications for this user related to this SitRep
       const relevantNotifs = notifications.filter(n => {
         if (n.is_read) return false
-        let data = n.data
-        if (typeof data === 'string') try { data = JSON.parse(data) } catch (e) { data = {} }
-        return String(data?.sitrep_id) === String(sitRepId)
+        let d = n.data
+        if (typeof d === 'string') try { d = JSON.parse(d) } catch (e) { d = {} }
+        return String(d?.sitrep_id) === String(sitRepId)
       })
-
       if (relevantNotifs.length === 0) return
-
-      const notifIds = relevantNotifs.map(n => n.id)
-      const { error } = await supabase
-        .from('notifications')
-        .update({ is_read: true })
-        .in('id', notifIds)
-      
-      if (error) throw error
-
-      setNotifications(prev => prev.map(n => notifIds.includes(n.id) ? { ...n, is_read: true } : n))
-      setUnreadCount(prev => Math.max(0, prev - notifIds.length))
-      console.log(`Auto-marked ${notifIds.length} notifications as read for SitRep: ${sitRepId}`)
+      const ids = relevantNotifs.map(n => n.id)
+      await api.post('/api/notifications/mark-many-read', { ids })
+      setNotifications(prev => prev.map(n => ids.includes(n.id) ? { ...n, is_read: true } : n))
+      setUnreadCount(prev => Math.max(0, prev - ids.length))
     } catch (err) {
-      console.error('Error auto-marking SitRep notifications as read:', err)
+      console.error('Error marking SitRep notifications as read:', err)
     }
   }, [user, notifications])
 
   // 4.5. Data Refresh Effect
   useEffect(() => {
+    if (!user) return
     fetchEvents()
     fetchNotifications()
     fetchPendingUsersCount()
     fetchPendingApprovalsCount()
     if (currentEventId) fetchUserSignal(currentEventId)
-  }, [fetchEvents, fetchNotifications, fetchPendingUsersCount, fetchPendingApprovalsCount, currentEventId, fetchUserSignal])
+  }, [user, fetchEvents, fetchNotifications, fetchPendingUsersCount, fetchPendingApprovalsCount, currentEventId, fetchUserSignal])
 
   // 5. Computed State
   const defaultEvent = {
@@ -422,153 +309,63 @@ export function EventProvider({ children, user }) {
 
   // 6. Effects
 
-  // Stable Subscriptions (User-based)
+  // Real-time via Socket.io (replaces Supabase channels)
   useEffect(() => {
-    if (!supabase || !user) return
+    if (!user) return
 
-    console.log(`Setting up stable real-time subscriptions for user: ${user.id}`)
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000'
+    const socket = io(API_URL, { transports: ['websocket'] })
+    socketRef.current = socket
 
-    // 1. Notifications Subscription
-    const notificationsChannel = supabase
-      .channel(`user-notifications-${user.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'notifications',
-          filter: `user_id=eq.${user.id}`
-        },
-        (payload) => {
-          console.log('New notification received:', payload.new?.title)
-          setNotifications(prev => [payload.new, ...prev])
-          setUnreadCount(prev => prev + 1)
-          showToast(payload.new.title || 'New Notification', payload.new.message || '', 'info')
-        }
-      )
-      .subscribe()
+    console.log('[Socket.io] Connecting for user:', user.id)
 
-    const eventsChannel = supabase
-      .channel('public-events-changes-global')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'events' },
-        (payload) => {
-          console.log('Event table change:', payload.eventType, payload.new?.name || payload.old?.id)
-          
-          if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
-            const updatedEvent = {
-              id: payload.new.id,
-              name: payload.new.name,
-              color: payload.new.color,
-              startDate: payload.new.start_date,
-              endDate: payload.new.end_date,
-              eventType: payload.new.event_type,
-              alertStatus: payload.new.alert_status,
-              alertLevel: payload.new.alert_level || '',
-              approvalStatus: payload.new.approval_status || 'Pending',
-              approvedPdfUrl: payload.new.approved_pdf_url || null,
-              summary: payload.new.summary || '',
-              pingedReportTypes: payload.new.pinged_report_types || [],
-              affectedProvinces: payload.new.affected_provinces || [],
-              isDeployed: payload.new.is_deployed || false,
-              deployedAt: payload.new.deployed_at || null,
-              deployedSnapshot: payload.new.deployed_snapshot || null
-            }
+    // Events
+    socket.on('events:created', (event) => {
+      setEvents(prev => [mapEvent(event), ...prev])
+    })
+    socket.on('events:updated', (event) => {
+      const mapped = mapEvent(event)
+      setEvents(prev => prev.map(e => e.id === mapped.id ? mapped : e))
+      if (mapped.isDeployed) setCurrentEventId(mapped.id)
+    })
+    socket.on('events:deleted', ({ id }) => {
+      setEvents(prev => prev.filter(e => e.id !== id))
+    })
 
-            setEvents(prev => {
-              const exists = prev.some(e => e.id === updatedEvent.id)
-              if (exists) {
-                return prev.map(e => e.id === updatedEvent.id ? updatedEvent : e)
-              }
-              return [updatedEvent, ...prev]
-            })
+    // Situational Reports
+    socket.on('sitrep:created', () => {
+      if (currentEventId) fetchSituationalReports(currentEventId)
+    })
+    socket.on('sitrep:updated', () => {
+      if (currentEventId) fetchSituationalReports(currentEventId)
+      fetchPendingApprovalsCount()
+    })
 
-            // Auto-switch if it's the newly deployed event
-            if (updatedEvent.isDeployed) {
-              console.log('Real-time switch to newly deployed event:', updatedEvent.name)
-              setCurrentEventId(updatedEvent.id)
-            }
-          } else if (payload.eventType === 'DELETE') {
-            setEvents(prev => prev.filter(e => e.id !== payload.old.id))
-          }
-          
-          // Still fetch all to stay perfectly in sync in case of misses
-          fetchEvents()
-        }
-      )
-      .subscribe()
+    // Notifications for this user
+    socket.on(`notification:${user.id}`, (notif) => {
+      setNotifications(prev => [notif, ...prev])
+      setUnreadCount(prev => prev + 1)
+      showToast(notif.title || 'New Notification', notif.message || '', 'info')
+    })
 
-    // 3. Event Deployments Subscription
-    const deploymentsChannel = supabase
-      .channel('public-deployments-changes-global')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'event_deployments' },
-        (payload) => {
-          if (user.account_type === 'LGU') {
-            const affectedCity = payload.new?.city || payload.old?.city
-            if (affectedCity === user.city) {
-              console.log('Deployment change for this LGU detected')
-              fetchEvents()
-            }
-          } else {
-            fetchEvents()
-          }
-        }
-      )
-      .subscribe()
-
-    // 4. Users Subscription (Real-time badge updates)
-    const usersChannel = supabase
-      .channel('public-users-changes-global')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'users' },
-        () => {
-          console.log('User table change detected, refreshing pending count')
-          fetchPendingUsersCount()
-        }
-      )
-      .subscribe()
+    // Users changed (badge refresh)
+    socket.on('users:changed', () => fetchPendingUsersCount())
 
     return () => {
-      console.log('Cleaning up stable subscriptions')
-      supabase.removeChannel(notificationsChannel)
-      supabase.removeChannel(eventsChannel)
-      supabase.removeChannel(deploymentsChannel)
-      supabase.removeChannel(usersChannel)
+      console.log('[Socket.io] Disconnecting')
+      socket.disconnect()
+      socketRef.current = null
     }
-  }, [user, fetchEvents, fetchPendingUsersCount, showToast])
+  }, [user, currentEventId, fetchSituationalReports, fetchPendingUsersCount, fetchPendingApprovalsCount, showToast])
 
-  // Event-specific Subscriptions
+  // Polling fallback for situational reports (30s) when socket misses an event
   useEffect(() => {
-    if (!supabase || !user || !currentEventId) return
-
-    console.log(`Setting up event-specific subscriptions for: ${currentEventId}`)
-
-    const sitRepsChannel = supabase
-      .channel(`situational-reports-${currentEventId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'situational_reports',
-          filter: `event_id=eq.${currentEventId}`
-        },
-        (payload) => {
-          console.log('Situational report change for current event detected')
-          fetchSituationalReports(currentEventId)
-        }
-      )
-      .subscribe()
-
-    return () => {
-      console.log('Cleaning up event-specific subscriptions')
-      supabase.removeChannel(sitRepsChannel)
-    }
-  }, [user, currentEventId, fetchSituationalReports, fetchPendingApprovalsCount])
+    if (!user || !currentEventId) return
+    const interval = setInterval(() => {
+      fetchSituationalReports(currentEventId)
+    }, 30000)
+    return () => clearInterval(interval)
+  }, [user, currentEventId, fetchSituationalReports])
 
   useEffect(() => {
     if (events.length > 0 && !currentEventId) {
@@ -591,18 +388,15 @@ export function EventProvider({ children, user }) {
 
   // 7. Operations Hooks
   const sendSituationalReport = useCallback(async (reportId) => {
-    if (!supabase || !reportId) return false
+    if (!reportId) return false
     try {
-      const { data, error } = await supabase.from('situational_reports').update({ status: 'Sent' }).eq('id', reportId).select().single()
-      if (error) throw error
+      const { data } = await api.patch(`/api/situational-reports/${reportId}`, { status: 'Sent' })
       setSituationalReports(prev => prev.map(r => r.id === reportId ? data : r))
       if (currentSituationalReport?.id === reportId) {
         setCurrentSituationalReport(data)
       }
       
-      // Auto-mark notifications for this SitRep as read
       await markSitRepNotificationsAsRead(reportId)
-
       return true
     } catch (err) {
       console.error('Error sending situational report:', err)
@@ -611,110 +405,31 @@ export function EventProvider({ children, user }) {
   }, [currentSituationalReport])
 
   const createSituationalReport = useCallback(async (eventId, title, options = {}) => {
-    if (!supabase || !eventId) return null
+    if (!eventId) return null
     try {
-      const { data: existing } = await supabase.from('situational_reports').select('report_number').eq('event_id', eventId).order('report_number', { ascending: false }).limit(1)
-      const nextNumber = (existing?.[0]?.report_number || 0) + 1
-      const finalTitle = title || `Situational Report No. ${nextNumber}`
-      const { data, error } = await supabase.from('situational_reports').insert({ 
+      const { data } = await api.post('/api/situational-reports', { 
         event_id: eventId, 
-        report_number: nextNumber, 
-        title: finalTitle, 
+        title, 
         target_lgus: options.targetLgus || [],
-        province: user?.province || null,
-        created_by: user?.id || null
-      }).select().single()
-      if (error) throw error
-      if (options.pingedReportTypes && options.pingedReportTypes.length > 0) {
-        const { error: eventError } = await supabase.from('events').update({ pinged_report_types: options.pingedReportTypes }).eq('id', eventId)
-        if (!eventError) {
-          setEvents(prev => prev.map(e => e.id === eventId ? { ...e, pingedReportTypes: options.pingedReportTypes } : e))
-        }
-      }
-
-      // Send notifications to targeted LGUs
-      try {
-        console.log('Sending LGU notifications for targeted LGUs:', options.targetLgus);
-        let cityQuery = supabase.from('users').select('id, city, province').eq('account_type', 'LGU')
-        
-        if (options.targetLgus && options.targetLgus.length > 0) {
-          // Normalize city names: "City (Province)" -> "City"
-          const normalizedCities = options.targetLgus.map(city => city.includes(' (') ? city.split(' (')[0] : city)
-          cityQuery = cityQuery.in('city', normalizedCities)
-          if (user?.province) {
-            cityQuery = cityQuery.eq('province', user.province)
-          }
-        } else if (user?.province) {
-          // Default to all LGUs in the user's province if no specific LGUs selected
-          cityQuery = cityQuery.eq('province', user.province)
-        } else {
-          cityQuery = null
-        }
-
-        if (cityQuery) {
-          const { data: lguUsers, error: lguError } = await cityQuery
-          if (lguError) throw lguError;
-          
-          if (lguUsers?.length > 0) {
-            console.log(`Found ${lguUsers.length} LGU users to notify`);
-            
-            // Ensure these LGUs are deployed to the event so they can see it in Add Report
-            const deploymentsToInsert = lguUsers.map(u => ({
-              event_id: eventId,
-              city: u.city,
-              province: u.province || user?.province,
-              deployed_by: user?.id,
-              strength_label: 'Standard',
-              strength_value: 1
-            }))
-            
-            const { error: deployError } = await supabase
-              .from('event_deployments')
-              .upsert(deploymentsToInsert, { onConflict: 'event_id, city' })
-            
-            if (deployError) console.error('Error auto-deploying LGUs:', deployError);
-            else console.log('Successfully auto-deployed LGUs to event');
-
-            const notificationsToInsert = lguUsers.map(u => ({
-              user_id: u.id,
-              type: 'sitrep_assignment',
-              title: 'New Situational Report',
-              message: `A new situational report "${finalTitle}" has been created for your LGU.`,
-              data: { sitrep_id: data.id, event_id: eventId, created_at: new Date().toISOString() }
-            }))
-            const { error: insertError } = await supabase.from('notifications').insert(notificationsToInsert)
-            if (insertError) console.error('Error inserting notifications:', insertError);
-            else console.log('Successfully inserted LGU notifications');
-          } else {
-            console.log('No LGU users found for the given targets/province');
-          }
-        }
-      } catch (notifErr) {
-        console.error('Failed to send LGU notifications:', notifErr)
-      }
-
+        pinged_report_types: options.pingedReportTypes || []
+      })
+      
       setSituationalReports(prev => [data, ...prev])
       return data
     } catch (err) {
       console.error('Error creating situational report:', err)
       throw err;
     }
-  }, [user])
+  }, [])
 
   const updateSituationalReport = useCallback(async (reportId, updates) => {
-    if (!supabase || !reportId) return null
+    if (!reportId) return null
     try {
-      const { data, error } = await supabase
-        .from('situational_reports')
-        .update({
-          title: updates.title,
-          target_lgus: updates.targetLgus,
-          status: updates.status
-        })
-        .eq('id', reportId)
-        .select()
-        .single()
-      if (error) throw error
+      const { data } = await api.patch(`/api/situational-reports/${reportId}`, {
+        title: updates.title,
+        target_lgus: updates.targetLgus,
+        status: updates.status
+      })
       
       setSituationalReports(prev => prev.map(r => r.id === reportId ? data : r))
       if (currentSituationalReport?.id === reportId) {
@@ -728,18 +443,16 @@ export function EventProvider({ children, user }) {
   }, [currentSituationalReport])
   
   const notifyAffectedUsers = useCallback(async (eventId, eventName, provinces) => {
-    if (!supabase || !provinces || provinces.length === 0) return
+    if (!provinces || provinces.length === 0) return
     try {
-      // Find all users in affected provinces (Provincial and LGU levels)
-      const { data: usersToNotify } = await supabase
-        .from('users')
-        .select('id, province, account_type')
-        .in('province', provinces)
-        .in('account_type', ['Provincial', 'Provincial Admin', 'LGU', 'LGU Admin'])
+      // Find all users in affected provinces
+      const { data: usersToNotify } = await api.get('/api/users', {
+        params: { province: provinces, account_type: ['Provincial', 'Provincial Admin', 'LGU', 'LGU Admin'], status: 'Active' }
+      })
 
       if (usersToNotify && usersToNotify.length > 0) {
         const notifs = usersToNotify
-          .filter(u => u.id !== user?.id) // Don't notify the person who made the change
+          .filter(u => u.id !== user?.id)
           .map(u => ({
             user_id: u.id,
             type: 'event_update',
@@ -749,8 +462,7 @@ export function EventProvider({ children, user }) {
           }))
         
         if (notifs.length > 0) {
-          await supabase.from('notifications').insert(notifs)
-          console.log(`Sent notifications to ${notifs.length} affected users for event: ${eventName}`)
+          await api.post('/api/notifications/bulk', notifs)
         }
       }
     } catch (err) {
@@ -759,7 +471,6 @@ export function EventProvider({ children, user }) {
   }, [user])
 
   const addEvent = useCallback(async (event) => {
-    if (!supabase) return null
     try {
       const capitalizedName = event.name 
         ? event.name.charAt(0).toUpperCase() + event.name.slice(1) 
@@ -778,47 +489,20 @@ export function EventProvider({ children, user }) {
         affected_provinces: event.affectedProvinces || []
       }
       
-      if (payload.start_date === '') payload.start_date = null
-      if (payload.end_date === '') payload.end_date = null
-      const { data, error } = await supabase.from('events').insert(payload).select().single()
-      if (error) throw error
-      if (user) {
-        await supabase.from('activity_logs').insert({ user_id: user.id, action: 'Created new event', details: `Event: ${data.name}` })
-      }
-      const newEvent = {
-        id: data.id,
-        name: data.name,
-        color: data.color,
-        startDate: data.start_date,
-        endDate: data.end_date,
-        eventType: data.event_type,
-        alertStatus: data.alert_status,
-        alertLevel: data.alert_level || '',
-        approvalStatus: data.approval_status || 'Pending',
-        approvedPdfUrl: data.approved_pdf_url || null,
-        summary: data.summary || '',
-        pingedReportTypes: data.pinged_report_types || [],
-        affectedProvinces: data.affected_provinces || [],
-        deployedSnapshot: data.deployed_snapshot || null
-      }
+      const { data } = await api.post('/api/events', payload)
+      const newEvent = mapEvent(data)
       setEvents((prev) => [newEvent, ...prev])
       showToast('Event Created', `Successfully created event: ${newEvent.name}`, 'success')
-
-      // Notify affected users
-      if (newEvent.affectedProvinces?.length > 0) {
-        notifyAffectedUsers(newEvent.id, newEvent.name, newEvent.affectedProvinces)
-      }
 
       return newEvent
     } catch (err) {
       console.error('Error adding event:', err)
-      alert('Failed to add event: ' + err.message)
+      showToast('Error', 'Failed to add event: ' + err.message, 'danger')
       return null
     }
-  }, [user])
+  }, [])
 
   const updateEvent = useCallback(async (id, updates) => {
-    if (!supabase) return
     try {
       const payload = {}
       if (updates.name !== undefined) {
@@ -839,37 +523,22 @@ export function EventProvider({ children, user }) {
       if (updates.deployedAt !== undefined) payload.deployed_at = updates.deployedAt || null
       if (updates.deployedSnapshot !== undefined) payload.deployed_snapshot = updates.deployedSnapshot || null
 
-      if (payload.start_date === '') payload.start_date = null
-      if (payload.end_date === '') payload.end_date = null
-      if (payload.deployed_at === '') payload.deployed_at = null
-      if (payload.deployed_snapshot === '') payload.deployed_snapshot = null
-
-      const { error } = await supabase.from('events').update(payload).eq('id', id)
-      if (error) throw error
-      setEvents((prev) => prev.map((e) => (e.id === id ? { ...e, ...updates } : e)))
+      const { data } = await api.patch(`/api/events/${id}`, payload)
+      const updated = mapEvent(data)
+      setEvents((prev) => prev.map((e) => (e.id === id ? updated : e)))
       showToast('Event Updated', `Successfully updated event details.`, 'success')
-
-      // Notify if affected provinces were updated
-      if (updates.affectedProvinces?.length > 0) {
-        const eventName = updates.name || events.find(e => e.id === id)?.name || 'Updated Event'
-        notifyAffectedUsers(id, eventName, updates.affectedProvinces)
-      }
     } catch (err) {
       console.error('Error updating event:', err)
-      alert('Failed to update event: ' + err.message)
+      showToast('Error', 'Failed to update event: ' + err.message, 'danger')
     }
   }, [])
 
   const fetchEventSignals = useCallback(async (eventId) => {
-    if (!supabase || !eventId) return []
+    if (!eventId) return []
     setLoadingSignals(true)
     try {
-      const { data, error } = await supabase
-        .from('event_signals')
-        .select('*')
-        .eq('event_id', eventId)
-      if (error) throw error
-      // De-duplicate signals by city/barangay case-insensitively
+      const { data } = await api.get('/api/signals', { params: { event_id: eventId } })
+      
       const deduplicated = (data || []).reduce((acc, current) => {
         const key = `${current.city?.toLowerCase() || ''}-${current.barangay?.toLowerCase() || ''}`;
         if (!acc[key]) {
@@ -889,25 +558,12 @@ export function EventProvider({ children, user }) {
   }, [])
 
   const assignSignal = useCallback(async (eventId, province, city, barangay, signal) => {
-    if (!supabase || !eventId || !user) return false
+    if (!eventId || !user) return false
     try {
       let locationName = barangay || city || province
       
       if (signal === null) {
-        // DELETE signal
-        console.log(`Clearing signal for:`, { province, city, barangay })
-        let query = supabase.from('event_signals').delete().eq('event_id', eventId).eq('province', province)
-        
-        if (city) query = query.eq('city', city)
-        else query = query.is('city', null)
-        
-        if (barangay) query = query.eq('barangay', barangay)
-        else query = query.is('barangay', null)
-
-        const { error } = await query
-        if (error) throw error
-        
-        // Update local state
+        await api.post('/api/signals/clear', { event_id: eventId, province, city, barangay })
         setEventSignals(prev => prev.filter(s => {
           const isMatch = s.event_id === eventId && 
             s.province?.toLowerCase() === province?.toLowerCase() &&
@@ -915,45 +571,18 @@ export function EventProvider({ children, user }) {
             (barangay ? s.barangay?.toLowerCase() === barangay?.toLowerCase() : !s.barangay);
           return !isMatch;
         }))
-
         showToast('Signal Cleared', `Successfully cleared signal for ${locationName}`, 'success')
         return true
       }
 
-      console.log(`Assigning Signal ${signal} to:`, { province, city, barangay })
-      
-      const payload = {
+      const { data } = await api.post('/api/signals/assign', {
         event_id: eventId,
         province,
         city: city || null,
         barangay: barangay || null,
-        signal,
-        assigned_by: user.id
-      }
+        signal
+      })
 
-      // Delete any existing signal for this specific location case-insensitively first
-      // to prevent duplicates caused by casing differences (e.g. "LA UNION" vs "La Union")
-      await supabase
-        .from('event_signals')
-        .delete()
-        .eq('event_id', eventId)
-        .eq('province', province) // We keep province for safety but will rely on city/barangay
-        .ilike('city', city || '')
-        .ilike('barangay', barangay || '')
-
-      // Upsert the signal
-      const { data, error } = await supabase
-        .from('event_signals')
-        .upsert(payload, { onConflict: 'event_id, province, city, barangay' })
-        .select()
-        .single()
-      
-      if (error) {
-        console.error('Supabase Error in assignSignal:', error)
-        throw error
-      }
-
-      // Update local state
       if (data) {
         setEventSignals(prev => {
           const other = prev.filter(s => {
@@ -967,92 +596,22 @@ export function EventProvider({ children, user }) {
         });
       }
 
-      // Notification Logic
-      let targetUserType = ''
-      let targetFilter = {}
-
-      if (!city && !barangay) {
-        // Region -> Province
-        targetUserType = 'Provincial Admin'
-        targetFilter = { province }
-        locationName = province
-      } else if (city && !barangay) {
-        // Province -> LGU
-        targetUserType = 'LGU Admin'
-        targetFilter = { city }
-        locationName = city
-      } else if (barangay) {
-        // LGU -> Barangay
-        targetUserType = 'LGU' 
-        targetFilter = { city }
-        locationName = barangay
-      }
-
-      // Fetch users to notify
-      let targetTypes = []
-      if (targetUserType === 'Provincial Admin') targetTypes = ['Provincial', 'Provincial Admin']
-      else if (targetUserType === 'LGU Admin' || targetUserType === 'LGU') targetTypes = ['LGU', 'LGU Admin']
-      else targetTypes = [targetUserType]
-
-      let userQuery = supabase.from('users').select('id').in('account_type', targetTypes)
-      if (targetFilter.province) userQuery = userQuery.eq('province', targetFilter.province)
-      if (targetFilter.city) userQuery = userQuery.eq('city', targetFilter.city)
-
-      const { data: usersToNotify } = await userQuery
-      
-      if (usersToNotify && usersToNotify.length > 0) {
-        const event = events.find(e => e.id === eventId)
-        
-        // If targeting an LGU (city is present), we treat this as a deployment
-        const isLguDeployment = city && !barangay;
-        
-        const notifications = usersToNotify.map(u => ({
-          user_id: u.id,
-          type: isLguDeployment ? 'event_deployment' : 'event_signal',
-          title: isLguDeployment ? 'New Event Deployment' : `Signal ${signal} Assigned`,
-          message: isLguDeployment 
-            ? `Event "${event?.name}" has been deployed to ${locationName} with Signal ${signal}.`
-            : `Event "${event?.name}": Signal ${signal} has been assigned to ${locationName}.`,
-          data: { event_id: eventId, signal, province, city, barangay }
-        }))
-        await supabase.from('notifications').insert(notifications)
-      }
-
-      // If it's an LGU deployment, ensure it's also in the event_deployments table
-      if (city && !barangay) {
-        console.log(`Auto-deploying to ${city} due to signal assignment`);
-        await supabase.from('event_deployments').upsert({
-          event_id: eventId,
-          province,
-          city,
-          strength_label: 'Wind Signal',
-          strength_value: `Signal No. ${signal}`,
-          deployed_by: user.id
-        }, { onConflict: 'event_id, city' })
-      }
-
       showToast('Signal Assigned', `Successfully assigned Signal ${signal} to ${locationName}`, 'success')
       return true
     } catch (err) {
-      console.error('Caught Error in assignSignal:', err)
+      console.error('Error assigning signal:', err)
       showToast('Error', 'Failed to assign signal.', 'danger')
       return false
     }
-  }, [user, events, showToast])
+  }, [user, showToast])
 
   const bulkAssignSignals = useCallback(async (eventId, province, locations, signal) => {
-    if (!supabase || !eventId || !user || !locations.length) return false
+    if (!eventId || !user || !locations.length) return false
     try {
       if (signal === null) {
-        const { error } = await supabase
-          .from('event_signals')
-          .delete()
-          .eq('event_id', eventId)
-          .eq('province', province)
-          .in('city', locations)
-          .is('barangay', null)
-        
-        if (error) throw error
+        for (const city of locations) {
+          await api.post('/api/signals/clear', { event_id: eventId, province, city, barangay: null })
+        }
         
         setEventSignals(prev => prev.filter(s => {
           if (s.event_id !== eventId || s.province?.toLowerCase() !== province?.toLowerCase() || s.barangay) return true;
@@ -1063,69 +622,24 @@ export function EventProvider({ children, user }) {
         return true
       }
 
-      const payloads = locations.map(city => ({
+      const assignments = locations.map(city => ({
         event_id: eventId,
         province,
         city,
         barangay: null,
-        signal,
-        assigned_by: user.id
+        signal
       }))
 
-      // Delete existing signals for these locations case-insensitively first
-      for (const loc of locations) {
-        await supabase
-          .from('event_signals')
-          .delete()
-          .eq('event_id', eventId)
-          .ilike('city', loc)
-          .is('barangay', null)
-      }
-
-      const { data: insertedSignals, error } = await supabase
-        .from('event_signals')
-        .upsert(payloads, { onConflict: 'event_id, province, city, barangay' })
-        .select()
+      const { data } = await api.post('/api/signals/bulk-assign', { assignments })
       
-      if (error) throw error
-
-      if (insertedSignals) {
+      if (data) {
         setEventSignals(prev => {
           const others = prev.filter(s => {
             if (s.event_id !== eventId || s.province?.toLowerCase() !== province?.toLowerCase() || s.barangay) return true;
             return !locations.some(loc => loc.toLowerCase() === s.city?.toLowerCase());
           });
-          return [...others, ...insertedSignals];
+          return [...others, ...data];
         });
-      }
-
-      const event = events.find(e => e.id === eventId)
-      
-      const deployments = locations.map(loc => ({
-        event_id: eventId,
-        province,
-        city: loc,
-        strength_label: 'Wind Signal',
-        strength_value: `Signal No. ${signal}`,
-        deployed_by: user.id
-      }))
-      await supabase.from('event_deployments').upsert(deployments, { onConflict: 'event_id, city' })
-
-      const { data: usersToNotify } = await supabase
-        .from('users')
-        .select('id, city')
-        .eq('account_type', 'LGU')
-        .in('city', locations)
-
-      if (usersToNotify && usersToNotify.length > 0) {
-        const notifications = usersToNotify.map(u => ({
-          user_id: u.id,
-          type: 'event_deployment',
-          title: 'New Event Deployment',
-          message: `Event "${event?.name}" has been deployed to ${u.city} with Signal ${signal}.`,
-          data: { event_id: eventId, signal, province, city: u.city }
-        }))
-        await supabase.from('notifications').insert(notifications)
       }
 
       showToast('Bulk Assigned', `Successfully assigned Signal ${signal} to ${locations.length} locations.`, 'success')
@@ -1135,26 +649,14 @@ export function EventProvider({ children, user }) {
       showToast('Error', 'Failed to assign signals in bulk.', 'danger')
       return false
     }
-  }, [user, events, showToast])
+  }, [user, showToast])
 
   const deployEvent = useCallback(async (eventId) => {
-    if (!supabase || !user) return false
+    if (!user) return false
     try {
-      console.log('Attempting to deploy event:', eventId)
-      
-      // Fetch the latest data from DB to ensure snapshot is accurate
-      const { data: dbEvent, error: fetchError } = await supabase
-        .from('events')
-        .select('*')
-        .eq('id', eventId)
-        .single()
-      
-      if (fetchError || !dbEvent) {
-        console.error('Error fetching latest event for deployment:', fetchError)
-        return false
-      }
-
       const deployedAt = new Date().toISOString()
+      const { data: dbEvent } = await api.get(`/api/events/${eventId}`)
+      
       const snapshot = {
         name: dbEvent.name,
         eventType: dbEvent.event_type,
@@ -1168,205 +670,62 @@ export function EventProvider({ children, user }) {
         deployedAt: deployedAt
       }
 
-      // 1. Un-deploy all other events (Single deployment rule)
-      const { error: unDeployError } = await supabase
-        .from('events')
-        .update({ is_deployed: false })
-        .neq('id', eventId)
+      const { data } = await api.patch(`/api/events/${eventId}`, { 
+        is_deployed: true, 
+        deployed_at: deployedAt,
+        deployed_snapshot: snapshot 
+      })
       
-      if (unDeployError) {
-        console.error('Error un-deploying other events:', unDeployError)
-        throw unDeployError
-      }
-
-      // 2. Deploy target event and save snapshot
-      const { error } = await supabase
-        .from('events')
-        .update({ 
-          is_deployed: true, 
-          deployed_at: deployedAt,
-          deployed_snapshot: snapshot 
-        })
-        .eq('id', eventId)
-      
-      if (error) {
-        console.error('Supabase error updating is_deployed:', error)
-        throw error
-      }
-
-      // 3. Update local state
-      setEvents(prev => prev.map(e => {
-        if (e.id === eventId) {
-          return { 
-            ...e, 
-            isDeployed: true, 
-            deployedAt, 
-            deployedSnapshot: snapshot,
-            // Also update with the latest DB data in case local state was stale
-            name: dbEvent.name,
-            eventType: dbEvent.event_type,
-            alertStatus: dbEvent.alert_status,
-            alertLevel: dbEvent.alert_level || '',
-            summary: dbEvent.summary || '',
-            affectedProvinces: dbEvent.affected_provinces || [],
-            color: dbEvent.color,
-            startDate: dbEvent.start_date,
-            endDate: dbEvent.end_date
-          }
-        }
-        return { ...e, isDeployed: false }
-      }))
-      
-      // Auto-switch to the newly deployed event so it shows on the dashboard
+      const updated = mapEvent(data)
+      setEvents(prev => prev.map(e => e.id === eventId ? updated : { ...e, isDeployed: false }))
       setCurrentEventId(eventId)
-
-      console.log('Event marked as deployed in DB. Checking provinces for notifications:', dbEvent.affected_provinces)
-      // ... (notification logic remains the same)
-      if (dbEvent.affected_provinces && dbEvent.affected_provinces.length > 0) {
-        const cleanAffectedProvinces = dbEvent.affected_provinces.map(p => p.trim().toLowerCase())
-        const { data: allUsers, error: userError } = await supabase.from('users').select('id, province, account_type')
-        if (userError) throw userError
-        
-        const affectedUsers = allUsers?.filter(u => {
-          const isProvincial = (u.account_type || '').trim().toLowerCase() === 'provincial'
-          if (!isProvincial || !u.province) return false
-          const userProv = u.province.trim().toLowerCase()
-          return cleanAffectedProvinces.includes(userProv)
-        }) || []
-
-        if (affectedUsers.length > 0) {
-          const notifPayload = affectedUsers.map(u => ({
-            user_id: u.id,
-            type: 'event_deployment',
-            title: 'New Event Deployment',
-            message: `Event "${dbEvent.name}" has been deployed to your province.`,
-            data: { event_id: eventId }
-          }))
-          await supabase.from('notifications').insert(notifPayload)
-        }
-      }
       
-      showSuccess('Success', `Event "${dbEvent.name}" has been deployed successfully.`);
+      showSuccess('Success', `Event "${updated.name}" has been deployed successfully.`);
       return true
     } catch (err) {
       console.error('Error in deployEvent:', err)
-      alert(`Failed to deploy event: ${err.message}`)
+      showSuccess('Error', `Failed to deploy event: ${err.message}`)
       return false
     }
-  }, [events, user, showSuccess, setCurrentEventId])
+  }, [user, showSuccess, setCurrentEventId])
 
   const deployToLgu = useCallback(async (deployData) => {
-    if (!supabase || !user) return false
+    if (!user) return false
     try {
-      const isValidUUID = (id) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id)
-      
-      // Real-time check: Verify if the current user exists in the database to avoid FK violations
-      let actualUserId = null
-      if (user?.id && isValidUUID(user.id)) {
-        const { data: dbUser } = await supabase.from('users').select('id').eq('id', user.id).maybeSingle()
-        if (dbUser) actualUserId = dbUser.id
-      }
-
-      const deployments = deployData.cities.map(city => ({
+      const { data } = await api.post('/api/deployments', {
         event_id: deployData.event_id,
         province: deployData.province,
-        city: city,
+        cities: deployData.cities,
         strength_label: deployData.strength_label,
-        strength_value: deployData.strength_value,
-        // MUST set to null explicitly if invalid to overwrite any corrupted/stale values in DB
-        deployed_by: actualUserId || null
-      }))
-
-      console.log('Deploying to LGUs (Payload):', JSON.stringify(deployments, null, 2))
-      
-      const { data, error } = await supabase
-        .from('event_deployments')
-        .upsert(deployments, { onConflict: 'event_id, city' })
-        .select()
-      
-      if (error) throw error
+        strength_value: deployData.strength_value
+      })
       
       if (data) {
         setEventDeployments(prev => {
           const other = prev.filter(p => !deployData.cities.includes(p.city) || p.event_id !== deployData.event_id)
           return [...other, ...data]
         })
-
-        // ══════════════ NOTIFICATION TRIGGER MOVED ══════════════
-        // Provincial notifications are now triggered by signal assignment (assignSignal)
-        // to consolidate the workflow as requested.
-        // ═════════════════════════════════════════════════════════
       }
 
       showSuccess('Success', 'Event deployed to LGUs successfully.');
       return true
     } catch (err) {
       console.error('Error deploying to LGU:', err)
-      const errorMsg = err.message || 'Unknown error'
-      const errorDetail = err.details || err.hint || ''
-      alert(`Failed to deploy to LGUs:\n\n${errorMsg}\n\n${errorDetail}\n\n(Check console for full details)`)
+      const errorMsg = err.response?.data?.error || err.message || 'Unknown error'
+      showSuccess('Error', `Failed to deploy to LGUs: ${errorMsg}`)
       return false
     }
   }, [user, showSuccess])
 
   const deleteEvent = useCallback(async (id) => {
-    if (!supabase) return
     try {
-      console.log('Starting sequential deletion for event:', id)
-      
-      // 1. Fetch grandchild IDs to handle nested dependencies
-      const { data: reportIds } = await supabase.from('reports').select('id').eq('event_id', id)
-      const { data: roadsIds } = await supabase.from('roads_and_bridges').select('id').eq('event_id', id)
-
-      // 2. Clear grandchildren
-      if (reportIds && reportIds.length > 0) {
-        await supabase.from('report_rows').delete().in('report_id', reportIds.map(r => r.id))
-      }
-      if (roadsIds && roadsIds.length > 0) {
-        await supabase.from('roads_and_bridges_sections').delete().in('report_id', roadsIds.map(r => r.id))
-      }
-
-      // 3. Clear all child report tables and deployments
-      const childTables = [
-        'agriculture_damage_reports',
-        'assistance_lgus_agencies_reports',
-        'assistance_provided_reports',
-        'class_suspension_reports',
-        'communication_lines_reports',
-        'damaged_houses_reports',
-        'declaration_state_of_calamity_reports',
-        'infrastructure_damage_reports',
-        'power_reports',
-        'pre_emptive_evacuation_reports',
-        'related_incidents',
-        'reports',
-        'roads_and_bridges',
-        'water_supply_reports',
-        'work_suspension_reports',
-        'event_deployments',
-        'situational_reports' // situational_reports should be last among children
-      ]
-
-      for (const table of childTables) {
-        const { error: deleteError } = await supabase.from(table).delete().eq('event_id', id)
-        if (deleteError) {
-          console.warn(`Non-fatal: Error clearing ${table}:`, deleteError.message)
-          // We continue because some tables might not exist or be empty
-        }
-      }
-
-      // 4. Finally delete the event itself
-      const { error } = await supabase.from('events').delete().eq('id', id)
-      if (error) throw error
-
-      // 5. Update local state
+      await api.delete(`/api/events/${id}`)
       setEvents((prev) => prev.filter((e) => e.id !== id))
       if (currentEventId === id) setCurrentEventId(null)
-      
       showToast('Event Deleted', 'The event and all its associated data have been removed.', 'success')
     } catch (err) {
       console.error('Error deleting event:', err)
-      alert('Failed to delete event: ' + err.message)
+      showToast('Error', 'Failed to delete event: ' + (err.response?.data?.error || err.message), 'danger')
     }
   }, [currentEventId, showToast])
 
@@ -1388,7 +747,8 @@ export function EventProvider({ children, user }) {
     closeSelectEventModal()
     if (onSelectCallback) onSelectCallback(event)
     if (user && event) {
-      supabase.from('activity_logs').insert({ user_id: user.id, action: 'Selected event for report', details: `Event: ${event.name}` }).then(({ error }) => { if (error) console.error('Error logging event selection:', error) })
+      api.post('/api/activity-logs', { action: 'Selected event for report', details: `Event: ${event.name}` })
+        .catch(err => console.error('Error logging event selection:', err))
     }
     if (targetPath) navigate(targetPath)
   }, [targetPath, onSelectCallback, closeSelectEventModal, navigate, user])
@@ -1396,7 +756,8 @@ export function EventProvider({ children, user }) {
   const switchEvent = useCallback((eventId) => {
     const event = events.find(e => e.id === eventId)
     if (user && event) {
-      supabase.from('activity_logs').insert({ user_id: user.id, action: 'Switched dashboard event', details: `Event: ${event.name}` }).then(({ error }) => { if (error) console.error('Error logging event switch:', error) })
+      api.post('/api/activity-logs', { action: 'Switched dashboard event', details: `Event: ${event.name}` })
+        .catch(err => console.error('Error logging event switch:', err))
     }
     setCurrentEventId(eventId)
   }, [events, user])
@@ -1444,6 +805,7 @@ export function EventProvider({ children, user }) {
     eventSignals,
     loadingSignals,
     userSignal,
+    socket: socketRef.current,
     toast,
     showToast,
     closeToast

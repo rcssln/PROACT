@@ -5,10 +5,10 @@ import SearchInput from '../components/SearchInput'
 import SearchableSelect from '../components/SearchableSelect'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { useEvents } from '../contexts/EventContext'
-import { supabase, supabaseUrl, supabaseAnonKey } from '../lib/supabase'
+import api from '../lib/api'
 import { LGU_NAMES } from '../data/locations'
 import { PROVINCE_NAMES, getCitiesForProvince } from '../data/provinces'
-import { validatePassword, hashPassword, getPasswordRules } from '../lib/passwordUtils'
+import { validatePassword, getPasswordRules } from '../lib/passwordUtils'
 import Button from '../components/Button'
 import HeaderFooterModal from '../components/HeaderFooterModal'
 import ConfirmationModal from '../components/ConfirmationModal'
@@ -90,36 +90,13 @@ export default function Users() {
   const [searchTerm, setSearchTerm] = useState('')
 
   const fetchUsers = async () => {
-    if (!supabase) {
-      setUsers(MOCK_USERS)
-      setLoading(false)
-      return
-    }
     try {
       setError(null)
-      let query = supabase
-        .from('users')
-        .select('*')
-        .order('created_at', { ascending: false })
-
-      // Scope data by admin type:
-      // Provincial Admin → only their province
-      if (isProvincialAdmin && !isSuperAdmin && !isRegionalAdmin) {
-        query = query.eq('province', currentUser?.province)
-          .in('account_type', ['Provincial Admin', 'Provincial Approver', 'Provincial', 'LGU Admin', 'LGU'])
-      }
-      // LGU Admin → only their city
-      if (isLguAdmin && !isSuperAdmin && !isRegionalAdmin && !isProvincialAdmin) {
-        query = query.eq('city', currentUser?.city)
-          .in('account_type', ['LGU Admin', 'LGU'])
-      }
-      // Regional Admin / Super Admin → see all (no extra filter)
-
-      const { data, error: fetchError } = await query
-      if (fetchError) throw fetchError
+      setLoading(true)
+      const { data } = await api.get('/api/users')
       setUsers(data || [])
     } catch (err) {
-      setError(err.message || 'Failed to load users')
+      setError(err.response?.data?.error || 'Failed to load users')
       setUsers([])
     } finally {
       setLoading(false)
@@ -229,7 +206,6 @@ export default function Users() {
     setShowCurrentPassword(false)
     setShowEditPassword(false)
     setShowEditConfirmPassword(false)
-    setShowSaveConfirm(false)
   }
 
   const handleSubmit = async (e) => {
@@ -252,55 +228,38 @@ export default function Users() {
       showSuccess('Validation Error', 'Please select a City for LGU account.')
       return
     }
-    if (supabase) {
-      showConfirm({
-        title: 'Add New User',
-        message: `Are you sure you want to add ${form.email}? An invitation email will be sent.`,
-        onConfirm: async () => {
-          setSubmitting(true)
-          try {
-            const url = `${supabaseUrl}/functions/v1/create-user-invite`
-            const res = await fetch(url, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                Authorization: `Bearer ${supabaseAnonKey}`,
-                apikey: supabaseAnonKey,
-              },
-              body: JSON.stringify({
-                email: form.email.trim(),
-                first_name: form.firstName.trim(),
-                last_name: form.lastName.trim(),
-                account_type: form.accountType || null,
-                province: form.province || null,
-                city: (form.accountType?.includes('LGU') || form.accountType?.includes('Provincial')) ? (form.city.trim() || null) : null,
-                caller_id: currentUser?.id,
-              }),
-            })
-            const data = await res.json().catch(() => ({}))
-            if (!res.ok) {
-              const msg = typeof data?.error === 'string' ? data.error : data?.error?.message || res.statusText || 'Invite failed'
-              throw new Error(msg)
-            }
-            await fetchUsers()
-            if (fetchPendingUsersCount) fetchPendingUsersCount()
-            setTempPasswordResult({ 
-              email: form.email.trim(), 
-              emailSent: data.emailSent,
-              emailError: data.emailError,
-              password: data.tempPassword || null
-            })
-            closeModal()
-          } catch (err) {
-            showSuccess('Error', err.message || 'Failed to add user.')
-          } finally {
-            setSubmitting(false)
-          }
+    showConfirm({
+      title: 'Add New User',
+      message: `Are you sure you want to add ${form.email}? An account will be created immediately.`,
+      onConfirm: async () => {
+        setSubmitting(true)
+        try {
+          const { data } = await api.post('/api/users', {
+            email: form.email.trim(),
+            first_name: form.firstName.trim(),
+            last_name: form.lastName.trim(),
+            account_type: form.accountType || null,
+            province: form.province || null,
+            city: (form.accountType?.includes('LGU') || form.accountType?.includes('Provincial')) ? (form.city.trim() || null) : null,
+          })
+          
+          await fetchUsers()
+          if (fetchPendingUsersCount) fetchPendingUsersCount()
+          
+          setTempPasswordResult({ 
+            email: form.email.trim(), 
+            emailSent: data.emailSent,
+            emailError: data.emailError || null,
+            password: data.tempPassword || null
+          })
+          closeModal()
+        } catch (err) {
+          showSuccess('Error', err.response?.data?.error || 'Failed to add user.')
+        } finally {
+          setSubmitting(false)
         }
-      })
-    } else {
-      showSuccess('Configuration Error', 'Database not configured. Add VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY to .env')
-    }
+      }
+    })
   }
 
   const handleEditSubmit = async (e) => {
@@ -325,16 +284,6 @@ export default function Users() {
       }
     }
     if (form.password || form.confirmPassword) {
-      if (!form.currentPassword.trim()) {
-        showSuccess('Validation Error', 'Please enter the current password to change password.')
-        return
-      }
-      const currentHash = await hashPassword(form.currentPassword, currentUser?.email || '')
-      const storedHash = editingUser.password_hash || ''
-      if (storedHash && currentHash !== storedHash) {
-        showSuccess('Validation Error', 'Current password is incorrect.')
-        return
-      }
       const pwdValidation = validatePassword(form.password)
       if (!pwdValidation.valid) {
         showSuccess('Validation Error', pwdValidation.message)
@@ -345,10 +294,6 @@ export default function Users() {
         return
       }
     }
-    if (!supabase) {
-      showSuccess('Database Error', 'Database not configured.')
-      return
-    }
 
     showConfirm({
       title: 'Confirm Changes',
@@ -358,11 +303,10 @@ export default function Users() {
   }
 
   const handleConfirmEdit = async () => {
-    if (!editingUser || !supabase) return
+    if (!editingUser) return
     setSubmittingEdit(true)
     try {
       const payload = {
-        email: form.email.trim(),
         first_name: form.firstName.trim(),
         last_name: form.lastName.trim(),
         phone: form.phone.trim() || null,
@@ -375,20 +319,25 @@ export default function Users() {
         payload.city = (form.accountType?.includes('LGU') || form.accountType?.includes('Provincial')) ? (form.city.trim() || null) : null
       }
       if (form.password) {
-        payload.password_hash = await hashPassword(form.password, form.email)
-        payload.must_change_password = true
+        payload.password = form.password
       }
-      const { error: updateError } = await supabase
-        .from('users')
-        .update(payload)
-        .eq('id', editingUser.id)
-      if (updateError) throw updateError
-      await fetchUsers()
-      if (fetchPendingUsersCount) fetchPendingUsersCount()
-      showSuccess('Success', 'User updated successfully.')
+      
+      // 1. Perform the update
+      await api.patch(`/api/users/${editingUser.id}`, payload)
+      
+      // 2. Success! Close modal first to give visual feedback
       closeEditModal()
+      
+      // 3. Refresh data in background
+      fetchUsers().catch(e => console.error('Error refreshing users:', e))
+      if (fetchPendingUsersCount) fetchPendingUsersCount()
+      
+      // 4. Show success
+      showSuccess('Success', 'User updated successfully.')
     } catch (err) {
-      showSuccess('Error', err.message || 'Failed to update user.')
+      console.error('Update failed:', err)
+      const errorMsg = err.response?.data?.error || err.message || 'Failed to update user.'
+      showSuccess('Error', errorMsg)
     } finally {
       setSubmittingEdit(false)
     }
@@ -1034,33 +983,150 @@ export default function Users() {
         title={tempPasswordResult?.emailSent ? "User Created Successfully" : "User Created (Email Failed)"}
         message={tempPasswordResult ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            {!tempPasswordResult.emailSent && (
+            {tempPasswordResult.emailSent ? (
+              <div style={{ 
+                background: '#f0fdf4', 
+                padding: '1rem', 
+                borderRadius: '12px', 
+                border: '1px solid #bbf7d0',
+                color: '#166534',
+                textAlign: 'center'
+              }}>
+                <div style={{ fontWeight: 700, fontSize: '1.125rem', marginBottom: '0.5rem' }}>Credentials Sent!</div>
+                <p style={{ fontSize: '0.875rem', margin: 0 }}>
+                  A temporary password has been sent to <strong>{tempPasswordResult.email}</strong>. 
+                  The user can now log in using their email.
+                </p>
+              </div>
+            ) : (
               <div style={{ 
                 background: '#fff7ed', 
-                padding: '0.875rem', 
-                borderRadius: '6px', 
+                padding: '1rem', 
+                borderRadius: '12px', 
                 border: '1px solid #ffedd5',
-                color: '#9a3412',
-                fontSize: '0.875rem'
+                color: '#9a3412'
               }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px', fontWeight: 600 }}>
-                  <WarningCircle size={18} />
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', fontWeight: 700 }}>
+                  <WarningCircle size={20} weight="fill" />
                   Email Delivery Failed
                 </div>
-                The account was created, but the invitation email could not be sent. 
-                {tempPasswordResult.emailError && (
-                  <div style={{ marginTop: '4px', fontSize: '0.75rem', opacity: 0.8 }}>
-                    Error: {tempPasswordResult.emailError}
-                  </div>
-                )}
-                Please check your email service configuration (Brevo) or the user's email address.
+                <p style={{ fontSize: '0.875rem', margin: 0 }}>
+                  The invitation email could not be sent. Please share the credentials below manually.
+                </p>
               </div>
             )}
 
-            <p style={{ fontSize: '0.875rem', color: 'var(--color-text-muted, #64748b)' }}>
-              The user will be required to change their password upon their first login.
-            </p>
+            {(!tempPasswordResult.emailSent) && (
+              <div style={{
+                background: 'var(--bg-card, #f8fafc)',
+                border: '1px solid var(--border-color, #e2e8f0)',
+                borderRadius: '12px',
+                padding: '1.25rem',
+                textAlign: 'center'
+              }}>
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted, #64748b)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Temporary Password
+                </span>
+                <div style={{ 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center', 
+                  gap: '0.75rem', 
+                  marginTop: '0.5rem',
+                  fontSize: '1.5rem',
+                  fontFamily: 'monospace',
+                  fontWeight: 700,
+                  color: 'var(--text-main, #1e293b)'
+                }}>
+                  {tempPasswordResult.password}
+                  <button
+                    onClick={() => {
+                      navigator.clipboard.writeText(tempPasswordResult.password)
+                      setCopied(true)
+                      setTimeout(() => setCopied(false), 2000)
+                    }}
+                    style={{
+                      background: copied ? '#22c55e' : 'var(--accent, #2563eb)',
+                      color: 'white',
+                      border: 'none',
+                      borderRadius: '8px',
+                      padding: '8px 12px',
+                      fontSize: '0.8125rem',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      transition: 'all 0.2s',
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                    }}
+                  >
+                    {copied ? <Check size={16} /> : <Copy size={16} />}
+                    {copied ? 'Copied' : 'Copy'}
+                  </button>
+                </div>
+              </div>
+            )}
 
+            {tempPasswordResult.emailSent && (
+              <div style={{
+                background: 'var(--bg-card, #f8fafc)',
+                border: '1px solid var(--border-color, #e2e8f0)',
+                borderRadius: '12px',
+                padding: '1.25rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: '1rem'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <div style={{ 
+                    width: '40px', 
+                    height: '40px', 
+                    borderRadius: '50%', 
+                    background: 'var(--accent-light, #eff6ff)', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center',
+                    color: 'var(--accent, #2563eb)'
+                  }}>
+                    <Envelope size={20} />
+                  </div>
+                  <div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted, #64748b)', fontWeight: 600, textTransform: 'uppercase' }}>Recipient</div>
+                    <div style={{ fontWeight: 600, color: 'var(--text-main, #1e293b)' }}>{tempPasswordResult.email}</div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => {
+                    navigator.clipboard.writeText(tempPasswordResult.email)
+                    setCopied(true)
+                    setTimeout(() => setCopied(false), 2000)
+                  }}
+                  style={{
+                    background: 'transparent',
+                    color: copied ? '#22c55e' : 'var(--text-muted, #64748b)',
+                    border: '1px solid currentColor',
+                    borderRadius: '6px',
+                    padding: '4px 8px',
+                    fontSize: '0.75rem',
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    transition: 'all 0.2s'
+                  }}
+                >
+                  {copied ? <Check size={14} /> : <Copy size={14} />}
+                  {copied ? 'Copied Email' : 'Copy'}
+                </button>
+              </div>
+            )}
+
+            <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted, #64748b)', textAlign: 'center', margin: 0 }}>
+              {tempPasswordResult.emailSent 
+                ? "The user will be required to change their password upon their first login."
+                : "The user will be required to change this password upon their first login."}
+            </p>
           </div>
         ) : null}
         confirmText="Done"

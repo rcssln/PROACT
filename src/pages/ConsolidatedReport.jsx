@@ -5,7 +5,7 @@ import { CaretDown, CaretUp, ArrowLeft, Download, FileText, FileArrowDown, Chart
 import SearchInput from '../components/SearchInput'
 import SearchableSelect from '../components/SearchableSelect'
 import ModernDateTimePicker from '../components/ModernDateTimePicker'
-import { supabase, supabaseUrl } from '../lib/supabase'
+import api from '../lib/api'
 import { generateRelatedIncidentsPdf } from '../lib/generateRelatedIncidentsPdf'
 import { LGU_NAMES, getBarangaysForCity, getCityForBarangay } from '../data/locations'
 import { getCitiesForProvince, PROVINCES_WITH_CITIES, PROVINCE_NAMES } from '../data/provinces'
@@ -233,7 +233,7 @@ export default function ConsolidatedReport() {
   }
 
   const handleSubmitDetails = async () => {
-    if (!supabase || !selectedCategory || !selectedEvent || !selectedSitRep) return
+    if (!selectedCategory || !selectedEvent || !selectedSitRep) return
     const tableName = CATEGORY_TO_TABLE[selectedCategory]
     if (!tableName) return
 
@@ -245,33 +245,24 @@ export default function ConsolidatedReport() {
         try {
           // 1. Handle Deletions
           if (deletedRowIds.length > 0) {
-            const { error: delErr } = await supabase
-              .from(tableName === 'reports' ? 'report_rows' : tableName) // affectedPopulation uses report_rows
-              .delete()
-              .in('id', deletedRowIds)
-            if (delErr) throw delErr
+            const table = tableName === 'reports' ? 'report_rows' : tableName
+            await api.delete(`/api/reports/${table}/bulk`, { data: { ids: deletedRowIds } })
           }
 
           // 2. Handle Upserts
-          // For 'affectedPopulation', we need to handle report_id and report_rows separately
           if (selectedCategory === 'affectedPopulation') {
-            const { data: reports } = await supabase
-              .from('reports')
-              .select('id')
-              .eq('event_id', selectedEvent.id)
-              .eq('situational_report_id', selectedSitRep.id)
-              .limit(1)
+            const { data: reports } = await api.get('/api/reports/reports', {
+              params: { event_id: selectedEvent.id, situational_report_id: selectedSitRep.id }
+            })
             
             let reportId
             if (reports?.length) {
               reportId = reports[0].id
             } else {
-              const { data: newReport, error: repErr } = await supabase
-                .from('reports')
-                .insert({ event_id: selectedEvent.id, situational_report_id: selectedSitRep.id })
-                .select('id')
-                .single()
-              if (repErr) throw repErr
+              const { data: newReport } = await api.post('/api/reports/reports', { 
+                event_id: selectedEvent.id, 
+                situational_report_id: selectedSitRep.id 
+              })
               reportId = newReport.id
             }
 
@@ -284,14 +275,8 @@ export default function ConsolidatedReport() {
               return { ...rest, report_id: reportId }
             })
 
-            if (toInsert.length > 0) {
-              const { error: insErr } = await supabase.from('report_rows').insert(toInsert)
-              if (insErr) throw insErr
-            }
-            if (toUpdate.length > 0) {
-              const { error: updErr } = await supabase.from('report_rows').upsert(toUpdate, { onConflict: 'id' })
-              if (updErr) throw updErr
-            }
+            if (toInsert.length > 0) await api.post('/api/reports/report_rows/bulk', toInsert)
+            if (toUpdate.length > 0) await api.patch('/api/reports/report_rows/bulk', toUpdate)
 
           } else {
             const toInsert = lguDetailRows.filter(r => !r.id).map(row => {
@@ -311,22 +296,16 @@ export default function ConsolidatedReport() {
               }
             })
 
-            if (toInsert.length > 0) {
-              const { error: insErr } = await supabase.from(tableName).insert(toInsert)
-              if (insErr) throw insErr
-            }
-            if (toUpdate.length > 0) {
-              const { error: updErr } = await supabase.from(tableName).upsert(toUpdate, { onConflict: 'id' })
-              if (updErr) throw updErr
-            }
+            if (toInsert.length > 0) await api.post(`/api/reports/${tableName}/bulk`, toInsert)
+            if (toUpdate.length > 0) await api.patch(`/api/reports/${tableName}/bulk`, toUpdate)
           }
 
           showSuccess('Success', 'Report details updated successfully.')
-          setDeletedRowIds([]) // Clear deletions
-          handleBack() // return to LGUs list
+          setDeletedRowIds([])
+          handleBack()
         } catch (err) {
           console.error('Submit details error:', err)
-          alert('Error saving changes: ' + err.message)
+          alert('Error saving changes: ' + (err.response?.data?.error || err.message))
         } finally {
           setSubmittingDetails(false)
         }
@@ -413,31 +392,39 @@ export default function ConsolidatedReport() {
   const [signatoryRole, setSignatoryRole] = useState('preparedBy') // which section is being picked
 
   const fetchSignatories = async () => {
-    let query = supabase.from('users').select('id, first_name, last_name, email, province, account_type, status')
-    if (!isSuperAdmin && !isRegional && province) {
-      query = query.eq('province', province)
-    } else if (isRegional && province) {
-      query = query.eq('province', province)
-    }
-    const { data, error } = await query.eq('status', 'Active').order('last_name', { ascending: true })
-    if (!error && data) {
-      const mapped = data.map(u => ({
-        id: u.id,
-        name: `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.email,
-        account_type: u.account_type,
-        province: u.province
-      }))
-      setAvailableSignatories(mapped)
-      // Auto-populate based on role
-      const provincialUsers = mapped.filter(u => u.account_type === 'Provincial')
-      const approverUsers = mapped.filter(u => u.account_type === 'Provincial Approver')
-      if (provincialUsers.length > 0) {
-        setPreparedBy(provincialUsers.slice(0, 1))
-        if (provincialUsers.length > 1) setNotedBy(provincialUsers[1])
+    try {
+      const params = { status: 'Active' }
+      if (!isSuperAdmin && !isRegional && province) {
+        params.province = province
+      } else if (isRegional && province) {
+        params.province = province
       }
-      if (approverUsers.length > 0) setApprovedBy(approverUsers[0])
+      
+      const { data } = await api.get('/api/users', { params })
+      if (data) {
+        const mapped = data.map(u => ({
+          id: u.id,
+          name: `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.email,
+          account_type: u.account_type,
+          province: u.province
+        }))
+        setAvailableSignatories(mapped)
+        // Auto-populate based on role
+        const provincialUsers = mapped.filter(u => u.account_type === 'Provincial')
+        const approverUsers = mapped.filter(u => u.account_type === 'Provincial Approver')
+        if (provincialUsers.length > 0) {
+          setPreparedBy(provincialUsers.slice(0, 1))
+          if (provincialUsers.length > 1) setNotedBy(provincialUsers[1])
+        }
+        if (approverUsers.length > 0) setApprovedBy(approverUsers[0])
+      }
+    } catch (err) {
+      console.error('Error fetching signatories:', err)
     }
   }
+
+  // fetchSituationalReports and markSitRepNotificationsAsRead are now handled by EventContext
+
 
   const generatePdfBlobUrl = (pdfParams, summaryOverride, sigs) => {
     try {
@@ -1245,11 +1232,12 @@ export default function ConsolidatedReport() {
     if (!selectedSitRep || !selectedEvent) return
     setDrillDownLoading(true)
     try {
-      const { data: allRows } = await supabase
-        .from(CATEGORY_TO_TABLE[category])
-        .select('*')
-        .eq('event_id', selectedEvent.id)
-        .eq('situational_report_id', selectedSitRep.id)
+      const { data: allRows } = await api.get(`/api/reports/${CATEGORY_TO_TABLE[category]}`, {
+        params: {
+          event_id: selectedEvent.id,
+          situational_report_id: selectedSitRep.id
+        }
+      })
       
       if (!allRows?.length) {
         alert('No data to export for this category.')
@@ -1307,41 +1295,37 @@ export default function ConsolidatedReport() {
 
   // Handle PDF upload (Provincial user) — uploads PDF & sets status to 'Pending Approval'
   const handleUploadPdfSubmit = async () => {
-    if (!approvalFile || !supabase || !selectedSitRep) return
+    if (!approvalFile || !selectedSitRep) return
     if (approvalFile.type !== 'application/pdf') {
       showSuccess('Validation Error', 'Only PDF files are allowed.')
       return
     }
     setUploadingApproval(true)
     try {
-      const ownerId = selectedSitRep.event_id || selectedEvent?.id
-      const path = `${ownerId}/${Date.now()}-${Math.random().toString(36).slice(2)}.pdf`
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from(APPROVAL_BUCKET)
-        .upload(path, approvalFile, { contentType: 'application/pdf', upsert: false })
-      if (uploadError) throw new Error(`Upload failed: ${uploadError.message}. Ensure bucket "${APPROVAL_BUCKET}" exists.`)
-      const { data: urlData } = supabase.storage.from(APPROVAL_BUCKET).getPublicUrl(uploadData.path)
-      const pdfUrl = urlData?.publicUrl ?? null
+      const formData = new FormData()
+      formData.append('file', approvalFile)
+      
+      const { data: uploadData } = await api.post('/api/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      })
+      const pdfUrl = uploadData.url
 
-      const { error: updateError } = await supabase
-        .from('situational_reports')
-        .update({ status: 'Pending Approval', approved_pdf_url: pdfUrl })
-        .eq('id', selectedSitRep.id)
-      if (updateError) throw updateError
+      await api.patch(`/api/situational-reports/${selectedSitRep.id}`, { 
+        status: 'Pending Approval', 
+        pending_pdf_url: pdfUrl 
+      })
 
       setSitRepVersions(prev => prev.map(v =>
-        v.id === selectedSitRep.id ? { ...v, status: 'Pending Approval', approved_pdf_url: pdfUrl } : v
+        v.id === selectedSitRep.id ? { ...v, status: 'Pending Approval', pending_pdf_url: pdfUrl } : v
       ))
 
       // Notify Provincial Approvers
       try {
         const userProvince = user?.province
         if (userProvince) {
-          const { data: approvers } = await supabase
-            .from('users')
-            .select('id')
-            .eq('province', userProvince)
-            .eq('account_type', 'Provincial Approver')
+          const { data: approvers } = await api.get('/api/users', {
+            params: { province: userProvince, account_type: 'Provincial Approver' }
+          })
           
           if (approvers?.length > 0) {
             const notifications = approvers.map(u => ({
@@ -1351,14 +1335,13 @@ export default function ConsolidatedReport() {
               message: `A new situational report "${selectedSitRep.title}" has been submitted for your approval.`,
               data: { sitrep_id: selectedSitRep.id, event_id: selectedEvent?.id }
             }))
-            await supabase.from('notifications').insert(notifications)
+            await api.post('/api/notifications', notifications)
           }
         }
       } catch (notifErr) {
         console.error('Failed to send submission notifications:', notifErr)
       }
 
-      // Auto-mark notifications for this SitRep as read (clears rejections)
       if (selectedSitRep?.id) {
         await markSitRepNotificationsAsRead(selectedSitRep.id)
       }
@@ -1367,7 +1350,7 @@ export default function ConsolidatedReport() {
       setApprovalConfirmMessage('The signed PDF has been uploaded successfully. The report is now pending approval by the Provincial Approver.')
       setShowApprovalConfirmation(true)
     } catch (err) {
-      showSuccess('Error', err.message || 'Failed to upload PDF.')
+      showSuccess('Error', (err.response?.data?.error || err.message || 'Failed to upload PDF.'))
     } finally {
       setUploadingApproval(false)
     }
@@ -1380,24 +1363,17 @@ export default function ConsolidatedReport() {
 
   // Handle "Edit Report" from approved view — reset to Pending
   const handleEditApprovedReport = async (event) => {
-    if (!supabase) return
     try {
-      const { error } = await supabase
-        .from('events')
-        .update({ approval_status: 'Pending', approved_pdf_url: null })
-        .eq('id', event.id)
-      if (error) throw error
-
+      await api.patch(`/api/events/${event.id}`, { approval_status: 'Pending', approved_pdf_url: null })
       setLocalApprovalMap(prev => ({
         ...prev,
         [event.id]: { status: 'Pending', url: null }
       }))
       setShowApprovedView(false)
       setApprovedViewEvent(null)
-      // Open the normal preview flow
       handleViewMore(event)
     } catch (err) {
-      showSuccess('Error', 'Failed to reset approval: ' + err.message)
+      showSuccess('Error', 'Failed to reset approval: ' + (err.response?.data?.error || err.message))
     }
   }
 
@@ -1410,46 +1386,17 @@ export default function ConsolidatedReport() {
     setLguStatusData({ submitted: [], pending: [] })
 
     try {
-      const tables = [
-        'related_incidents', 'roads_and_bridges', 'power_reports',
-        'water_supply_reports', 'communication_lines_reports',
-        'damaged_houses_reports', 'class_suspension_reports',
-        'work_suspension_reports', 'declaration_state_of_calamity_reports',
-        'pre_emptive_evacuation_reports', 'assistance_provided_reports'
-      ]
+      const { data: results } = await api.get('/api/reports/consolidated', {
+        params: {
+          event_id: event.id,
+          situational_report_ids: version.id
+        }
+      })
 
       const uniqueCities = new Set()
-
-      // 1. Get Cities from Affected Population
-      const { data: apReports } = await supabase
-        .from('reports')
-        .select('id')
-        .eq('event_id', event.id)
-        .eq('situational_report_id', version.id)
-
-      if (apReports?.length) {
-        const { data: rows } = await supabase
-          .from('report_rows')
-          .select('barangay')
-          .in('report_id', apReports.map(r => r.id))
-
-        rows?.forEach(r => {
-          const city = getCityForBarangay(r.barangay)
-          if (city) uniqueCities.add(city)
-        })
-      }
-
-      // 2. Get Cities from other tables
-      const otherDataResults = await Promise.all(tables.map(tbl =>
-        supabase.from(tbl).select('barangay')
-          .eq('event_id', event.id)
-          .eq('situational_report_id', version.id)
-      ))
-
-      otherDataResults.forEach(res => {
-
-        res.data?.forEach(r => {
-          const city = getCityForBarangay(r.barangay)
+      Object.values(results).forEach(rows => {
+        rows.forEach(r => {
+          const city = r.city || getCityForBarangay(r.barangay)
           if (city) uniqueCities.add(city)
         })
       })
@@ -1553,261 +1500,167 @@ export default function ConsolidatedReport() {
     if (sortKey !== columnKey) return <CaretDown size={14} className="consolidated-sort-icon inactive" />
     return sortAsc ? <CaretUp size={14} className="consolidated-sort-icon" /> : <CaretDown size={14} className="consolidated-sort-icon" />
   }
-
+  
   const fetchEventConsolidatedData = async (event, situationalReportId = null) => {
-    if (!supabase) return null
-
     const totalByCity = {}
     const byCityCategory = {}
-    const toCity = (row, bKey) => row?.city || getCityForBarangay(row?.[bKey]) || (row?.[bKey] ? row[bKey] : 'Unknown')
-    // If a situationalReportId is provided, we fetch ONLY for that version.
-    // Otherwise (Regional consolidation), we gather only APPROVED reports.
-    let reportsToConsolidate = []
-    if (situationalReportId) {
-      reportsToConsolidate = [situationalReportId]
-    } else {
-      let q = supabase
-        .from('situational_reports')
-        .select('id')
-        .eq('event_id', event.id)
-      
-      // Scoping: Provincial users only see their own SitReps in consolidation
-      if (!isRegional && user?.province) {
-        q = q.eq('province', user.province)
-      }
-      
-      const { data: approvedSitreps } = await q
-      reportsToConsolidate = (approvedSitreps || []).map(r => r.id)
-    }
-
-    if (reportsToConsolidate.length === 0 && !situationalReportId) {
-      return { categoryTotals: {}, byCityCategory: {} }
-    }
-
-    // 1. Affected Population (Table: reports)
-    let query = supabase.from('reports').select('id')
-    if (situationalReportId) {
-      query = query.eq('situational_report_id', situationalReportId)
-    } else if (reportsToConsolidate.length > 0) {
-      query = query.in('situational_report_id', reportsToConsolidate)
-    } else if (isRegional) {
-      query = query.eq('event_id', event.id)
-    } else {
-      // If not regional and no reports to consolidate, don't fetch anything
-      return { categoryTotals: {}, byCityCategory: {}, details }
-    }
-    const { data: recentReports } = await query
-    let reportIds = (recentReports || []).map((r) => r.id)
-
-    // Fallback for reports table
-    if (reportIds.length === 0 && situationalReportId) {
-      const { data: fallbackReports } = await supabase.from('reports').select('id').eq('event_id', event.id)
-      reportIds = (fallbackReports || []).map(r => r.id)
-    }
-    
     const details = {
-      affectedPopulation: [],
-      relatedIncidents: [],
-      roadsAndBridges: [],
-      power: [],
-      communicationLines: [],
-      damagedHouses: [],
-      classSuspension: [],
-      workSuspension: [],
-      stateOfCalamity: [],
-      preEmptiveEvacuation: [],
-      assistanceProvided: [],
-      assistanceLgus: [],
-      agricultureDamage: [],
-      infrastructureDamage: [],
-      waterSupply: []
+      affectedPopulation: [], relatedIncidents: [], roadsAndBridges: [],
+      power: [], communicationLines: [], damagedHouses: [],
+      classSuspension: [], workSuspension: [], stateOfCalamity: [],
+      preEmptiveEvacuation: [], assistanceProvided: [], assistanceLgus: [],
+      agricultureDamage: [], infrastructureDamage: [], waterSupply: []
     }
 
-    if (reportIds.length > 0) {
-      const { data: reportRows } = await supabase
-        .from('report_rows')
-        .select('*')
-        .in('report_id', reportIds)
-      
-      reportRows?.forEach(row => {
-          const city = toCity(row, 'barangay')
-          const families = Number(row?.affected_families ?? 0) || 0
-          const persons = Number(row?.affected_persons ?? 0) || 0
-          details.affectedPopulation.push({ ...row, city, families, persons })
+    try {
+      let sitRepIds = []
+      if (situationalReportId) {
+        sitRepIds = [situationalReportId]
+      } else {
+        const params = { event_id: event.id }
+        if (!isRegional && user?.province) params.province = user.province
+        const { data: approvedSitreps } = await api.get('/api/situational-reports', { params })
+        sitRepIds = (approvedSitreps || []).map(r => r.id)
+      }
 
+      if (sitRepIds.length === 0 && !situationalReportId) {
+        return { categoryTotals: {}, byCityCategory: {} }
+      }
+
+      const { data: results } = await api.get('/api/reports/consolidated', {
+        params: {
+          event_id: event.id,
+          situational_report_ids: sitRepIds.join(',')
+        }
+      })
+
+      const toCity = (row, bKey) => row?.city || getCityForBarangay(row?.[bKey]) || (row?.[bKey] ? row[bKey] : 'Unknown')
+
+      // Process results and populate details/totals (keeping the original aggregation logic)
+      Object.entries(results).forEach(([table, rows]) => {
+        let category = table
+        if (table === 'affected_population') category = 'affectedPopulation'
+        if (table === 'power_reports') category = 'power'
+        if (table === 'communication_lines_reports') category = 'communicationLines'
+        if (table === 'damaged_houses_reports') category = 'damagedHouses'
+        if (table === 'class_suspension_reports') category = 'classSuspension'
+        if (table === 'work_suspension_reports') category = 'workSuspension'
+        if (table === 'declaration_state_of_calamity_reports') category = 'stateOfCalamity'
+        if (table === 'pre_emptive_evacuation_reports') category = 'preEmptiveEvacuation'
+        if (table === 'assistance_provided_reports') category = 'assistanceProvided'
+        if (table === 'assistance_lgus_agencies_reports') category = 'assistanceLgus'
+        if (table === 'agriculture_damage_reports') category = 'agricultureDamage'
+        if (table === 'infrastructure_damage_reports') category = 'infrastructureDamage'
+        if (table === 'water_supply_reports') category = 'waterSupply'
+        if (table === 'related_incidents') category = 'relatedIncidents'
+        if (table === 'roads_and_bridges') category = 'roadsAndBridges'
+
+        rows.forEach(row => {
+          const city = toCity(row, 'barangay')
+          if (!city) return
+
+          details[category].push({ ...row, city })
           totalByCity[city] = (totalByCity[city] || 0) + 1
           if (!byCityCategory[city]) byCityCategory[city] = {}
 
-          if (!byCityCategory[city].affectedPopulation) {
-            byCityCategory[city].affectedPopulation = { 
-              families: 0, persons: 0, 
-              brgy_count: 0, ecs_cum: 0, ecs_now: 0,
-              in_fam_cum: 0, in_fam_now: 0, in_per_cum: 0, in_per_now: 0,
-              out_fam_cum: 0, out_fam_now: 0, out_per_cum: 0, out_per_now: 0
+          // Original detailed aggregation logic...
+          if (category === 'affectedPopulation') {
+            if (!byCityCategory[city].affectedPopulation) {
+              byCityCategory[city].affectedPopulation = { 
+                families: 0, persons: 0, brgy_count: 0, ecs_cum: 0, ecs_now: 0,
+                in_fam_cum: 0, in_fam_now: 0, in_per_cum: 0, in_per_now: 0,
+                out_fam_cum: 0, out_fam_now: 0, out_per_cum: 0, out_per_now: 0
+              }
             }
+            byCityCategory[city].affectedPopulation.families += Number(row.affected_families || 0)
+            byCityCategory[city].affectedPopulation.persons += Number(row.affected_persons || 0)
+            byCityCategory[city].affectedPopulation.brgy_count += 1
+            byCityCategory[city].affectedPopulation.ecs_cum += Number(row.ecs_cum || 0)
+            byCityCategory[city].affectedPopulation.ecs_now += Number(row.ecs_now || 0)
+            byCityCategory[city].affectedPopulation.in_fam_cum += Number(row.inside_families_cum || 0)
+            byCityCategory[city].affectedPopulation.in_fam_now += Number(row.inside_families_now || 0)
+            byCityCategory[city].affectedPopulation.in_per_cum += Number(row.inside_persons_cum || 0)
+            byCityCategory[city].affectedPopulation.in_per_now += Number(row.inside_persons_now || 0)
+            byCityCategory[city].affectedPopulation.out_fam_cum += Number(row.outside_families_cum || 0)
+            byCityCategory[city].affectedPopulation.out_fam_now += Number(row.outside_families_now || 0)
+            byCityCategory[city].affectedPopulation.out_per_cum += Number(row.outside_persons_cum || 0)
+            byCityCategory[city].affectedPopulation.out_per_now += Number(row.outside_persons_now || 0)
+          } else if (category === 'relatedIncidents') {
+            if (!byCityCategory[city][category]) byCityCategory[city][category] = { 
+              total: 0, ongoing: 0, resolved: 0, flooded: 0, subsided: 0, receding: 0, 
+              fallenDebris: 0, stormSurge: 0, other: 0 
+            }
+            byCityCategory[city][category].total++
+            const type = (row.type_of_incident || '').toLowerCase()
+            const status = (row.status || '').toLowerCase()
+            if (type.includes('flood')) {
+              if (status.includes('subsided')) byCityCategory[city][category].subsided++
+              else if (status.includes('receding')) byCityCategory[city][category].receding++
+              else byCityCategory[city][category].flooded++
+            } else if (type.includes('debris') || type.includes('tree')) {
+              byCityCategory[city][category].fallenDebris++
+            } else if (type.includes('surge')) {
+              byCityCategory[city][category].stormSurge++
+            } else {
+              byCityCategory[city][category].other++
+            }
+            if (row.status === 'Resolved') byCityCategory[city][category].resolved++
+            else byCityCategory[city][category].ongoing++
+          } else if (category === 'roadsAndBridges') {
+            if (!byCityCategory[city][category]) byCityCategory[city][category] = { total: 0, roads: 0, bridges: 0, passable: 0, notPassable: 0 }
+            byCityCategory[city][category].total++
+            if (row.classification === 'Bridge') byCityCategory[city][category].bridges++
+            else byCityCategory[city][category].roads++
+            if (row.status === 'Passable' || row.status === 'Open' || row.status?.toLowerCase().includes('passable')) {
+              byCityCategory[city][category].passable++
+            } else {
+              byCityCategory[city][category].notPassable++
+            }
+          } else if (['power', 'communicationLines'].includes(category)) {
+            if (!byCityCategory[city][category]) byCityCategory[city][category] = { total: 0, interrupted: 0, restored: 0 }
+            byCityCategory[city][category].total++
+            byCityCategory[city][category].interrupted++
+            const restoredDate = category === 'power' ? row.date_restored : row.date_restoration
+            if (restoredDate || row.status === 'Resolved' || row.status === 'Restored') {
+              byCityCategory[city][category].restored++
+            }
+          } else if (category === 'damagedHouses') {
+            if (!byCityCategory[city][category]) byCityCategory[city][category] = { total: 0, totally: 0, partially: 0, amount: 0 }
+            const tot = Number(row.totally_damaged || 0)
+            const part = Number(row.partially_damaged || 0)
+            byCityCategory[city][category].total += (tot + part)
+            byCityCategory[city][category].totally += tot
+            byCityCategory[city][category].partially += part
+            byCityCategory[city][category].amount += Number(row.amount_php || row.amount || 0)
+          } else if (category === 'assistanceProvided') {
+            if (!byCityCategory[city][category]) byCityCategory[city][category] = { total: 0, cost: 0 }
+            byCityCategory[city][category].total++
+            byCityCategory[city][category].cost += Number(row.fnfi_amount || row.cost_php || row.amount || 0)
+          } else if (category === 'assistanceLgus') {
+            if (!byCityCategory[city][category]) byCityCategory[city][category] = { total: 0, amount: 0 }
+            byCityCategory[city][category].total++
+            byCityCategory[city][category].amount += Number(row.amount || 0)
+          } else if (category === 'agricultureDamage') {
+            if (!byCityCategory[city][category]) byCityCategory[city][category] = { total: 0, farmers: 0, value: 0 }
+            byCityCategory[city][category].total++
+            byCityCategory[city][category].farmers += Number(row.farmers_affected || 0)
+            byCityCategory[city][category].value += Number(row.production_loss_value || row.value_loss || 0)
+          } else if (category === 'infrastructureDamage') {
+            if (!byCityCategory[city][category]) byCityCategory[city][category] = { total: 0, cost: 0 }
+            byCityCategory[city][category].total++
+            byCityCategory[city][category].cost += Number(row.cost || row.estimated_cost || 0)
+          } else if (category === 'preEmptiveEvacuation') {
+            if (!byCityCategory[city][category]) byCityCategory[city][category] = { total: 0, families: 0, persons: 0 }
+            byCityCategory[city][category].total++
+            byCityCategory[city][category].families += Number(row.families || 0)
+            byCityCategory[city][category].persons += Number(row.persons || 0)
+          } else {
+            byCityCategory[city][category] = (byCityCategory[city][category] || 0) + 1
           }
-          byCityCategory[city].affectedPopulation.families += families
-          byCityCategory[city].affectedPopulation.persons += persons
-          byCityCategory[city].affectedPopulation.brgy_count += 1
-          byCityCategory[city].affectedPopulation.ecs_cum += Number(row?.ecs_cum ?? 0)
-          byCityCategory[city].affectedPopulation.ecs_now += Number(row?.ecs_now ?? 0)
-          byCityCategory[city].affectedPopulation.in_fam_cum += Number(row?.inside_families_cum ?? 0)
-          byCityCategory[city].affectedPopulation.in_fam_now += Number(row?.inside_families_now ?? 0)
-          byCityCategory[city].affectedPopulation.in_per_cum += Number(row?.inside_persons_cum ?? 0)
-          byCityCategory[city].affectedPopulation.in_per_now += Number(row?.inside_persons_now ?? 0)
-          byCityCategory[city].affectedPopulation.out_fam_cum += Number(row?.outside_families_cum ?? 0)
-          byCityCategory[city].affectedPopulation.out_fam_now += Number(row?.outside_families_now ?? 0)
-          byCityCategory[city].affectedPopulation.out_per_cum += Number(row?.outside_persons_cum ?? 0)
-          byCityCategory[city].affectedPopulation.out_per_now += Number(row?.outside_persons_now ?? 0)
         })
-    }
-
-    // 2. Multi-table categories
-    const detailTables = [
-      { table: 'related_incidents', category: 'relatedIncidents', barangayKey: 'barangay' },
-      { table: 'roads_and_bridges', category: 'roadsAndBridges', barangayKey: 'barangay' },
-      { table: 'power_reports', category: 'power', barangayKey: 'barangay' },
-      { table: 'communication_lines_reports', category: 'communicationLines', barangayKey: 'barangay' },
-      { table: 'damaged_houses_reports', category: 'damagedHouses', barangayKey: 'barangay' },
-      { table: 'class_suspension_reports', category: 'classSuspension', barangayKey: 'barangay' },
-      { table: 'work_suspension_reports', category: 'workSuspension', barangayKey: 'barangay' },
-      { table: 'declaration_state_of_calamity_reports', category: 'stateOfCalamity', barangayKey: 'barangay' },
-      { table: 'pre_emptive_evacuation_reports', category: 'preEmptiveEvacuation', barangayKey: 'barangay' },
-      { table: 'assistance_provided_reports', category: 'assistanceProvided', barangayKey: 'barangay' },
-      { table: 'assistance_lgus_agencies_reports', category: 'assistanceLgus', barangayKey: 'barangay' },
-      { table: 'agriculture_damage_reports', category: 'agricultureDamage', barangayKey: 'barangay' },
-      { table: 'infrastructure_damage_reports', category: 'infrastructureDamage', barangayKey: 'barangay' },
-      { table: 'water_supply_reports', category: 'waterSupply', barangayKey: 'barangay' },
-    ]
-
-
-    for (const { table, category, barangayKey } of detailTables) {
-      let selectStr = '*'
-      if (table === 'roads_and_bridges') {
-        selectStr = '*, roads_and_bridges_sections(name)'
-      }
-      let q = supabase.from(table).select(selectStr)
-      if (situationalReportId) {
-        q = q.or(`situational_report_id.eq.${situationalReportId},event_id.eq.${event.id}`)
-      } else if (reportsToConsolidate.length > 0) {
-        q = q.in('situational_report_id', reportsToConsolidate)
-      } else if (isRegional) {
-        q = q.eq('event_id', event.id)
-      } else {
-        // Not regional and no sitreps? skip this table
-        continue
-      }
-      const { data: rows } = await q
-      let finalRows = rows || []
-      // If we found rows specifically for this sitrep, use only those
-      if (situationalReportId && finalRows.some(r => r.situational_report_id === situationalReportId)) {
-        finalRows = finalRows.filter(r => r.situational_report_id === situationalReportId)
-      }
-
-      for (const row of finalRows) {
-        const city = toCity(row, barangayKey)
-        if (!city) continue
-
-        let finalRow = { ...row }
-        if (category === 'roadsAndBridges' && row.roads_and_bridges_sections) {
-          const sections = row.roads_and_bridges_sections
-          finalRow.road_bridge_name = (Array.isArray(sections) ? sections : [sections])
-            .map(s => typeof s === 'object' ? s.name : s)
-            .filter(Boolean)
-            .join(', ') || row.road_bridge_name
-        }
-
-        details[category].push({ ...finalRow, city })
-        totalByCity[city] = (totalByCity[city] || 0) + 1
-        if (!byCityCategory[city]) byCityCategory[city] = {}
-
-        if (category === 'relatedIncidents') {
-          if (!byCityCategory[city][category]) byCityCategory[city][category] = { 
-            total: 0, ongoing: 0, resolved: 0, 
-            flooded: 0, subsided: 0, receding: 0, 
-            fallenDebris: 0, stormSurge: 0, other: 0 
-          }
-          byCityCategory[city][category].total++
-          
-          const type = (row.type_of_incident || '').toLowerCase()
-          const status = (row.status || '').toLowerCase()
-          
-          if (type.includes('flood')) {
-            if (status.includes('subsided')) byCityCategory[city][category].subsided++
-            else if (status.includes('receding')) byCityCategory[city][category].receding++
-            else byCityCategory[city][category].flooded++
-          } else if (type.includes('debris') || type.includes('tree')) {
-            byCityCategory[city][category].fallenDebris++
-          } else if (type.includes('surge')) {
-            byCityCategory[city][category].stormSurge++
-          } else {
-            byCityCategory[city][category].other++
-          }
-
-          if (row.status === 'Resolved') byCityCategory[city][category].resolved++
-          else byCityCategory[city][category].ongoing++
-        }
-        else if (category === 'roadsAndBridges') {
-          if (!byCityCategory[city][category]) byCityCategory[city][category] = { total: 0, roads: 0, bridges: 0, passable: 0, notPassable: 0 }
-          byCityCategory[city][category].total++
-          if (row.classification === 'Bridge') byCityCategory[city][category].bridges++
-          else byCityCategory[city][category].roads++
-          
-          if (row.status === 'Passable' || row.status === 'Open' || row.status?.toLowerCase().includes('passable')) {
-            byCityCategory[city][category].passable++
-          } else {
-            byCityCategory[city][category].notPassable++
-          }
-        }
-        else if (['power', 'communicationLines'].includes(category)) {
-          if (!byCityCategory[city][category]) byCityCategory[city][category] = { total: 0, interrupted: 0, restored: 0 }
-          byCityCategory[city][category].total++
-          byCityCategory[city][category].interrupted++
-          const restoredDate = category === 'power' ? row.date_restored : row.date_restoration;
-          if (restoredDate || row.status === 'Resolved' || row.status === 'Restored' || row.status_of_communication === 'Restored') {
-            byCityCategory[city][category].restored++
-          }
-        }
-        else if (category === 'damagedHouses') {
-          if (!byCityCategory[city][category]) byCityCategory[city][category] = { total: 0, totally: 0, partially: 0, amount: 0 }
-          const tot = Number(row.totally_damaged || 0)
-          const part = Number(row.partially_damaged || 0)
-          byCityCategory[city][category].total += (tot + part)
-          byCityCategory[city][category].totally += tot
-          byCityCategory[city][category].partially += part
-          byCityCategory[city][category].amount += Number(row.amount_php || row.amount || 0)
-        }
-        else if (category === 'assistanceProvided') {
-          if (!byCityCategory[city][category]) byCityCategory[city][category] = { total: 0, cost: 0 }
-          byCityCategory[city][category].total++
-          byCityCategory[city][category].cost += Number(row.fnfi_amount || row.cost_php || row.amount || 0)
-        }
-        else if (category === 'assistanceLgus') {
-          if (!byCityCategory[city][category]) byCityCategory[city][category] = { total: 0, amount: 0 }
-          byCityCategory[city][category].total++
-          byCityCategory[city][category].amount += Number(row.amount || 0)
-        }
-        else if (category === 'agricultureDamage') {
-          if (!byCityCategory[city][category]) byCityCategory[city][category] = { total: 0, farmers: 0, value: 0 }
-          byCityCategory[city][category].total++
-          byCityCategory[city][category].farmers += Number(row.farmers_affected || 0)
-          byCityCategory[city][category].value += Number(row.production_loss_value || row.value_loss || row.cost_of_damage || 0)
-        }
-        else if (category === 'infrastructureDamage') {
-          if (!byCityCategory[city][category]) byCityCategory[city][category] = { total: 0, cost: 0 }
-          byCityCategory[city][category].total++
-          byCityCategory[city][category].cost += Number(row.cost || row.estimated_cost || 0)
-        }
-        else if (category === 'preEmptiveEvacuation') {
-          if (!byCityCategory[city][category]) byCityCategory[city][category] = { total: 0, families: 0, persons: 0 }
-          byCityCategory[city][category].total++
-          byCityCategory[city][category].families += Number(row.families || 0)
-          byCityCategory[city][category].persons += Number(row.persons || row.total || (Number(row.families || 0) * 5))
-        }
-        else {
-          byCityCategory[city][category] = (byCityCategory[city][category] || 0) + 1
-        }
-      }
+      })
+    } catch (err) {
+      console.error('fetchEventConsolidatedData error:', err)
     }
 
     // 3. Filtering and Totals

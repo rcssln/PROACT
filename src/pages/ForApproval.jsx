@@ -13,7 +13,7 @@ import {
   CaretRight,
   Info
 } from '@phosphor-icons/react'
-import { supabase } from '../lib/supabase'
+import api from '../lib/api'
 import { useEvents } from '../contexts/EventContext'
 import Button from '../components/Button'
 import LoadingSpinner from '../components/LoadingSpinner'
@@ -48,27 +48,15 @@ export default function ForApproval() {
   const [previewUrl, setPreviewUrl] = useState(null)
 
   const fetchPendingSitreps = useCallback(async () => {
-    if (!supabase || !user) return
+    if (!user) return
     setLoading(true)
     try {
-      let query = supabase
-        .from('situational_reports')
-        .select(`
-          *,
-          events (
-            name,
-            start_date
-          )
-        `)
-        .eq('status', 'Pending Approval')
-        .order('created_at', { ascending: false })
-
+      const params = { status: 'Pending Approval' }
       if (user.account_type === 'Provincial Approver') {
-        query = query.eq('province', user.province)
+        params.province = user.province
       }
 
-      const { data, error } = await query
-      if (error) throw error
+      const { data } = await api.get('/api/situational-reports', { params })
       setSitreps(data || [])
     } catch (err) {
       console.error('Error fetching pending sitreps:', err)
@@ -96,21 +84,13 @@ export default function ForApproval() {
       onConfirm: async () => {
         setProcessingReview(true)
         try {
-          const { data: updateData, error } = await supabase
-            .from('situational_reports')
-            .update({ 
-              status: 'Approved', 
-              rejection_remarks: null,
-              approved_pdf_url: reviewSitRep.pending_pdf_url || reviewSitRep.approved_pdf_url,
-              pending_pdf_url: null
-            })
-            .eq('id', reviewSitRep.id)
-            .select()
+          await api.patch(`/api/situational-reports/${reviewSitRep.id}`, { 
+            status: 'Approved', 
+            rejection_remarks: null,
+            approved_pdf_url: reviewSitRep.pending_pdf_url || reviewSitRep.approved_pdf_url,
+            pending_pdf_url: null
+          })
           
-          if (error) throw error
-
-          // Immediately remove from local state — do NOT re-fetch right away
-          // to avoid a race condition where the DB hasn't committed yet
           setSitreps(prev => prev.filter(s => s.id !== reviewSitRep.id))
           setShowReviewModal(false)
 
@@ -118,11 +98,9 @@ export default function ForApproval() {
           try {
             const reportProvince = reviewSitRep.province || user?.province
             if (reportProvince) {
-              const { data: provincialUsers } = await supabase
-                .from('users')
-                .select('id')
-                .eq('province', reportProvince)
-                .eq('account_type', 'Provincial')
+              const { data: provincialUsers } = await api.get('/api/users', {
+                params: { province: reportProvince, account_type: 'Provincial' }
+              })
               
               if (provincialUsers?.length > 0) {
                 const notifications = provincialUsers.map(u => ({
@@ -132,7 +110,7 @@ export default function ForApproval() {
                   message: `Your report "${reviewSitRep.title}" has been approved.`,
                   data: { sitrep_id: reviewSitRep.id, event_id: reviewSitRep.event_id }
                 }))
-                await supabase.from('notifications').insert(notifications)
+                await api.post('/api/notifications/bulk', notifications)
               }
             }
           } catch (notifErr) {
@@ -142,10 +120,9 @@ export default function ForApproval() {
           showSuccess('Approved', `"${reviewSitRep.title}" has been approved successfully.`)
           await markSitRepNotificationsAsRead(reviewSitRep.id)
           fetchPendingApprovalsCount()
-          // Delay re-fetch so DB has time to commit before we query again
           setTimeout(() => fetchPendingSitreps(), 1000)
         } catch (err) {
-          showSuccess('Error', err.message || 'Failed to approve report.')
+          showSuccess('Error', err.response?.data?.error || err.message || 'Failed to approve report.')
         } finally {
           setProcessingReview(false)
         }
@@ -165,26 +142,19 @@ export default function ForApproval() {
       onConfirm: async () => {
         setProcessingReview(true)
         try {
-          const { error } = await supabase
-            .from('situational_reports')
-            .update({ 
-              status: 'Draft', 
-              rejection_remarks: rejectRemarks.trim(),
-              pending_pdf_url: null 
-            })
-            .eq('id', reviewSitRep.id)
+          await api.patch(`/api/situational-reports/${reviewSitRep.id}`, { 
+            status: 'Draft', 
+            rejection_remarks: rejectRemarks.trim(),
+            pending_pdf_url: null 
+          })
           
-          if (error) throw error
-
           // Notify Provincial users
           try {
             const reportProvince = reviewSitRep.province || user?.province
             if (reportProvince) {
-              const { data: provincialUsers } = await supabase
-                .from('users')
-                .select('id')
-                .eq('province', reportProvince)
-                .eq('account_type', 'Provincial')
+              const { data: provincialUsers } = await api.get('/api/users', {
+                params: { province: reportProvince, account_type: 'Provincial' }
+              })
               
               if (provincialUsers?.length > 0) {
                 const notifications = provincialUsers.map(u => ({
@@ -194,7 +164,7 @@ export default function ForApproval() {
                   message: `Your report "${reviewSitRep.title}" was rejected. Remarks: ${rejectRemarks.trim()}`,
                   data: { sitrep_id: reviewSitRep.id, event_id: reviewSitRep.event_id, remarks: rejectRemarks.trim() }
                 }))
-                await supabase.from('notifications').insert(notifications)
+                await api.post('/api/notifications/bulk', notifications)
               }
             }
           } catch (notifErr) {
@@ -207,7 +177,7 @@ export default function ForApproval() {
           fetchPendingSitreps()
           fetchPendingApprovalsCount()
         } catch (err) {
-          showSuccess('Error', err.message || 'Failed to reject report.')
+          showSuccess('Error', err.response?.data?.error || err.message || 'Failed to reject report.')
         } finally {
           setProcessingReview(false)
         }

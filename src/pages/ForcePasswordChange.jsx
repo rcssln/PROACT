@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { ShieldWarning, Eye, EyeClosed } from '@phosphor-icons/react'
 import LoadingSpinner from '../components/LoadingSpinner'
-import { supabase } from '../lib/supabase'
-import { hashPassword, validatePassword, getPasswordRules } from '../lib/passwordUtils'
+import api from '../lib/api'
+import { validatePassword, getPasswordRules } from '../lib/passwordUtils'
 import { useEvents } from '../contexts/EventContext'
 import Button from '../components/Button'
 import '../styles/pages/ForcePasswordChange.css'
@@ -32,11 +32,6 @@ export default function ForcePasswordChange({ user, onLogout }) {
             return
         }
 
-        if (!supabase) {
-            setError('Database not configured.')
-            return
-        }
-
         showConfirm({
             title: 'Update Password',
             message: 'Are you sure you want to update your password? You will be logged out and need to sign in again with your new password.',
@@ -44,33 +39,21 @@ export default function ForcePasswordChange({ user, onLogout }) {
                 setSubmitting(true)
 
                 try {
-                    const hashed = await hashPassword(password, user.email)
-
-                    // Update password and clear must_change_password flag
-                    const { error: updateError } = await supabase
-                        .from('users')
-                        .update({
-                            password_hash: hashed,
-                            must_change_password: false
-                        })
-                        .eq('id', user.id)
-
-                    if (updateError) throw updateError
+                    await api.post('/api/auth/change-password', {
+                        newPassword: password
+                    })
 
                     // Log the action
-                    await supabase
-                        .from('activity_logs')
-                        .insert({
-                            user_id: user.id,
-                            action: 'Changed password',
-                            details: 'Forced password change on first login'
-                        })
+                    await api.post('/api/activity-logs', {
+                        action: 'Changed password',
+                        details: 'Forced password change on first login'
+                    })
 
                     // Force logout on successful password change
                     onLogout()
 
                 } catch (err) {
-                    setError(err.message || 'Failed to update password.')
+                    setError(err.response?.data?.error || err.message || 'Failed to update password.')
                     setSubmitting(false)
                 }
             }

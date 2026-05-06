@@ -7,7 +7,7 @@ import ModernDateTimePicker from '../components/ModernDateTimePicker'
 import { useEvents } from '../contexts/EventContext'
 import Button from '../components/Button'
 import LoadingSpinner from '../components/LoadingSpinner'
-import { supabase } from '../lib/supabase'
+import api from '../lib/api'
 import { LGU_NAMES, getBarangaysForCity, getCityForBarangay, getLguNames } from '../data/locations'
 import { getProvinceForCity, PROVINCE_NAMES } from '../data/provinces'
 import { generateRelatedIncidentsPdf } from '../lib/generateRelatedIncidentsPdf'
@@ -130,6 +130,7 @@ const emptyRow = (catId = 'evacuation', city = '') => {
 // Convert app row to DB format
 const rowToDb = (row) => ({
   barangay: row.barangay,
+  remarks: row.remarks || '',
   affected_families: parseInt(row.affectedFamilies) || 0,
   affected_persons: parseInt(row.affectedPersons) || 0,
   ecs_cum: parseInt(row.ecsCum) || 0,
@@ -143,17 +144,30 @@ const rowToDb = (row) => ({
   outside_persons_cum: parseInt(row.outsidePersonsCum) || 0,
   outside_persons_now: parseInt(row.outsidePersonsNow) || 0,
   status: row.status || '',
-  remarks: row.remarks || '',
+  city: row.city || '',
 })
 
 // Convert DB row to app format
 const dbRowToApp = (row, category = 'evacuation') => {
+  let cleanBarangay = row.barangay || ''
+  let remarks = row.remarks || ''
+  
+  // Legacy fallback: decode remarks from barangay if the remarks column is empty
+  if (!remarks && cleanBarangay.includes('[REM:')) {
+    const remMatch = cleanBarangay.match(/\[REM:(.*)\]/)
+    if (remMatch) {
+      remarks = remMatch[1]
+      cleanBarangay = cleanBarangay.replace(remMatch[0], '').trim()
+    }
+  }
+
   const base = {
     id: row.id,
-    report_id: row.report_id, // Preserve for Affected Population
-    city: row.city || getCityForBarangay(row.barangay) || '',
-    barangay: row.barangay || '',
-    remarks: row.remarks || ''
+    report_id: row.report_id, 
+    city: row.city || getCityForBarangay(cleanBarangay) || '',
+    barangay: cleanBarangay,
+    remarks: remarks,
+    status: row.status || ''
   }
 
   switch (category) {
@@ -414,7 +428,7 @@ function CategorySelectionModal({ onClose, onSelect, pingedReportTypes = [], sub
 
 export default function AddReport() {
   const { user } = useOutletContext() || {}
-  const { events, currentEventId, openSelectEventModal, selectedEventForReport, showSuccess, showConfirm, notifications } = useEvents()
+  const { events, currentEventId, openSelectEventModal, selectedEventForReport, showSuccess, showConfirm, notifications, showToast } = useEvents()
 
   const unreadNotifs = useMemo(() => notifications?.filter(n => !n.is_read) || [], [notifications])
 
@@ -534,12 +548,6 @@ export default function AddReport() {
   const [lguSearch, setLguSearch] = useState('')
 
   const fetchReports = useCallback(async () => {
-    if (!supabase) {
-      setError('Supabase not configured.')
-      setLoading(false)
-      return
-    }
-
     if (!currentSituationalReport?.id) {
       setSubmittedReports([])
       setLoading(false)
@@ -550,139 +558,54 @@ export default function AddReport() {
       setLoading(true)
       setError(null)
 
-      const tables = [
-        { name: 'report_rows', cat: 'evacuation', label: 'Affected Population' },
-        { name: 'power_reports', cat: 'power', label: 'Power Status' },
-        { name: 'water_supply_reports', cat: 'water', label: 'Water Status' },
-        { name: 'roads_and_bridges', cat: 'roads', label: 'Roads & Bridges' },
-        { name: 'communication_lines_reports', cat: 'communication', label: 'Communication' },
-        { name: 'related_incidents', cat: 'incidents', label: 'Related Incidents' },
-        { name: 'damaged_houses_reports', cat: 'houses', label: 'Damaged Houses' },
-        { name: 'class_suspension_reports', cat: 'class', label: 'Class Suspension' },
-        { name: 'work_suspension_reports', cat: 'work', label: 'Work Suspension' },
-        { name: 'declaration_state_of_calamity_reports', cat: 'calamity', label: 'State of Calamity' },
-        { name: 'pre_emptive_evacuation_reports', cat: 'preemptive', label: 'Pre-emptive Evac' },
-        { name: 'assistance_provided_reports', cat: 'assistance', label: 'Assistance Provided' },
-        { name: 'assistance_lgus_agencies_reports', cat: 'assistance_lgus', label: 'Assistance (LGUs/Agencies)' },
-        { name: 'agriculture_damage_reports', cat: 'agriculture', label: 'Agriculture Damage' },
-        { name: 'infrastructure_damage_reports', cat: 'infrastructure', label: 'Infrastructure Damage' },
-      ]
+      const { data } = await api.get(`/api/reports/all-types?situational_report_id=${currentSituationalReport.id}`)
+      
+      // Group evacuation entries by report_id
+      const grouped = []
+      const evacuationByReport = {}
 
-      const getSectionNames = (r) => {
-        const sections = r?.roads_and_bridges_sections
-        if (!sections?.length) return ''
-        return sections.map((s) => (typeof s === 'object' ? s.name : s)).filter(Boolean).join(', ')
-      }
-
-      const allPromises = tables.map(async (t) => {
-        try {
-          if (t.name === 'report_rows') {
-            const { data: reportsData, error: reportsError } = await supabase
-              .from('reports')
-              .select('*')
-              .eq('situational_report_id', currentSituationalReport.id)
-            
-            if (reportsError) throw reportsError
-            if (!reportsData?.length) return []
-            
-            const reportIds = reportsData.map(r => r.id)
-            const { data: rowsData, error: rowsError } = await supabase
-              .from('report_rows')
-              .select('*')
-              .in('report_id', reportIds)
-            
-            if (rowsError) throw rowsError
-
-            return reportsData.map(r => {
-              const rows = (rowsData || []).filter(row => row.report_id === r.id)
-              if (rows.length === 0) return null
-              
-              const firstRow = rows[0]
-              const city = getCityForBarangay(firstRow.barangay)
-              const barangays = [...new Set(rows.map(row => row.barangay).filter(Boolean))]
-              
-              return {
-                id: r.id,
-                category: t.cat,
-                categoryLabel: t.label,
-                tableName: 'reports',
-                city: city,
-                barangay: firstRow.barangay,
-                location: barangays.length > 1 
-                  ? `${city || ''}: ${barangays.length} Barangays` 
-                  : (city ? `${city}: ${firstRow.barangay}` : firstRow.barangay),
-                classification: 'Affected Population',
-                summary: `${rows.reduce((sum, row) => sum + (row.affected_families || 0), 0)} Families Affected`,
-                timestamp: r.submitted_at || r.created_at,
-                status: 'Reported',
-                all_rows: rows.map(row => ({ ...row, report_id: r.id }))
-              }
-            }).filter(Boolean)
-          } else if (t.name === 'roads_and_bridges') {
-            const { data, error } = await supabase
-              .from(t.name)
-              .select('*')
-              .eq('situational_report_id', currentSituationalReport.id)
-            
-            if (error) throw error
-            if (!data?.length) return []
-
-            const { data: sectionsData } = await supabase
-              .from('roads_and_bridges_sections')
-              .select('*')
-              .in('report_id', data.map(r => r.id))
-
-            const rowsWithSections = data.map(r => ({
-              ...r,
-              roads_and_bridges_sections: (sectionsData || []).filter(s => s.report_id === r.id)
-            }))
-
-            return [{
-              id: `group-${t.cat}`,
-              category: t.cat,
-              categoryLabel: t.label,
-              tableName: t.name,
-              city: data[0].city || getCityForBarangay(data[0].barangay),
-              barangay: data[0].barangay,
-              location: [...new Set(data.map(r => r.city || getCityForBarangay(r.barangay)).filter(Boolean))].join(', ') || 'Multiple Locations',
-              classification: 'Infrastructure',
-              summary: `${data.length} Roads/Bridges Reported`,
-              timestamp: data[0].created_at,
-              status: data[0].status || 'Ongoing',
-              all_rows: rowsWithSections
-            }]
-          } else {
-            const { data, error } = await supabase
-              .from(t.name)
-              .select('*')
-              .eq('situational_report_id', currentSituationalReport.id)
-            
-            if (error) throw error
-            if (!data?.length) return []
-
-            return [{
-              id: `group-${t.cat}`,
-              category: t.cat,
-              categoryLabel: t.label,
-              tableName: t.name,
-              city: data[0].city || getCityForBarangay(data[0].barangay),
-              barangay: data[0].barangay,
-              location: [...new Set(data.map(r => r.city || getCityForBarangay(r.barangay)).filter(Boolean))].join(', ') || 'Multiple Locations',
-              classification: t.label,
-              summary: `${data.length} Entries`,
-              timestamp: data[0].created_at || data[0].submitted_at,
-              status: data[0].status || 'Reported',
-              all_rows: data
-            }]
+      data.forEach(item => {
+        if (item.category === 'evacuation' && item.report_id) {
+          if (!evacuationByReport[item.report_id]) {
+            evacuationByReport[item.report_id] = []
           }
-        } catch (err) {
-          console.error(`Error fetching category ${t.cat}:`, err)
-          return []
+          evacuationByReport[item.report_id].push(item)
+        } else {
+          grouped.push(item)
         }
       })
 
-      const results = await Promise.all(allPromises)
-      const merged = results.flat().sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+      // Process grouped evacuation entries
+      Object.keys(evacuationByReport).forEach(reportId => {
+        const rows = evacuationByReport[reportId]
+        const first = rows[0]
+        
+        // Use province name if all rows share it (look up if not in DB)
+        const rowProvinces = rows.map(r => {
+          if (r.province) return r.province
+          const city = r.city || getCityForBarangay(r.barangay)
+          return city ? getProvinceForCity(city) : null
+        }).filter(Boolean)
+
+        const uniqueProvinces = [...new Set(rowProvinces)]
+        const provinceDisplay = uniqueProvinces.length === 1 ? uniqueProvinces[0] : 'Multiple Locations'
+
+        grouped.push({
+          id: reportId,
+          report_id: reportId,
+          category: 'evacuation',
+          categoryTitle: 'Affected Population',
+          tableName: 'reports',
+          location: provinceDisplay,
+          subject: `${rows.length} Barangays Affected`,
+          summary: `Total Affected: ${rows.reduce((acc, r) => acc + (parseInt(r.affected_families) || 0), 0)} families`,
+          status: first.status || 'Resolved',
+          timestamp: first.timestamp,
+          all_rows: rows
+        })
+      })
+
+      const merged = grouped.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
 
       // LGU accounts: only show reports from barangays that belong to their city
       const isLgu = isLGU
@@ -695,13 +618,16 @@ export default function AddReport() {
         )
         
         finalReports = merged.filter(r => {
-          // 1. Check if city matches directly (for grouped entries or city-wide reports)
+          if (r.category === 'evacuation' && r.all_rows) {
+            // For grouped evacuation, check if any row belongs to this LGU's city
+            return r.all_rows.some(row => {
+              const rowCity = (row.city || getCityForBarangay(row.barangay) || '').toLowerCase()
+              return rowCity === lguCityLow
+            })
+          }
           const reportCity = (r.city || getCityForBarangay(r.barangay) || '').toLowerCase()
-          if (reportCity === lguCityLow) return true
-          
-          // 2. Check if barangay belongs to the city
-          const brgy = (r.barangay || '').toLowerCase()
-          return brgy && lguBarangays.has(brgy)
+          const reportBarangay = (r.barangay || '').toLowerCase()
+          return reportCity === lguCityLow || lguBarangays.has(reportBarangay)
         })
       }
 
@@ -711,35 +637,24 @@ export default function AddReport() {
     } finally {
       setLoading(false)
     }
-  }, [currentSituationalReport, user, supabase])
+  }, [currentSituationalReport, user])
 
   const resetSitRepStatus = async () => {
-    if (!currentSituationalReport || !supabase) return
+    if (!currentSituationalReport) return
     
-    // Reset if Approved, Pending Approval, or has rejection remarks
     if (['Approved', 'Pending Approval'].includes(currentSituationalReport.status) || currentSituationalReport.rejection_remarks) {
       try {
-        // Keep approved_pdf_url intact so the last approved PDF stays visible
-        // in Consolidated Reports while the report is being edited in Draft.
-        // It will only be replaced when a new PDF is approved.
-        const { error: updateError } = await supabase
-          .from('situational_reports')
-          .update({ 
-            status: 'Draft', 
-            pending_pdf_url: null,
-            rejection_remarks: null 
-            // approved_pdf_url is intentionally NOT cleared here
-          })
-          .eq('id', currentSituationalReport.id)
-        
-        if (updateError) throw updateError
+        const { data: updatedSR } = await api.patch(`/api/situational-reports/${currentSituationalReport.id}`, { 
+          status: 'Draft', 
+          pending_pdf_url: null,
+          rejection_remarks: null 
+        })
         
         setCurrentSituationalReport(prev => ({ 
           ...prev, 
           status: 'Draft', 
           pending_pdf_url: null,
           rejection_remarks: null
-          // approved_pdf_url intentionally preserved
         }))
         
         if (selectedEvent) {
@@ -753,11 +668,8 @@ export default function AddReport() {
 
   const deleteReport = async (item) => {
     try {
-      const { error: deleteError } = item.tableName === 'reports'
-        ? await supabase.from('reports').delete().eq('id', item.id)
-        : await supabase.from(item.tableName).delete().eq('situational_report_id', currentSituationalReport.id)
-      
-      if (deleteError) throw deleteError
+      const table = item.tableName === 'reports' ? 'report_rows' : item.tableName
+      await api.delete(`/api/reports/${table}/bulk`, { data: { ids: [item.id] } })
       
       await resetSitRepStatus()
       showSuccess('Success', 'Report deleted successfully')
@@ -771,275 +683,41 @@ export default function AddReport() {
   const fetchFullSitRepData = async (sitRep) => {
     if (!sitRep) return null
 
-    const tables = [
-      { id: 'relatedIncidents', table: 'related_incidents' },
-      { id: 'roadsAndBridges', table: 'roads_and_bridges' },
-      { id: 'classSuspension', table: 'class_suspension_reports' },
-      { id: 'workSuspension', table: 'work_suspension_reports' },
-      { id: 'stateOfCalamity', table: 'declaration_state_of_calamity_reports' },
-      { id: 'assistanceProvided', table: 'assistance_provided_reports' },
-      { id: 'preEmptiveEvacuation', table: 'pre_emptive_evacuation_reports' },
-      { id: 'waterSupply', table: 'water_supply_reports' },
-      { id: 'damagedHouses', table: 'damaged_houses_reports' },
-      { id: 'communicationLines', table: 'communication_lines_reports' },
-      { id: 'power', table: 'power_reports' },
-      { id: 'assistanceLgusAgencies', table: 'assistance_lgus_agencies_reports' },
-      { id: 'agricultureDamage', table: 'agriculture_damage_reports' },
-      { id: 'infrastructureDamage', table: 'infrastructure_damage_reports' }
-    ]
-
     try {
-      if (!selectedEvent) {
-        console.warn('DEBUG: selectedEvent is null in fetchFullSitRepData')
-      }
-      const qParams = { 
-        eventId: selectedEvent?.id || sitRep.event_id, 
-        sitRepId: sitRep.id 
-      }
-      console.log('DEBUG: qParams:', qParams)
-
-      
-      // 1. Fetch all detailed tables + reports header table in parallel
-      const results = await Promise.all([
-        ...tables.map(t => {
-          let sel = '*'
-          if (t.table === 'roads_and_bridges') sel = '*, roads_and_bridges_sections(name)'
-          return supabase.from(t.table).select(sel).eq('event_id', qParams.eventId).eq('situational_report_id', qParams.sitRepId)
-        }),
-        supabase.from('reports').select('id').eq('event_id', qParams.eventId).eq('situational_report_id', qParams.sitRepId)
-      ])
-
-      const dataMap = {}
-      tables.forEach((t, i) => {
-        let rows = results[i].data || []
-        // Add city to each row if missing
-        rows = rows.map(r => ({
-          ...r,
-          city: r.city || getCityForBarangay(r.barangay) || 'Unknown'
-        }))
-
-        // Handle roads sections mapping
-        if (t.table === 'roads_and_bridges') {
-          rows = rows.map(r => {
-            if (r.roads_and_bridges_sections) {
-              const sections = r.roads_and_bridges_sections
-              const sectionNames = (Array.isArray(sections) ? sections : [sections])
-                .map(s => typeof s === 'object' ? s.name : s)
-                .filter(Boolean)
-                .join(', ')
-              return { ...r, road_bridge_name: sectionNames || r.road_bridge_name || r.road_section_bridge }
-            }
-            return r
-          })
-        }
-        dataMap[t.id] = rows
-      })
-
-      // 2. Affected Population needs sequential fetch for report_rows
-      const reportsResult = results[tables.length].data || []
-      let affectedPopulationDetails = []
-      if (reportsResult.length > 0) {
-        const apIds = reportsResult.map(r => r.id)
-        const { data: apRows } = await supabase.from('report_rows').select('*').in('report_id', apIds)
-        const agg = new Map()
-        const num = (v) => Number(v ?? 0) || 0
-        for (const rr of apRows || []) {
-          const city = rr.city || getCityForBarangay(rr.barangay) || 'Unknown'
-          const key = `${city}||${rr.barangay || ''}`
-          const cur = agg.get(key) || {
-            city, barangay: rr.barangay || '', families: 0, persons: 0, ecs_cum: 0, ecs_now: 0,
-            inside_families_cum: 0, inside_families_now: 0, inside_persons_cum: 0, inside_persons_now: 0,
-            outside_families_cum: 0, outside_families_now: 0, outside_persons_cum: 0, outside_persons_now: 0
-          }
-          cur.families += num(rr.affected_families); cur.persons += num(rr.affected_persons)
-          cur.ecs_cum += num(rr.ecs_cum); cur.ecs_now += num(rr.ecs_now)
-          cur.inside_families_cum += num(rr.inside_families_cum); cur.inside_families_now += num(rr.inside_families_now)
-          cur.inside_persons_cum += num(rr.inside_persons_cum); cur.inside_persons_now += num(rr.inside_persons_now)
-          cur.outside_families_cum += num(rr.outside_families_cum); cur.outside_families_now += num(rr.outside_families_now)
-          cur.outside_persons_cum += num(rr.outside_persons_cum); cur.outside_persons_now += num(rr.outside_persons_now)
-          agg.set(key, cur)
-        }
-        affectedPopulationDetails = Array.from(agg.values())
-      }
-
-      // 3. Totals and Aggregation
-      // 3. Totals and Aggregation (Robust implementation for PDF summary tables)
-      const categoryTotals = {}
-      const byCityCategory = {}
-      const allDetailLists = { ...dataMap, affectedPopulation: affectedPopulationDetails }
-
-      const numVal = (v) => Number(v ?? 0) || 0
-      console.log('DEBUG: allDetailLists keys:', Object.keys(allDetailLists))
-
-
-      Object.entries(allDetailLists).forEach(([cat, list]) => {
-        list.forEach(item => {
-          const city = item.city || (item.barangay ? getCityForBarangay(item.barangay) : 'Unknown')
-          if (!byCityCategory[city]) byCityCategory[city] = {}
-          
-          // Category-specific aggregation for summary tables
-          if (cat === 'affectedPopulation') {
-            if (!byCityCategory[city][cat]) byCityCategory[city][cat] = { families: 0, persons: 0, brgy_count: 0, ecs_now: 0, in_fam_now: 0, in_per_now: 0, out_fam_now: 0, out_per_now: 0 }
-            byCityCategory[city][cat].families += numVal(item.families)
-            byCityCategory[city][cat].persons += numVal(item.persons)
-            byCityCategory[city][cat].brgy_count++
-            byCityCategory[city][cat].ecs_now += numVal(item.ecs_now)
-            byCityCategory[city][cat].in_fam_now += numVal(item.inside_families_now)
-            byCityCategory[city][cat].in_per_now += numVal(item.inside_persons_now)
-            byCityCategory[city][cat].out_fam_now += numVal(item.outside_families_now)
-            byCityCategory[city][cat].out_per_now += numVal(item.outside_persons_now)
-          } 
-          else if (cat === 'relatedIncidents') {
-            if (!byCityCategory[city][cat]) byCityCategory[city][cat] = { total: 0, flooded: 0, subsided: 0, receding: 0, fallenDebris: 0, stormSurge: 0, other: 0 }
-            byCityCategory[city][cat].total++
-            const type = (item.type_of_incident || '').toLowerCase()
-            if (type.includes('flood')) byCityCategory[city][cat].flooded++
-            else if (type.includes('debris') || type.includes('tree')) byCityCategory[city][cat].fallenDebris++
-            else if (type.includes('surge')) byCityCategory[city][cat].stormSurge++
-            else byCityCategory[city][cat].other++
-            
-            if ((item.status || '').toLowerCase().includes('subsided')) byCityCategory[city][cat].subsided++
-            if ((item.status || '').toLowerCase().includes('receding')) byCityCategory[city][cat].receding++
-          }
-          else if (cat === 'roadsAndBridges') {
-            if (!byCityCategory[city][cat]) byCityCategory[city][cat] = { total: 0, roads: 0, bridges: 0, passable: 0, notPassable: 0 }
-            byCityCategory[city][cat].total++
-            if (item.type === 'Bridge') byCityCategory[city][cat].bridges++
-            else byCityCategory[city][cat].roads++
-            if ((item.status || '').toLowerCase().includes('passable')) byCityCategory[city][cat].passable++
-            else byCityCategory[city][cat].notPassable++
-          }
-          else if (['power', 'waterSupply', 'communicationLines'].includes(cat)) {
-            if (!byCityCategory[city][cat]) byCityCategory[city][cat] = { total: 0, interrupted: 0, restored: 0 }
-            byCityCategory[city][cat].total++
-            byCityCategory[city][cat].interrupted++
-            if (item.date_restored || item.date_restoration || (item.status || '').toLowerCase().includes('restored')) {
-              byCityCategory[city][cat].restored++
-            }
-          }
-          else if (cat === 'damagedHouses') {
-            if (!byCityCategory[city][cat]) byCityCategory[city][cat] = { total: 0, totally: 0, partially: 0, amount: 0 }
-            const t = numVal(item.totally_damaged)
-            const p = numVal(item.partially_damaged)
-            byCityCategory[city][cat].total += (t + p)
-            byCityCategory[city][cat].totally += t
-            byCityCategory[city][cat].partially += p
-            byCityCategory[city][cat].amount += numVal(item.amount_php || item.amount)
-          }
-          else if (cat === 'preEmptiveEvacuation') {
-            if (!byCityCategory[city][cat]) byCityCategory[city][cat] = { total: 0, families: 0, persons: 0 }
-            byCityCategory[city][cat].total++
-            byCityCategory[city][cat].families += numVal(item.families)
-            // Use 'total' or 'persons' property from the record
-            byCityCategory[city][cat].persons += numVal(item.total || item.persons || (numVal(item.families) * 5))
-          }
-          else if (cat === 'assistanceProvided') {
-            if (!byCityCategory[city][cat]) byCityCategory[city][cat] = { total: 0, cost: 0 }
-            byCityCategory[city][cat].total++
-            byCityCategory[city][cat].cost += numVal(item.amount || item.cost_php || item.fnfi_amount)
-          }
-          else {
-            byCityCategory[city][cat] = (byCityCategory[city][cat] || 0) + 1
-          }
-        })
-      })
-
-      // Calculate Category Totals from byCityCategory
-      const categoriesList = [
-        'relatedIncidents', 'affectedPopulation', 'roadsAndBridges', 'power', 'waterSupply', 
-        'communicationLines', 'damagedHouses', 'classSuspension', 'workSuspension', 
-        'stateOfCalamity', 'preEmptiveEvacuation', 'assistanceProvided'
-      ]
-
-      categoriesList.forEach(cat => {
-        if (cat === 'affectedPopulation') {
-          categoryTotals[cat] = Object.values(byCityCategory).reduce((s, c) => ({
-            families: s.families + (c[cat]?.families || 0),
-            persons: s.persons + (c[cat]?.persons || 0),
-            brgy_count: s.brgy_count + (c[cat]?.brgy_count || 0),
-            ecs_now: s.ecs_now + (c[cat]?.ecs_now || 0),
-            in_fam_now: s.in_fam_now + (c[cat]?.in_fam_now || 0),
-            in_per_now: s.in_per_now + (c[cat]?.in_per_now || 0),
-            out_fam_now: s.out_fam_now + (c[cat]?.out_fam_now || 0),
-            out_per_now: s.out_per_now + (c[cat]?.out_per_now || 0)
-          }), { families: 0, persons: 0, brgy_count: 0, ecs_now: 0, in_fam_now: 0, in_per_now: 0, out_fam_now: 0, out_per_now: 0 })
-        } else if (cat === 'relatedIncidents') {
-          categoryTotals[cat] = Object.values(byCityCategory).reduce((s, c) => ({
-            total: s.total + (c[cat]?.total || 0),
-            flooded: s.flooded + (c[cat]?.flooded || 0),
-            subsided: s.subsided + (c[cat]?.subsided || 0),
-            receding: s.receding + (c[cat]?.receding || 0),
-            fallenDebris: s.fallenDebris + (c[cat]?.fallenDebris || 0),
-            stormSurge: s.stormSurge + (c[cat]?.stormSurge || 0),
-            other: s.other + (c[cat]?.other || 0)
-          }), { total: 0, flooded: 0, subsided: 0, receding: 0, fallenDebris: 0, stormSurge: 0, other: 0 })
-        } else if (cat === 'roadsAndBridges') {
-          categoryTotals[cat] = Object.values(byCityCategory).reduce((s, c) => ({
-            total: s.total + (c[cat]?.total || 0),
-            roads: s.roads + (c[cat]?.roads || 0),
-            bridges: s.bridges + (c[cat]?.bridges || 0),
-            passable: s.passable + (c[cat]?.passable || 0),
-            notPassable: s.notPassable + (c[cat]?.notPassable || 0)
-          }), { total: 0, roads: 0, bridges: 0, passable: 0, notPassable: 0 })
-        } else if (['power', 'waterSupply', 'communicationLines'].includes(cat)) {
-          categoryTotals[cat] = Object.values(byCityCategory).reduce((s, c) => ({
-            total: s.total + (c[cat]?.total || 0),
-            interrupted: s.interrupted + (c[cat]?.interrupted || 0),
-            restored: s.restored + (c[cat]?.restored || 0)
-          }), { total: 0, interrupted: 0, restored: 0 })
-        } else if (cat === 'damagedHouses') {
-          categoryTotals[cat] = Object.values(byCityCategory).reduce((s, c) => ({
-            total: s.total + (c[cat]?.total || 0),
-            totally: s.totally + (c[cat]?.totally || 0),
-            partially: s.partially + (c[cat]?.partially || 0),
-            amount: s.amount + (c[cat]?.amount || 0)
-          }), { total: 0, totally: 0, partially: 0, amount: 0 })
-        } else if (cat === 'preEmptiveEvacuation') {
-          categoryTotals[cat] = Object.values(byCityCategory).reduce((s, c) => ({
-            families: s.families + (c[cat]?.families || 0),
-            persons: s.persons + (c[cat]?.persons || 0)
-          }), { families: 0, persons: 0 })
-        } else if (cat === 'assistanceProvided') {
-          categoryTotals[cat] = Object.values(byCityCategory).reduce((s, c) => ({
-            total: s.total + (c[cat]?.total || 0),
-            cost: s.cost + (c[cat]?.cost || 0)
-          }), { total: 0, cost: 0 })
-        } else {
-          categoryTotals[cat] = Object.values(byCityCategory).reduce((s, c) => s + (c[cat] || 0), 0)
+      const { data } = await api.get('/api/reports/consolidated', {
+        params: {
+          event_id: selectedEvent?.id || sitRep.event_id,
+          situational_report_ids: sitRep.id
         }
       })
 
-      const summaryData = { categoryTotals, byCityCategory, details: allDetailLists }
-      const cities = Object.keys(byCityCategory).sort()
-      console.log('DEBUG: Aggregation Complete. Cities:', cities)
-      console.log('DEBUG: categoryTotals.affectedPopulation:', categoryTotals.affectedPopulation)
+      if (!data) return null
 
-
+      const { summaryData, details } = data
 
       return {
         province: userProvince || sitRep.province || 'Region 1',
         eventName: selectedEvent?.name || 'SITUATIONAL REPORT',
-
         reportTitle: sitRep.title,
-        cities,
-        categoryTotals,
-        byCityCategory,
-        relatedIncidentsDetails: dataMap.relatedIncidents,
-        affectedPopulationDetails,
-        roadsAndBridgesDetails: dataMap.roadsAndBridges,
-        powerDetails: dataMap.power,
-        waterSupplyDetails: dataMap.waterSupply,
-        communicationLinesDetails: dataMap.communicationLines,
-        damagedHousesDetails: dataMap.damagedHouses,
-        classSuspensionDetails: dataMap.classSuspension,
-        workSuspensionDetails: dataMap.workSuspension,
-        stateOfCalamityDetails: dataMap.stateOfCalamity,
-        preEmptiveEvacuationDetails: dataMap.preEmptiveEvacuation,
-        assistanceProvidedDetails: dataMap.assistanceProvided,
-        assistanceLgusDetails: dataMap.assistanceLgusAgencies,
-        agricultureDamageDetails: dataMap.agricultureDamage,
-        infrastructureDamageDetails: dataMap.infrastructureDamage,
-        summaryData // Pass original aggregated data for later AI summary generation
+        cities: data.cities || [],
+        categoryTotals: data.categoryTotals || {},
+        byCityCategory: data.byCityCategory || {},
+        relatedIncidentsDetails: details.relatedIncidents || [],
+        affectedPopulationDetails: details.affectedPopulation || [],
+        roadsAndBridgesDetails: details.roadsAndBridges || [],
+        powerDetails: details.power || [],
+        waterSupplyDetails: details.waterSupply || [],
+        communicationLinesDetails: details.communicationLines || [],
+        damagedHousesDetails: details.damagedHouses || [],
+        classSuspensionDetails: details.classSuspension || [],
+        workSuspensionDetails: details.workSuspension || [],
+        stateOfCalamityDetails: details.stateOfCalamity || [],
+        preEmptiveEvacuationDetails: details.preEmptiveEvacuation || [],
+        assistanceProvidedDetails: details.assistanceProvided || [],
+        assistanceLgusDetails: details.assistanceLgusAgencies || [],
+        agricultureDamageDetails: details.agricultureDamage || [],
+        infrastructureDamageDetails: details.infrastructureDamage || [],
+        summaryData
       }
     } catch (err) {
       console.error('Error fetching full SitRep data:', err)
@@ -1048,26 +726,24 @@ export default function AddReport() {
   }
 
   const fetchSignatories = async () => {
-    if (!supabase) return
     setLoadingSignatories(true)
     try {
-      let query = supabase.from('users').select('id, first_name, last_name, email, province, account_type, status')
+      const params = { status: 'Active' }
       if (!isSuperAdmin && !isRegional && userProvince) {
-        query = query.eq('province', userProvince)
+        params.province = userProvince
       }
-      const { data, error } = await query.eq('status', 'Active').order('last_name', { ascending: true })
-      if (!error && data) {
+      const { data } = await api.get('/api/users', { params })
+      if (data) {
         const mapped = data.map(u => ({
           id: u.id,
           name: `${u.first_name || ''} ${u.last_name || ''}`.trim() || u.email,
           account_type: u.account_type,
           province: u.province,
-          designation: u.account_type, // Fallback
+          designation: u.account_type,
           office: u.province || 'PDRRMO'
         }))
         setAvailableSignatories(mapped)
         
-        // Auto-populate if empty
         if (preparedBy.length === 0) {
           const provincialUsers = mapped.filter(u => u.account_type === 'Provincial')
           const approverUsers = mapped.filter(u => u.account_type === 'Provincial Approver')
@@ -1120,50 +796,83 @@ export default function AddReport() {
     }
   }
 
-  const handleDownloadClick = (sr) => {
-    console.log('DEBUG: handleDownloadClick called', { id: sr?.id, title: sr?.title, status: sr?.status })
-    if (!sr) {
-      console.warn('DEBUG: handleDownloadClick called with null sr')
-      return
-    }
-    // If a signed PDF is already uploaded and approved, ask if they want that or a new one
+  const handleReportDownload = async (sr) => {
+    if (!sr) return
+    
+    // If a signed PDF is already uploaded and approved, give options
     if (sr.approved_pdf_url && sr.status === 'Approved') {
-      console.log('DEBUG: Approved PDF exists, showing confirmation...')
       showConfirm({
         title: 'Download Report',
-        message: 'An approved signed PDF is already available for this report. Would you like to download the official signed PDF or generate a new one based on the current data?',
+        message: 'An approved signed PDF is already available. Would you like to download the official signed PDF or generate a new consolidated ZIP?',
         confirmText: 'Download Official PDF',
-        cancelText: 'Generate New PDF',
+        cancelText: 'Generate Consolidated ZIP',
         type: 'info',
         onConfirm: () => {
-          console.log('DEBUG: User chose to download Official PDF')
-          setProcessingExportId(sr.id)
-          try {
-            const link = document.createElement('a')
-            link.href = sr.approved_pdf_url
-            const fileName = `${sr.title.replace(/\s+/g, '-')}_Signed.pdf`
-            link.setAttribute('download', fileName)
-            link.setAttribute('target', '_blank')
-            document.body.appendChild(link)
-            link.click()
-            document.body.removeChild(link)
-          } catch (err) {
-            console.error('Direct download failed:', err)
-          } finally {
-            setProcessingExportId(null)
-          }
+          const link = document.createElement('a')
+          link.href = sr.approved_pdf_url
+          link.setAttribute('download', `Approved_Report_${sr.report_number || sr.id}.pdf`)
+          link.setAttribute('target', '_blank')
+          document.body.appendChild(link)
+          link.click()
+          document.body.removeChild(link)
         },
         onCancel: () => {
-          console.log('DEBUG: User chose to Generate New PDF')
-          // If they click cancel (Generate New PDF), we proceed with the normal generation flow
+          processConsolidatedExport(sr)
+        }
+      })
+    } else {
+      // For non-approved, ask if they want PDF (old flow) or CSV (new flow)
+      showConfirm({
+        title: 'Download Report',
+        message: 'How would you like to export this situational report?',
+        confirmText: 'Consolidated ZIP (CSVs)',
+        cancelText: 'Generate PDF Report',
+        type: 'info',
+        onConfirm: () => {
+          processConsolidatedExport(sr)
+        },
+        onCancel: () => {
           startReportGeneration(sr)
         }
       })
-      return
     }
+  }
 
-    console.log('DEBUG: Proceeding to startReportGeneration...')
-    startReportGeneration(sr)
+  const processConsolidatedExport = async (sr) => {
+    try {
+      setProcessingExportId(sr.id)
+      const { data: allData } = await api.get('/api/reports/all-types', {
+        params: { situational_report_id: sr.id }
+      })
+
+      const exportData = {
+        eventName: selectedEvent?.name || 'Event',
+        summaryText: sr.title || '',
+        relatedIncidentsDetails: allData.filter(d => d.category === 'incidents'),
+        affectedPopulationDetails: allData.filter(d => d.category === 'evacuation'),
+        roadsAndBridgesDetails: allData.filter(d => d.category === 'roads'),
+        powerDetails: allData.filter(d => d.category === 'power'),
+        waterSupplyDetails: allData.filter(d => d.category === 'water'),
+        communicationLinesDetails: allData.filter(d => d.category === 'communication'),
+        damagedHousesDetails: allData.filter(d => d.category === 'houses'),
+        classSuspensionDetails: allData.filter(d => d.category === 'class'),
+        workSuspensionDetails: allData.filter(d => d.category === 'work'),
+        stateOfCalamityDetails: allData.filter(d => d.category === 'calamity'),
+        preEmptiveEvacuationDetails: allData.filter(d => d.category === 'preemptive'),
+        assistanceProvidedDetails: allData.filter(d => d.category === 'assistance'),
+        assistanceLgusDetails: allData.filter(d => d.category === 'assistance_lgus'),
+        agricultureDamageDetails: allData.filter(d => d.category === 'agriculture'),
+        infrastructureDamageDetails: allData.filter(d => d.category === 'infrastructure'),
+      }
+
+      generateConsolidatedCsv(exportData)
+      showToast('Export Success', 'Consolidated report generated successfully.', 'success')
+    } catch (err) {
+      console.error('Export failed:', err)
+      showToast('Export Error', 'Failed to generate export: ' + err.message, 'danger')
+    } finally {
+      setProcessingExportId(null)
+    }
   }
 
   const startReportGeneration = async (sr) => {
@@ -1258,40 +967,37 @@ export default function AddReport() {
   }
 
   const handleUploadPdfSubmit = async () => {
-    if (!approvalFile || !supabase || !currentSituationalReport) return
+    if (!approvalFile || !currentSituationalReport) return
     if (approvalFile.type !== 'application/pdf') {
       showSuccess('Validation Error', 'Only PDF files are allowed.')
       return
     }
     setUploadingApproval(true)
     try {
-      const ownerId = currentSituationalReport.event_id || selectedEvent?.id
-      const path = `${ownerId}/${Date.now()}-${Math.random().toString(36).slice(2)}.pdf`
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from(APPROVAL_BUCKET)
-        .upload(path, approvalFile, { contentType: 'application/pdf', upsert: false })
-      if (uploadError) throw new Error(`Upload failed: ${uploadError.message}. Ensure bucket "${APPROVAL_BUCKET}" exists.`)
-      const { data: urlData } = supabase.storage.from(APPROVAL_BUCKET).getPublicUrl(uploadData.path)
-      const pdfUrl = urlData?.publicUrl ?? null
+      const formData = new FormData()
+      formData.append('file', approvalFile)
+      formData.append('category', 'approvals')
 
-      const { error: updateError } = await supabase
-        .from('situational_reports')
-        .update({ status: 'Pending Approval', pending_pdf_url: pdfUrl })
-        .eq('id', currentSituationalReport.id)
-      if (updateError) throw updateError
+      const { data: uploadData } = await api.post('/api/upload', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      })
+      
+      const pdfUrl = uploadData.url
 
-      // Refresh situational reports to show new status
+      await api.patch(`/api/situational-reports/${currentSituationalReport.id}`, { 
+        status: 'Pending Approval', 
+        pending_pdf_url: pdfUrl 
+      })
+
       if (selectedEvent) fetchSituationalReports(selectedEvent.id)
 
       // Notify Provincial Approvers
       try {
-        const userProvince = user?.province
-        if (userProvince) {
-          const { data: approvers } = await supabase
-            .from('users')
-            .select('id')
-            .eq('province', userProvince)
-            .eq('account_type', 'Provincial Approver')
+        const province = user?.province
+        if (province) {
+          const { data: approvers } = await api.get('/api/users', {
+            params: { province, account_type: 'Provincial Approver' }
+          })
           
           if (approvers?.length > 0) {
             const notifications = approvers.map(u => ({
@@ -1301,14 +1007,13 @@ export default function AddReport() {
               message: `A new situational report "${currentSituationalReport.title}" has been submitted for your approval.`,
               data: { sitrep_id: currentSituationalReport.id, event_id: selectedEvent?.id }
             }))
-            await supabase.from('notifications').insert(notifications)
+            await api.post('/api/notifications/bulk', notifications)
           }
         }
       } catch (notifErr) {
         console.error('Failed to send submission notifications:', notifErr)
       }
 
-      // Auto-mark notifications for this SitRep as read (like rejections)
       if (currentSituationalReport?.id) {
         await markSitRepNotificationsAsRead(currentSituationalReport.id)
       }
@@ -1333,11 +1038,12 @@ export default function AddReport() {
       type: 'success',
       onConfirm: async () => {
         try {
-          const { error } = await supabase
-            .from('situational_reports')
-            .update({ status: 'Approved' })
-            .eq('id', sitRep.id)
-          if (error) throw error
+          await api.patch(`/api/situational-reports/${sitRep.id}`, { 
+            status: 'Approved',
+            rejection_remarks: null,
+            approved_pdf_url: sitRep.pending_pdf_url || sitRep.approved_pdf_url,
+            pending_pdf_url: null
+          })
           showSuccess('Approved', `"${sitRep.title}" has been approved successfully.`)
           await markSitRepNotificationsAsRead(sitRep.id)
           if (selectedEvent) fetchSituationalReports(selectedEvent.id)
@@ -1359,44 +1065,20 @@ export default function AddReport() {
     if (!reviewSitRep) return
     setProcessingReview(true)
     try {
-      // Try updating with rejection_remarks reset
-      const { error } = await supabase
-        .from('situational_reports')
-        .update({ 
-          status: 'Approved', 
-          rejection_remarks: null,
-          approved_pdf_url: reviewSitRep.pending_pdf_url || reviewSitRep.approved_pdf_url,
-          pending_pdf_url: null
-        })
-        .eq('id', reviewSitRep.id)
-      
-      if (error) {
-        // If it fails specifically because of the missing column, retry without it
-        if (error.message?.includes('rejection_remarks') || error.code === '42703' || error.message?.includes('schema cache')) {
-          const { error: retryError } = await supabase
-            .from('situational_reports')
-            .update({ 
-              status: 'Approved',
-              approved_pdf_url: reviewSitRep.pending_pdf_url || reviewSitRep.approved_pdf_url,
-              pending_pdf_url: null
-            })
-            .eq('id', reviewSitRep.id)
-          if (retryError) throw retryError
-        } else {
-          throw error
-        }
-      }
+      await api.patch(`/api/situational-reports/${reviewSitRep.id}`, { 
+        status: 'Approved', 
+        rejection_remarks: null,
+        approved_pdf_url: reviewSitRep.pending_pdf_url || reviewSitRep.approved_pdf_url,
+        pending_pdf_url: null
+      })
 
       // Send notifications to Provincial users in the same province
       try {
-        // Fallback to current user's province if sitrep doesn't have it (for existing reports)
         const reportProvince = reviewSitRep.province || user?.province
         if (reportProvince) {
-          const { data: provincialUsers } = await supabase
-            .from('users')
-            .select('id')
-            .eq('province', reportProvince)
-            .eq('account_type', 'Provincial')
+          const { data: provincialUsers } = await api.get('/api/users', {
+            params: { province: reportProvince, account_type: 'Provincial' }
+          })
           
           if (provincialUsers?.length > 0) {
             const notifications = provincialUsers.map(u => ({
@@ -1406,7 +1088,7 @@ export default function AddReport() {
               message: `Your report "${reviewSitRep.title}" has been approved.`,
               data: { sitrep_id: reviewSitRep.id, event_id: selectedEvent?.id }
             }))
-            await supabase.from('notifications').insert(notifications)
+            await api.post('/api/notifications/bulk', notifications)
           }
         }
       } catch (notifErr) {
@@ -1418,12 +1100,7 @@ export default function AddReport() {
       await markSitRepNotificationsAsRead(reviewSitRep.id)
       if (selectedEvent) fetchSituationalReports(selectedEvent.id)
     } catch (err) {
-      const msg = err.message || ''
-      if (msg.includes('rejection_remarks') || msg.includes('schema cache')) {
-        showSuccess('Database Migration Needed', 'The "rejection_remarks" column is missing. Please run the SQL script provided in the artifacts and click "Reload Schema" in your Supabase API settings.')
-      } else {
-        showSuccess('Error', msg || 'Failed to approve report.')
-      }
+      showSuccess('Error', err.message || 'Failed to approve report.')
     } finally {
       setProcessingReview(false)
     }
@@ -1436,23 +1113,18 @@ export default function AddReport() {
     }
     setProcessingReview(true)
     try {
-      const { error } = await supabase
-        .from('situational_reports')
-        .update({ status: 'Draft', rejection_remarks: rejectRemarks.trim() })
-        .eq('id', reviewSitRep.id)
-      
-      if (error) throw error
+      await api.patch(`/api/situational-reports/${reviewSitRep.id}`, { 
+        status: 'Draft', 
+        rejection_remarks: rejectRemarks.trim() 
+      })
 
       // Send notifications to Provincial users in the same province
       try {
-        // Fallback to current user's province if sitrep doesn't have it (for existing reports)
         const reportProvince = reviewSitRep.province || user?.province
         if (reportProvince) {
-          const { data: provincialUsers } = await supabase
-            .from('users')
-            .select('id')
-            .eq('province', reportProvince)
-            .eq('account_type', 'Provincial')
+          const { data: provincialUsers } = await api.get('/api/users', {
+            params: { province: reportProvince, account_type: 'Provincial' }
+          })
           
           if (provincialUsers?.length > 0) {
             const notifications = provincialUsers.map(u => ({
@@ -1462,7 +1134,7 @@ export default function AddReport() {
               message: `Your report "${reviewSitRep.title}" was rejected. Remarks: ${rejectRemarks.trim()}`,
               data: { sitrep_id: reviewSitRep.id, event_id: selectedEvent?.id, remarks: rejectRemarks.trim() }
             }))
-            await supabase.from('notifications').insert(notifications)
+            await api.post('/api/notifications/bulk', notifications)
           }
         }
       } catch (notifErr) {
@@ -1474,12 +1146,7 @@ export default function AddReport() {
       await markSitRepNotificationsAsRead(reviewSitRep.id)
       if (selectedEvent) fetchSituationalReports(selectedEvent.id)
     } catch (err) {
-      const msg = err.message || ''
-      if (msg.includes('rejection_remarks') || msg.includes('schema cache')) {
-        showSuccess('Database Migration Needed', 'To save rejection remarks, you must run the SQL script I provided in your Supabase SQL Editor, then click "Reload Schema" in your Supabase API settings.')
-      } else {
-        showSuccess('Error', msg || 'Failed to reject report.')
-      }
+      showSuccess('Error', err.message || 'Failed to reject report.')
     } finally {
       setProcessingReview(false)
     }
@@ -1695,10 +1362,8 @@ export default function AddReport() {
     setShowCategoryModal(true)
   }
 
-  const handleCategorySelect = async (catId) => {
+  const handleCategorySelect = (catId) => {
     setShowCategoryModal(false)
-
-    // Check if an entry for this category already exists in the current situational report
     const existingEntry = submittedReports.find(r => r.category === catId)
     if (existingEntry) {
       handleEditReport(existingEntry)
@@ -1706,7 +1371,7 @@ export default function AddReport() {
     }
 
     setActiveCategoryModal(catId)
-    const defaultRowCity = isLGU ? user.city : defaultCity
+    const defaultRowCity = isLGU ? user?.city : defaultCity
     setRows([emptyRow(catId, defaultRowCity)])
     setEditingItemId(null)
     setDeletedRowIds([])
@@ -1788,6 +1453,8 @@ export default function AddReport() {
     })
   }
 
+
+
   const handleCloseActiveModal = () => {
     setActiveCategoryModal(null)
     setRows([emptyRow()])
@@ -1798,12 +1465,13 @@ export default function AddReport() {
   const handleEditReport = (item) => {
     setActiveCategoryModal(item.category)
     setDeletedRowIds([])
+    // For evacuation, the "editingItemId" should be the parent report_id
+    setEditingItemId(item.category === 'evacuation' ? item.report_id : item.id)
     if (item.all_rows) {
       setRows(item.all_rows.map(r => dbRowToApp(r, item.category)))
     } else {
       setRows([dbRowToApp(item, item.category)])
     }
-    setEditingItemId(item.id)
   }
 
   const handleUnifiedChange = (field, value) => {
@@ -1827,11 +1495,6 @@ export default function AddReport() {
   const handleSubmit = async (e) => {
     e.preventDefault()
 
-    if (!supabase) {
-      showSuccess('Error', 'Supabase not configured.')
-      return
-    }
-
     const categoryTitle = REPORT_CATEGORIES.find(c => c.id === activeCategoryModal)?.title || 'Report'
     
     showConfirm({
@@ -1841,99 +1504,61 @@ export default function AddReport() {
         setSubmitting(true)
         try {
           const validRows = rows.filter((r) => r.barangay || (activeCategoryModal === 'roads' && r.roadBridgeName))
+          const table = CATEGORY_TO_TABLE[activeCategoryModal]
+          let reportId = null
           
+          // 1. Handle Deletions
+          if (deletedRowIds.length > 0) {
+            const deleteTable = activeCategoryModal === 'evacuation' ? 'report_rows' : table
+            await api.delete(`/api/reports/${deleteTable}/bulk`, { data: { ids: deletedRowIds } })
+          }
+
           if (activeCategoryModal === 'evacuation') {
-            let reportId = null
-            if (editingItemId) {
-              reportId = editingItemId
-            }
-
+            reportId = editingItemId
             if (!reportId) {
-              const { data: reportData, error: reportError } = await supabase
-                .from('reports')
-                .insert({
-                  event_id: selectedEvent?.id,
-                  situational_report_id: currentSituationalReport.id
-                })
-                .select('id')
-                .single()
-
-              if (reportError) throw reportError
+              const { data: reportData } = await api.post('/api/reports/reports', {
+                event_id: selectedEvent?.id,
+                situational_report_id: currentSituationalReport.id
+              })
+              console.log('DEBUG: Created new report:', reportData)
               reportId = reportData.id
             }
 
-            // Handle Deletions
-            if (deletedRowIds.length > 0) {
-              await supabase.from('report_rows').delete().in('id', deletedRowIds)
+            if (!reportId) {
+              throw new Error('Failed to create or identify the parent report. Please try again.')
             }
 
-            if (validRows.length === 0 && deletedRowIds.length > 0) {
-              // If all rows deleted, maybe delete parent?
-              // For now just keep parent.
-            } else if (validRows.length === 0) {
-              showSuccess('Error', 'Please fill in at least one row.')
-              setSubmitting(false)
-              return
-            }
+            const toInsert = validRows.filter(r => !r.id).map(r => ({ 
+              ...rowToDb(r), 
+              report_id: reportId,
+              city: r.city || user?.city || defaultCity 
+            }))
+            const toUpdate = validRows.filter(r => r.id).map(r => ({ 
+              ...rowToDb(r), 
+              report_id: reportId, 
+              id: r.id,
+              city: r.city || user?.city || defaultCity
+            }))
 
-            for (const row of validRows) {
-              const rowPayload = {
-                report_id: reportId,
-                ...rowToDb(row),
-              }
-              
-              if (row.id) {
-                const { error } = await supabase
-                  .from('report_rows')
-                  .update(rowPayload)
-                  .eq('id', row.id)
-                if (error) throw error
-              } else {
-                const { error } = await supabase
-                  .from('report_rows')
-                  .insert(rowPayload)
-                if (error) throw error
-              }
-            }
-            showSuccess('Success', 'Affected population report(s) updated successfully!')
+            console.log('DEBUG: Submitting evacuation data:', { reportId, toInsert, toUpdate })
+
+            if (toInsert.length > 0) await api.post('/api/reports/report_rows/bulk', toInsert)
+            if (toUpdate.length > 0) await api.patch('/api/reports/report_rows/bulk', toUpdate)
+
           } else {
-            const table = CATEGORY_TO_TABLE[activeCategoryModal]
-            if (deletedRowIds.length > 0) {
-              await supabase.from(table).delete().in('id', deletedRowIds)
-            }
-
-            if (validRows.length === 0) {
-              // All rows deleted
-            } else {
-              // Handle all other 11 categories as multi-row inserts/updates
-              for (const row of validRows) {
-              let table = ''
-              let payload = {
+            const preparePayload = (row) => {
+              const base = {
                 event_id: selectedEvent?.id,
                 situational_report_id: currentSituationalReport.id,
                 city: row.city,
                 barangay: row.barangay,
                 remarks: row.remarks || ''
               }
-
               switch (activeCategoryModal) {
                 case 'power':
-                  table = 'power_reports'
-                  payload = {
-                    ...payload,
-                    type: row.type,
-                    service_provider: row.serviceProvider,
-                    date_of_interruption: row.dateInterruption || null,
-                    time_of_interruption: row.timeInterruption || null,
-                    date_restored: row.dateRestored || null,
-                    time_restored: row.timeRestored || null,
-                    status: row.status || 'Ongoing'
-                  }
-                  break
                 case 'water':
-                  table = 'water_supply_reports'
-                  payload = {
-                    ...payload,
+                  return {
+                    ...base,
                     type: row.type,
                     service_provider: row.serviceProvider,
                     date_of_interruption: row.dateInterruption || null,
@@ -1942,49 +1567,20 @@ export default function AddReport() {
                     time_restored: row.timeRestored || null,
                     status: row.status || 'Ongoing'
                   }
-                  break
                 case 'roads':
-                  const roadPayload = {
-                    ...payload,
+                  return {
+                    ...base,
                     classification: row.classification,
+                    road_bridge_name: row.roadBridgeName,
                     status: row.status,
                     date_reported_passable: row.datePassable || null,
                     time_reported_passable: row.timePassable || null,
                     date_reported_not_passable: row.dateNotPassable || null,
                     time_reported_not_passable: row.timeNotPassable || null
                   }
-
-                  let roadId = row.id
-                  if (row.id) {
-                    const { error: roadError } = await supabase
-                      .from('roads_and_bridges')
-                      .update(roadPayload)
-                      .eq('id', row.id)
-                    if (roadError) throw roadError
-                  } else {
-                    const { data: roadData, error: roadError } = await supabase
-                      .from('roads_and_bridges')
-                      .insert(roadPayload)
-                      .select()
-                      .single()
-                    if (roadError) throw roadError
-                    roadId = roadData.id
-                  }
-
-                  if (row.roadBridgeName) {
-                    if (row.id) {
-                      await supabase.from('roads_and_bridges_sections').delete().eq('report_id', row.id)
-                    }
-                    const { error: sectionError } = await supabase
-                      .from('roads_and_bridges_sections')
-                      .insert({ report_id: roadId, name: row.roadBridgeName })
-                    if (sectionError) throw sectionError
-                  }
-                  continue // Road handled via unique logic
                 case 'communication':
-                  table = 'communication_lines_reports'
-                  payload = {
-                    ...payload,
+                  return {
+                    ...base,
                     telecompany: row.telecompany,
                     status_of_communication: row.statusOfCommunication,
                     date_interruption: row.dateInterruption || null,
@@ -2002,11 +1598,9 @@ export default function AddReport() {
                     pct_coverage_4g: row.pctCoverage4g ? Number(row.pctCoverage4g) : null,
                     status: row.status || 'Operational'
                   }
-                  break
                 case 'incidents':
-                  table = 'related_incidents'
-                  payload = {
-                    ...payload,
+                  return {
+                    ...base,
                     type_of_incident: row.typeOfIncident,
                     date_of_occurrence: row.dateOfOccurrence || null,
                     time_of_occurrence: row.timeOfOccurrence || null,
@@ -2014,21 +1608,19 @@ export default function AddReport() {
                     actions_taken: row.actionsTaken || '',
                     status: row.status || 'Ongoing'
                   }
-                  break
                 case 'houses':
-                  table = 'damaged_houses_reports'
-                  payload = {
-                    ...payload,
+                  return {
+                    ...base,
                     totally_damaged: Number(row.totallyDamaged || 0),
+                    partially_damaged: Number(row.partiallyDamaged || 0),
                     grand_total: Number(row.grandTotal || 0),
                     amount_php: row.amountPhp ? parseFloat(row.amountPhp) : 0,
                     status: row.status || 'Reported'
                   }
-                  break
                 case 'class':
-                  table = 'class_suspension_reports'
-                  payload = {
-                    ...payload,
+                case 'work':
+                  return {
+                    ...base,
                     level_from: row.level,
                     type: row.typeOfSuspension,
                     date_of_suspension: row.dateOfSuspension || null,
@@ -2037,45 +1629,27 @@ export default function AddReport() {
                     time_resumed: row.timeOfResumption || null,
                     status: row.status || 'Ongoing'
                   }
-                  break
-                case 'work':
-                  table = 'work_suspension_reports'
-                  payload = {
-                    ...payload,
-                    type: row.typeOfSuspension,
-                    date_of_suspension: row.dateOfSuspension || null,
-                    time_of_suspension: row.timeOfSuspension || null,
-                    date_resumed: row.dateOfResumption || null,
-                    time_resumed: row.timeOfResumption || null,
-                    status: row.status || 'Ongoing'
-                  }
-                  break
                 case 'calamity':
-                  table = 'declaration_state_of_calamity_reports'
-                  payload = {
-                    ...payload,
+                  return {
+                    ...base,
                     type: row.type,
                     count_soc: row.count_soc ? parseInt(row.count_soc) : null,
                     resolution_number: row.resolutionNo,
                     resolution_date: row.resolutionDate || null,
                     status: row.status || 'Declared'
                   }
-                  break
                 case 'preemptive':
-                  table = 'pre_emptive_evacuation_reports'
-                  payload = {
-                    ...payload,
+                  return {
+                    ...base,
                     families: Number(row.families || 0),
                     male_count: Number(row.maleCount || 0),
                     female_count: Number(row.femaleCount || 0),
                     total: Number(row.total || 0),
                     status: row.status || 'Completed'
                   }
-                  break
                 case 'assistance':
-                  table = 'assistance_provided_reports'
-                  payload = {
-                    ...payload,
+                  return {
+                    ...base,
                     no_families_affected: Number(row.noFamiliesAffected || 0),
                     no_families_requiring_assistance: Number(row.noFamiliesRequiringAssistance || 0),
                     needs: row.needs,
@@ -2088,11 +1662,9 @@ export default function AddReport() {
                     pct_families_assisted: row.pctFamiliesAssisted || 0,
                     status: row.status || 'Ongoing'
                   }
-                  break
                 case 'assistance_lgus':
-                  table = 'assistance_lgus_agencies_reports'
-                  payload = {
-                    ...payload,
+                  return {
+                    ...base,
                     type: row.type,
                     qty: row.qty ? parseFloat(row.qty) : null,
                     unit: row.unit,
@@ -2101,11 +1673,9 @@ export default function AddReport() {
                     source: row.source,
                     status: row.status || 'Ongoing'
                   }
-                  break
                 case 'agriculture':
-                  table = 'agriculture_damage_reports'
-                  payload = {
-                    ...payload,
+                  return {
+                    ...base,
                     classification: row.classification,
                     type: row.type,
                     farmers_affected: row.farmersAffected ? parseInt(row.farmersAffected) : 0,
@@ -2119,11 +1689,9 @@ export default function AddReport() {
                     production_loss_value: row.valueLoss ? parseFloat(row.valueLoss) : 0,
                     status: row.status || 'Ongoing'
                   }
-                  break
                 case 'infrastructure':
-                  table = 'infrastructure_damage_reports'
-                  payload = {
-                    ...payload,
+                  return {
+                    ...base,
                     type: row.type,
                     classification: row.classification,
                     infrastructure_name: row.infrastructureName,
@@ -2133,28 +1701,29 @@ export default function AddReport() {
                     cost: row.cost ? parseFloat(row.cost) : 0,
                     status: row.status || 'Ongoing'
                   }
-                  break
+                default:
+                  return base
               }
-
-              const { error } = row.id
-                ? await supabase.from(table).update(payload).eq('id', row.id)
-                : await supabase.from(table).insert(payload)
-
-              if (error) throw error
             }
-            showSuccess('Success', `${REPORT_CATEGORIES.find(c => c.id === activeCategoryModal)?.title} report(s) updated!`)
-          }
-        }
 
+            const toInsert = validRows.filter(r => !r.id).map(r => preparePayload(r))
+            const toUpdate = validRows.filter(r => r.id).map(r => ({ ...preparePayload(r), id: r.id }))
+
+            if (toInsert.length > 0) await api.post(`/api/reports/${table}/bulk`, toInsert)
+            if (toUpdate.length > 0) await api.patch(`/api/reports/${table}/bulk`, toUpdate)
+          }
+
+          showSuccess('Success', `${categoryTitle} report(s) updated!`)
           await resetSitRepStatus()
           await fetchReports()
-          // Auto-mark notifications for this SitRep as read since the user has now "acted" on it
           if (currentSituationalReport?.id) {
             await markSitRepNotificationsAsRead(currentSituationalReport.id)
           }
           handleCloseActiveModal()
         } catch (err) {
-          showSuccess('Error', err.message || 'Failed to submit report')
+          const errorMsg = err.response?.data?.details || err.response?.data?.error || err.message || 'Failed to submit report'
+          const reportInfo = typeof reportId !== 'undefined' ? ` (Report ID: ${reportId})` : ''
+          showSuccess('Error', `${errorMsg}${reportInfo}`)
         } finally {
           setSubmitting(false)
         }
@@ -2912,7 +2481,7 @@ export default function AddReport() {
                     <Button 
                       variant="solid"
                       color="success"
-                      onClick={() => handleDownloadClick(currentSituationalReport)}
+                      onClick={() => handleReportDownload(currentSituationalReport)}
                       disabled={processingExportId === currentSituationalReport?.id}
                       className="toolbar-action-btn"
                       leftIcon={processingExportId === currentSituationalReport?.id ? <LoadingSpinner size={14} /> : <Download size={16} />}
@@ -3144,7 +2713,7 @@ export default function AddReport() {
                                   variant="solid"
                                   color="success"
                                   size="sm"
-                                  onClick={() => handleDownloadClick(sr)}
+                                  onClick={() => handleReportDownload(sr)}
                                   title="Download Report"
                                   isLoading={processingExportId === sr.id}
                                   icon={<Download size={14} />}
@@ -3175,11 +2744,10 @@ export default function AddReport() {
               <table className="consolidated-report-table report-table-display add-report-display-table">
                 <thead>
                   <tr>
-                    <th style={{ width: '180px', textAlign: 'left' }}>LOCATION</th>
-                    <th style={{ width: '140px', textAlign: 'left' }}>CLASSIFICATION</th>
+                    <th style={{ width: '200px', textAlign: 'left' }}>LOCATION</th>
+                    <th style={{ width: '180px', textAlign: 'left' }}>CLASSIFICATION</th>
                     <th style={{ textAlign: 'left' }}>SUMMARY / DETAILS</th>
-                    <th style={{ width: '120px', textAlign: 'left' }}>STATUS</th>
-                    <th style={{ width: '180px', textAlign: 'left' }}>REMARKS</th>
+                    <th style={{ width: '140px', textAlign: 'center' }}>STATUS</th>
                     <th className="col-action" style={{ width: '250px', textAlign: 'center' }}>ACTIONS</th>
                   </tr>
                 </thead>
@@ -3187,23 +2755,30 @@ export default function AddReport() {
                   {paginatedRows.length > 0 ? (
                     paginatedRows.map((item, idx) => (
                       <tr key={item.id || idx} className="report-table-data-row">
-                        <td className="col-barangay">
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                            <span style={{ fontWeight: 600, color: '#0f172a' }}>{item.location}</span>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '10px', color: '#64748b' }}>
+                        <td className="col-barangay" style={{ verticalAlign: 'middle', padding: '8px 12px' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: '12px' }}>
                               <span style={{
-                                width: '6px',
-                                height: '6px',
+                                width: '8px',
+                                height: '8px',
                                 borderRadius: '50%',
-                                backgroundColor: REPORT_CATEGORIES.find(c => c.id === item.category)?.color || '#64748b'
+                                backgroundColor: REPORT_CATEGORIES.find(c => c.id === item.category)?.color || '#94a3b8',
+                                flexShrink: 0
                               }}></span>
-                              {item.categoryLabel}
                             </div>
+                            <span style={{ fontWeight: 600, color: '#1e293b', fontSize: '12.5px' }}>
+                              {item.location || item.city || 'Entry'}
+                            </span>
                           </div>
                         </td>
-                        <td style={{ color: '#64748b', fontSize: '11px', fontWeight: 600 }}>{item.classification}</td>
-                        <td style={{ fontSize: '11px', color: '#334155' }}>{item.summary}</td>
-                        <td>
+                        <td style={{ color: '#475569', fontSize: '12.5px', fontWeight: 700, verticalAlign: 'middle', textTransform: 'uppercase', padding: '8px 12px' }}>
+                          {item.categoryTitle}
+                        </td>
+                        <td style={{ fontSize: '12.5px', color: '#334155', verticalAlign: 'middle', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', padding: '8px 12px' }}>
+                          <span style={{ fontWeight: 600, color: '#0f172a' }}>{item.subject}</span>
+                          {item.summary && <span style={{ color: '#64748b' }}> | {item.summary}</span>}
+                        </td>
+                        <td style={{ textAlign: 'center', verticalAlign: 'middle', padding: '8px 12px', fontSize: '12.5px' }}>
                           {(() => {
                             const s = item.status || 'Resolved'
                             const slug = String(s).toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') || 'pending'
@@ -3214,10 +2789,7 @@ export default function AddReport() {
                             )
                           })()}
                         </td>
-                        <td style={{ fontSize: '11px', color: '#64748b', maxWidth: '180px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {item.remarks || '-'}
-                        </td>
-                        <td className="col-action" style={{ width: '250px' }}>
+                        <td className="col-action" style={{ width: '250px', padding: '6px 12px' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', justifyContent: 'center' }}>
                             <Button
                               variant="solid"

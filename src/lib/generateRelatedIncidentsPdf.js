@@ -1235,10 +1235,11 @@ export function generateRelatedIncidentsPdf({
     }
 
     const uniqBrgysAll = new Set(rows.map((r) => `${r.city}||${r.barangay || ''}`))
-    const familiesAll = rows.reduce((s, r) => s + Number(r.families || 0), 0)
+    const familiesAll = rows.reduce((s, r) => s + Number(r.affected_families || 0), 0)
     const n = (v) => Number(v ?? 0) || 0
     const sumEc = (list) => {
       return {
+        affected_persons: list.reduce((s, r) => s + n(r.affected_persons), 0),
         ecs_cum: list.reduce((s, r) => s + n(r.ecs_cum), 0),
         ecs_now: list.reduce((s, r) => s + n(r.ecs_now), 0),
         inside_families_cum: list.reduce((s, r) => s + n(r.inside_families_cum), 0),
@@ -1254,7 +1255,7 @@ export function generateRelatedIncidentsPdf({
     const ecAll = sumEc(rows)
 
     const makeRow = (label, total, brgys, families, ec = {}) => {
-      const persons = n(ec.persons) || (Number(families || 0) * 5)
+      const persons = n(ec.affected_persons) || (Number(families || 0) * 5)
       const ecsCum = n(ec.ecs_cum)
       const ecsNow = n(ec.ecs_now)
       const inFamCum = n(ec.inside_families_cum)
@@ -1289,6 +1290,7 @@ export function generateRelatedIncidentsPdf({
         totFamNow,
         totPerCum,
         totPerNow,
+        ec.remarks || ''
       ]
     }
 
@@ -1298,12 +1300,12 @@ export function generateRelatedIncidentsPdf({
 
     for (const [city, list] of Array.from(byCity.entries()).sort((a, b) => a[0].localeCompare(b[0]))) {
       const uniqBrgysCity = new Set(list.map((r) => r.barangay || '')).size
-      const famCity = list.reduce((s, r) => s + Number(r.families || 0), 0)
+      const famCity = list.reduce((s, r) => s + Number(r.affected_families || 0), 0)
       const ecCity = sumEc(list)
       body.push(makeRow(String(city).toUpperCase(), famCity, uniqBrgysCity, famCity, ecCity))
       for (const r of list) {
         const label = `  ${r.barangay || ''}`.trimEnd()
-        const fam = Number(r.families || 0)
+        const fam = Number(r.affected_families || 0)
         body.push(makeRow(label, fam, 1, fam, r))
       }
     }
@@ -1319,6 +1321,7 @@ export function generateRelatedIncidentsPdf({
         { content: 'Inside Evacuation Centers', colSpan: 4, styles: { halign: 'center' } },
         { content: 'Outside Evacuation Centers', colSpan: 4, styles: { halign: 'center' } },
         { content: 'TOTAL SERVED\n(Inside + Outside)', colSpan: 4, styles: { halign: 'center' } },
+        { content: 'REMARKS', rowSpan: 3, styles: { halign: 'center' } },
       ],
       [
         { content: 'Brgys.', rowSpan: 2, styles: { halign: 'center' } },
@@ -1349,7 +1352,7 @@ export function generateRelatedIncidentsPdf({
       ],
     ]
 
-    const affectedDataCols = 17
+    const affectedDataCols = 18
     const affectedDataW = landscapeDataColWidth(affectedDataCols)
     const colWidths = [
       LANDSCAPE_AREA_COL,
@@ -1378,7 +1381,7 @@ export function generateRelatedIncidentsPdf({
         lineWidth: 0.6,
         lineColor: [0, 0, 0],
       },
-      columnStyles: Object.fromEntries(colWidths.map((w, i) => [i, { cellWidth: w, halign: i === 0 ? 'left' : 'center' }]).concat([[0, { cellWidth: colWidths[0], halign: 'left' }]])),
+      columnStyles: Object.fromEntries(colWidths.map((w, i) => [i, { cellWidth: w, halign: i === 0 || i === 19 ? 'left' : 'center' }]).concat([[0, { cellWidth: colWidths[0], halign: 'left' }]])),
       didParseCell: (data) => {
         const raw = data.row?.raw
         if (!raw || !Array.isArray(raw)) return

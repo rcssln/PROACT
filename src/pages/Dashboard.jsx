@@ -18,10 +18,10 @@ import {
   CartesianGrid,
   Legend
 } from 'recharts'
-import { supabase } from '../lib/supabase'
+import { useEvents } from '../contexts/EventContext'
+import api from '../lib/api'
 import regionData, { getCityForBarangay, getBarangaysForCity } from '../data/locations'
 import { PROVINCE_NAMES, getCitiesForProvince, getProvinceForCity } from '../data/provinces'
-import { useEvents } from '../contexts/EventContext'
 import '../styles/pages/PageStyles.css'
 import '../styles/pages/Dashboard.css'
 import '../styles/components/EventModal.css'
@@ -177,7 +177,19 @@ const CustomizedAxisTick = (props) => {
 
 export default function Dashboard() {
   const { user } = useOutletContext() ?? {}
-  const { currentEvent: rawCurrentEvent, currentEventId, events, loading: eventsLoading, addEvent, updateEvent, deleteEvent, setCurrentEventId, switchEvent, userSignal } = useEvents()
+  const { 
+    currentEvent: rawCurrentEvent, 
+    currentEventId, 
+    events, 
+    loading: eventsLoading, 
+    addEvent, 
+    updateEvent, 
+    deleteEvent, 
+    setCurrentEventId, 
+    switchEvent, 
+    userSignal,
+    socket 
+  } = useEvents()
 
   const SIGNAL_COLORS = {
     '1': { bg: '#fef9c3', text: '#854d0e', border: '#fde047' }, // Yellow
@@ -594,7 +606,7 @@ export default function Dashboard() {
   }, [barangayMap])
 
   const fetchData = useCallback(async () => {
-    if (!supabase || !currentEventId || currentEventId === 'default-good-day') {
+    if (!currentEventId || currentEventId === 'default-good-day') {
       return {
         topCity: null, total: 0, totalTrend: 0, top4: [], categoryCards: [],
         overviewData: [], trendChartData: [],
@@ -619,17 +631,14 @@ export default function Dashboard() {
     }
 
     // Fetch Approved SitRep IDs for this event
-    const { data: approvedSitreps } = await supabase
-      .from('situational_reports')
-      .select('id')
-      .eq('event_id', currentEventId)
-      .eq('status', 'Approved')
+    const { data: approvedSitreps } = await api.get('/api/situational-reports', {
+      params: { event_id: currentEventId, status: 'Approved' }
+    })
     const approvedIds = (approvedSitreps || []).map(s => s.id)
+    const approvedIdsCsv = approvedIds.join(',')
 
     if (approvedIds.length === 0) {
       console.warn('[Dashboard] No situational reports with "Approved" status found for event:', currentEventId)
-      // We still proceed to fetch other non-SitRep-dependent data, 
-      // but most tables in the dashboard are linked to SitReps.
     }
 
 
@@ -730,23 +739,12 @@ export default function Dashboard() {
 
     // 1. Fetch 14 days of data for all standard tables in parallel
     const tablePromises = tables.map(async ({ table, category, col, dateCol }) => {
-      // Dynamic select based on category needs
-      let selectCols = `${col}, ${dateCol}`;
-      if (category === 'damagedHouses') selectCols += ', grand_total, totally_damaged, partially_damaged';
-      if (category === 'assistanceProvided') selectCols += ', no_families_assisted, fnfi_amount, fnfi_qty';
-      if (category === 'relatedIncidents') selectCols += ', type_of_incident, status, date_of_occurrence, time_of_occurrence, description';
-      if (category === 'power') selectCols += ', type, date_restored';
-      if (category === 'communicationLines') selectCols += ', telecompany, status_of_communication';
-      if (category === 'preEmptiveEvacuation') selectCols += ', male_count, female_count, families, total';
-      if (category === 'assistanceLgus') selectCols += ', amount, source, type';
-      if (category === 'agricultureDamage') selectCols += ', production_loss_value, classification, farmers_affected';
-      if (category === 'infrastructureDamage') selectCols += ', infrastructure_name, type, status, cost, quantity';
-
-      const { data } = await supabase
-        .from(table)
-        .select(selectCols)
-        .eq('event_id', currentEventId)
-        .in('situational_report_id', approvedIds)
+      const { data } = await api.get(`/api/reports/${table}`, {
+        params: { 
+          event_id: currentEventId,
+          situational_report_id: approvedIdsCsv
+        }
+      })
 
       if (data) data.forEach(row => {
         let amount = 1;
@@ -854,97 +852,93 @@ export default function Dashboard() {
 
     // 2. Fetch 14 days of Reports/Rows
     const reportsPromise = (async () => {
-      const { data: reportsData, error: reportsError } = await supabase
-        .from('reports')
-        .select('id, submitted_at')
-        .eq('event_id', currentEventId)
-        .in('situational_report_id', approvedIds)
-
-      if (reportsError || !reportsData || reportsData.length === 0) {
-        console.log('[Dashboard] No reports found for event:', currentEventId)
-        return
-      }
-
-      const reportIds = reportsData.map(r => r.id)
-      const { data: rowsData, error: rowsError } = await supabase
-        .from('report_rows')
-        .select('*')
-        .in('report_id', reportIds)
-
-      if (rowsError || !rowsData) {
-        console.error('[Dashboard] Error fetching report_rows:', rowsError)
-        return
-      }
-
-      // Map rows back to reports to match the expected format in the rest of the code
-      const reportsWithRows = reportsData.map(report => ({
-        ...report,
-        report_rows: rowsData.filter(row => row.report_id === report.id)
-      }))
-
-      console.log(`[Dashboard] Fetched ${reportsWithRows.length} reports with ${rowsData.length} rows for event ${currentEventId}`)
-
-      reportsWithRows.forEach(report => {
-        if (!report.report_rows || report.report_rows.length === 0) return
-        report.report_rows.forEach(row => {
-          if (!row.barangay) return
-          const fam = Number(row?.affected_families ?? 0) || 0
-          const per = Number(row?.affected_persons ?? 0) || 0
-          const inFam = Number(row?.inside_families_now ?? 0) || 0
-          const outFam = Number(row?.outside_families_now ?? 0) || 0
-          const city = toCity(row.barangay);
-          const province = getProvinceForCity(city) || 'Unknown';
-
-          if (!details.byProvince[province]) {
-            details.byProvince[province] = { persons: 0, families: 0, inside: 0, outside: 0, dmg: 0, served: 0, ecs: 0, powerInt: 0, powerRes: 0, roadsNotPassable: 0, brgys: new Set() };
-          }
-          if (!details.byCity[city]) {
-            details.byCity[city] = { persons: 0, families: 0, inside: 0, outside: 0, dmg: 0, served: 0, ecs: 0, powerInt: 0, powerRes: 0, roadsNotPassable: 0, brgys: new Set() };
-          }
-
-          details.byProvince[province].persons += per;
-          details.byProvince[province].families += fam;
-          details.byProvince[province].inside += inFam;
-          details.byProvince[province].outside += outFam;
-          if (row.ecs_now > 0) details.byProvince[province].ecs++;
-          if (row.barangay) {
-            details.byProvince[province].brgys.add(row.barangay);
-            details.byCity[city].brgys.add(row.barangay);
-          }
-
-          details.byCity[city].persons += per;
-          details.byCity[city].families += fam;
-          details.byCity[city].inside += inFam;
-          details.byCity[city].outside += outFam;
-          if (row.ecs_now > 0) details.byCity[city].ecs++;
-
-          details.evacStatus.inside += inFam;
-          details.evacStatus.outside += outFam;
-          details.evacStatus.total += per;
-
-          if (!details.populationByLgu[city]) {
-            details.populationByLgu[city] = { families: 0, persons: 0, inFam: 0, inPer: 0, outFam: 0, outPer: 0, ecs: 0 };
-          }
-          const p = details.populationByLgu[city]
-          p.families += fam
-          p.persons += per
-          p.inFam += inFam
-          p.inPer += Number(row.inside_persons_now || 0)
-          p.outFam += outFam
-          p.outPer += Number(row.outside_persons_now || 0)
-          if (row.ecs_now > 0) p.ecs += Number(row.ecs_now)
-
-          addToStats('affectedPopulation', row.barangay, per, report.submitted_at)
+      try {
+        const { data: reportsData } = await api.get('/api/reports/reports', {
+          params: { event_id: currentEventId, situational_report_id: approvedIdsCsv }
         })
-      })
+
+        if (!reportsData || reportsData.length === 0) {
+          console.log('[Dashboard] No reports found for event:', currentEventId)
+          return
+        }
+
+        const reportIds = reportsData.map(r => r.id)
+        const { data: rowsData } = await api.get('/api/reports/report_rows', {
+          params: { report_id: reportIds.join(',') }
+        })
+
+        if (!rowsData) return
+
+        // Map rows back to reports
+        const reportsWithRows = reportsData.map(report => ({
+          ...report,
+          report_rows: rowsData.filter(row => row.report_id === report.id)
+        }))
+        
+        reportsWithRows.forEach(report => {
+          if (!report.report_rows || report.report_rows.length === 0) return
+          report.report_rows.forEach(row => {
+            if (!row.barangay) return
+            const fam = Number(row?.affected_families ?? 0) || 0
+            const per = Number(row?.affected_persons ?? 0) || 0
+            const inFam = Number(row?.inside_families_now ?? 0) || 0
+            const outFam = Number(row?.outside_families_now ?? 0) || 0
+            const city = toCity(row.barangay);
+            const province = getProvinceForCity(city) || 'Unknown';
+
+            if (!details.byProvince[province]) {
+              details.byProvince[province] = { persons: 0, families: 0, inside: 0, outside: 0, dmg: 0, served: 0, ecs: 0, powerInt: 0, powerRes: 0, roadsNotPassable: 0, brgys: new Set() };
+            }
+            if (!details.byCity[city]) {
+              details.byCity[city] = { persons: 0, families: 0, inside: 0, outside: 0, dmg: 0, served: 0, ecs: 0, powerInt: 0, powerRes: 0, roadsNotPassable: 0, brgys: new Set() };
+            }
+
+            details.byProvince[province].persons += per;
+            details.byProvince[province].families += fam;
+            details.byProvince[province].inside += inFam;
+            details.byProvince[province].outside += outFam;
+            if (row.ecs_now > 0) details.byProvince[province].ecs++;
+            if (row.barangay) {
+              details.byProvince[province].brgys.add(row.barangay);
+              details.byCity[city].brgys.add(row.barangay);
+            }
+
+            details.byCity[city].persons += per;
+            details.byCity[city].families += fam;
+            details.byCity[city].inside += inFam;
+            details.byCity[city].outside += outFam;
+            if (row.ecs_now > 0) details.byCity[city].ecs++;
+
+            details.evacStatus.inside += inFam;
+            details.evacStatus.outside += outFam;
+            details.evacStatus.total += per;
+
+            if (!details.populationByLgu[city]) {
+              details.populationByLgu[city] = { families: 0, persons: 0, inFam: 0, inPer: 0, outFam: 0, outPer: 0, ecs: 0 };
+            }
+            const p = details.populationByLgu[city]
+            p.families += fam
+            p.persons += per
+            p.inFam += inFam
+            p.inPer += Number(row.inside_persons_now || 0)
+            p.outFam += outFam
+            p.outPer += Number(row.outside_persons_now || 0)
+            if (row.ecs_now > 0) p.ecs += Number(row.ecs_now)
+
+            addToStats('affectedPopulation', row.barangay, per, report.submitted_at)
+          })
+        })
+      } catch (err) {
+        console.error('[Dashboard] Error in reportsPromise:', err)
+      }
     })()
 
     // 3. Water Supply - Detailed logs for Infrastructure tab
-    const waterPromise = supabase
-      .from('water_supply_reports')
-      .select('*')
-      .eq('event_id', currentEventId)
-      .then(({ data }) => {
+    const waterPromise = (async () => {
+      try {
+        const { data } = await api.get('/api/reports/water_supply_reports', {
+          params: { event_id: currentEventId }
+        })
         if (!data) return
         data.forEach(row => {
           const isCurrent = row.created_at >= sinceISO
@@ -960,7 +954,10 @@ export default function Dashboard() {
             details.infrastructure.push({ mun: toCity(brgy), area: brgy, type: 'water', status: row.date_restored ? 'operational' : 'interrupted', int: row.created_at, res: row.date_restored });
           }
         })
-      })
+      } catch (err) {
+        console.error('[Dashboard] Error in waterPromise:', err)
+      }
+    })()
 
     await Promise.all([...tablePromises, reportsPromise, waterPromise])
 
@@ -1109,14 +1106,7 @@ export default function Dashboard() {
   }, [provinceFilter, currentEventId, toCity, currentEvent])
 
   useEffect(() => {
-    if (!supabase) {
-      setError('Supabase not configured')
-      setLoading(false)
-      return
-    }
     // Guard: wait until events have finished loading before fetching dashboard data.
-    // Do NOT put eventsLoading in the dep array — that would cause a double-fetch
-    // (once when eventsLoading flips false, and again when currentEventId updates).
     if (eventsLoading) return
 
     setError(null)
@@ -1156,13 +1146,12 @@ export default function Dashboard() {
 
   // Real-time Data Subscription for Dashboard
   useEffect(() => {
-    if (!supabase || !currentEventId || currentEventId === 'default-good-day') return
+    if (!socket || !currentEventId || currentEventId === 'default-good-day') return
 
-    console.log(`Setting up real-time data monitoring for event: ${currentEventId}`)
+    console.log(`Setting up Socket.io monitoring for event: ${currentEventId}`)
 
     // Tables that have an event_id column
     const tablesWithEventId = [
-      'reports',
       'related_incidents',
       'roads_and_bridges',
       'power_reports',
@@ -1179,64 +1168,35 @@ export default function Dashboard() {
       'water_supply_reports'
     ]
 
-    const channel = supabase.channel(`dashboard-realtime-${currentEventId}`)
+    const handleUpdate = () => {
+      console.log('Real-time data update received, refreshing dashboard')
+      fetchData().then(data => {
+        if (data) {
+          const cacheKey = currentEventId || 'default'
+          cacheRef.current[cacheKey] = data
+          setResult(data)
+        }
+      })
+    }
 
     // Subscribe to all relevant tables
     tablesWithEventId.forEach(table => {
-      channel.on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: table,
-          filter: `event_id=eq.${currentEventId}`
-        },
-        (payload) => {
-          console.log(`Real-time update from ${table}:`, payload.eventType)
-          // Debounce or simply call fetchData
-          fetchData().then(data => {
-            if (data) {
-              const cacheKey = currentEventId || 'default'
-              cacheRef.current[cacheKey] = data
-              setResult(data)
-            }
-          })
-        }
-      )
+      socket.on(`${table}:created`, handleUpdate)
+      socket.on(`${table}:bulk_created`, handleUpdate)
     })
-
-    // Special case for report_rows (no event_id, so we listen to all and hope it's not too noisy)
-    // In a production app, we might want a more targeted approach.
-    channel.on(
-      'postgres_changes',
-      {
-        event: '*',
-        schema: 'public',
-        table: 'report_rows'
-      },
-      (payload) => {
-        console.log('Real-time update from report_rows')
-        fetchData().then(data => {
-          if (data) {
-            const cacheKey = currentEventId || 'default'
-            cacheRef.current[cacheKey] = data
-            setResult(data)
-          }
-        })
-      }
-    )
-
-    channel.subscribe((status) => {
-      if (status === 'SUBSCRIBED') {
-        console.log('Dashboard now listening for live updates.')
-      }
-    })
+    
+    // Also listen for report_rows
+    socket.on('report_rows:created', handleUpdate)
 
     return () => {
       console.log(`Cleaning up dashboard monitoring for event: ${currentEventId}`)
-      supabase.removeChannel(channel)
+      tablesWithEventId.forEach(table => {
+        socket.off(`${table}:created`, handleUpdate)
+        socket.off(`${table}:bulk_created`, handleUpdate)
+      })
+      socket.off('report_rows:created', handleUpdate)
     }
-  }, [currentEventId, fetchData])
+  }, [currentEventId, fetchData, socket])
 
   const handleRefresh = () => {
     // Clear cache for current event so we get fresh data

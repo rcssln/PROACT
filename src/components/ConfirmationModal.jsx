@@ -42,7 +42,7 @@ export default function ConfirmationModal({
           {getIcon()}
         </div>
         <h2 className="modal-confirm-title">{title}</h2>
-        <p className="modal-confirm-text">{message}</p>
+        <div className="modal-confirm-text">{message}</div>
         <div className="modal-confirm-footer">
           <Button 
             variant="subtle"

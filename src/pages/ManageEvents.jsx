@@ -82,7 +82,7 @@ export default function ManageEvents() {
   const { 
     events, addEvent, updateEvent, deleteEvent, deployEvent, 
     fetchEventSignals, assignSignal, bulkAssignSignals, 
-    eventSignals, loadingSignals, loading, showConfirm 
+    eventSignals, loadingSignals, loading, showConfirm, showSuccess, showToast
   } = useEvents()
 
   const [searchTerm, setSearchTerm] = useState('')
@@ -211,19 +211,19 @@ export default function ManageEvents() {
 
   const handleSubmit = async (shouldClose = true) => {
     if (!form.name.trim()) {
-      alert("Please enter an Event Name.")
+      showSuccess('Validation Error', 'Please enter an Event Name.')
       return null
     }
     if (ALERT_LEVELS[form.eventType]?.length > 0 && !form.typhoonCategory) {
-      alert("Please select a Specific Alert Level / Category.")
+      showSuccess('Validation Error', 'Please select a Specific Alert Level / Category.')
       return null
     }
     if (form.affectedProvinces.length === 0) {
-      alert("Please select at least one province for the Deployment Scope.")
+      showSuccess('Validation Error', 'Please select at least one province for the Deployment Scope.')
       return null
     }
     if (!form.startDate) {
-      alert("Please select a Start Date & Time.")
+      showSuccess('Validation Error', 'Please select a Start Date & Time.')
       return null
     }
     
@@ -275,6 +275,7 @@ export default function ManageEvents() {
           }
         }
         
+        // Close modal first for immediate feedback
         if (shouldClose) setShowModal(false)
       }
     })

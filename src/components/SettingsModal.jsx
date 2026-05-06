@@ -4,8 +4,8 @@ import { X, Shield, Palette, Eye, EyeClosed, ClockCounterClockwise, Info, Databa
 import { zip, unzip, strToU8, strFromU8 } from 'fflate'
 import pkg from '../../package.json'
 
-import { supabase } from '../lib/supabase'
-import { hashPassword, validatePassword } from '../lib/passwordUtils'
+import api from '../lib/api'
+import { validatePassword } from '../lib/passwordUtils'
 import LoadingSpinner from './LoadingSpinner'
 import Button from './Button'
 import SearchableSelect from './SearchableSelect'
@@ -58,15 +58,9 @@ export default function SettingsModal({ isOpen, onClose, user, onLogout, onUserU
         // Apply immediately for smooth UX
         document.documentElement.setAttribute('data-theme', newTheme)
         
-        if (supabase && user?.id) {
+        if (user?.id) {
             try {
-                const { error } = await supabase
-                    .from('users')
-                    .update({ theme: newTheme })
-                    .eq('id', user.id)
-
-                if (error) throw error
-
+                await api.patch(`/api/users/${user.id}`, { theme: newTheme })
                 // Update global state and session
                 onUserUpdate?.({ ...user, theme: newTheme })
             } catch (err) {
@@ -98,47 +92,18 @@ export default function SettingsModal({ isOpen, onClose, user, onLogout, onUserU
             return
         }
 
-        if (!supabase || !user) {
-            setPwdError('Database not configured or user not found.')
+        if (!user) {
+            setPwdError('User not found.')
             return
         }
 
         setSubmittingPwd(true)
 
         try {
-            const { data: userData, error: fetchError } = await supabase
-                .from('users')
-                .select('password_hash')
-                .eq('id', user.id)
-                .single()
-
-            if (fetchError || !userData) {
-                throw new Error('Failed to verify current password.')
-            }
-
-            const currentHashInput = await hashPassword(currentPassword, user.email)
-            if (currentHashInput !== userData.password_hash) {
-                throw new Error('Current password is incorrect.')
-            }
-
-            const newHash = await hashPassword(newPassword, user.email)
-
-            // Update the db
-            const { error: updateError } = await supabase
-                .from('users')
-                .update({ password_hash: newHash })
-                .eq('id', user.id)
-
-            if (updateError) throw updateError
-
-            // Log the action
-            await supabase
-                .from('activity_logs')
-                .insert({
-                    user_id: user.id,
-                    action: 'Changed password',
-                    details: 'User voluntarily changed password via Settings Modal'
-                })
+            await api.post('/api/auth/change-password', {
+                currentPassword,
+                newPassword
+            })
 
             setPwdSuccess('Password changed successfully! Logging out...')
 
@@ -148,204 +113,18 @@ export default function SettingsModal({ isOpen, onClose, user, onLogout, onUserU
             }, 1500)
 
         } catch (err) {
-            setPwdError(err.message || 'Error changing password.')
+            setPwdError(err.response?.data?.error || err.message || 'Error changing password.')
         } finally {
             setSubmittingPwd(false)
         }
     }
 
     const handleBackup = async () => {
-        setMaintenanceLoading(true)
-        setMaintenanceError('')
-        setMaintenanceSuccess('')
-        setMaintenanceProgress('Starting backup...')
-
-        try {
-            const backupData = {
-                version: pkg.version,
-                timestamp: new Date().toISOString(),
-                tables: {}
-            }
-
-            const tables = [
-                'users', 'events', 'situational_reports', 'notifications', 'activity_logs',
-                'event_deployments', 'event_signals', 'reports', 'report_rows',
-                'related_incidents', 'roads_and_bridges', 'roads_and_bridges_sections',
-                'power_reports', 'water_supply_reports', 'communication_lines_reports',
-                'damaged_houses_reports', 'class_suspension_reports', 'work_suspension_reports',
-                'declaration_state_of_calamity_reports', 'pre_emptive_evacuation_reports',
-                'assistance_provided_reports', 'assistance_lgus_agencies_reports',
-                'agriculture_damage_reports', 'infrastructure_damage_reports'
-            ]
-
-            for (const table of tables) {
-                setMaintenanceProgress(`Fetching table: ${table}...`)
-                const { data, error } = await supabase.from(table).select('*')
-                if (error) throw new Error(`Failed to fetch ${table}: ${error.message}`)
-                backupData.tables[table] = data
-            }
-
-            setMaintenanceProgress('Listing storage files...')
-            const bucket = 'consolidated-report-approvals'
-            
-            const listAllFiles = async (path = '') => {
-                const { data, error } = await supabase.storage.from(bucket).list(path)
-                if (error) return []
-                let files = []
-                for (const item of data) {
-                    const fullPath = path ? `${path}/${item.name}` : item.name
-                    if (!item.id) {
-                        const subFiles = await listAllFiles(fullPath)
-                        files = [...files, ...subFiles]
-                    } else {
-                        files.push(fullPath)
-                    }
-                }
-                return files
-            }
-
-            const filePaths = await listAllFiles()
-            const storageFiles = {}
-
-            for (const path of filePaths) {
-                setMaintenanceProgress(`Downloading file: ${path}...`)
-                const { data, error } = await supabase.storage.from(bucket).download(path)
-                if (error) {
-                    console.error(`Failed to download ${path}:`, error)
-                    continue
-                }
-                const arrayBuffer = await data.arrayBuffer()
-                storageFiles[path] = new Uint8Array(arrayBuffer)
-            }
-
-            setMaintenanceProgress('Creating ZIP archive...')
-            const zipContent = {
-                "data.json": strToU8(JSON.stringify(backupData, null, 2))
-            }
-
-            for (const [path, content] of Object.entries(storageFiles)) {
-                zipContent[`storage/${path}`] = content
-            }
-
-            zip(zipContent, (err, zipped) => {
-                if (err) {
-                    setMaintenanceError(`ZIP error: ${err.message}`)
-                    setMaintenanceLoading(false)
-                    return
-                }
-
-                const blob = new Blob([zipped], { type: 'application/zip' })
-                const url = URL.createObjectURL(blob)
-                const a = document.createElement('a')
-                a.href = url
-                a.download = `system-backup-${new Date().toISOString().split('T')[0]}.zip`
-                a.click()
-                URL.revokeObjectURL(url)
-
-                setMaintenanceSuccess('Backup completed successfully!')
-                setMaintenanceLoading(false)
-                setMaintenanceProgress('')
-            })
-
-        } catch (err) {
-            console.error('[Maintenance] Backup failed:', err)
-            setMaintenanceError(err.message || 'Backup failed')
-            setMaintenanceLoading(false)
-        }
+        alert('System backup is unavailable in local database mode.')
     }
 
     const handleRestore = async (file) => {
-        if (!file) return
-        
-        setMaintenanceLoading(true)
-        setMaintenanceError('')
-        setMaintenanceSuccess('')
-        setMaintenanceProgress('Reading backup file...')
-
-        try {
-            const reader = new FileReader()
-            const arrayBuffer = await new Promise((resolve, reject) => {
-                reader.onload = () => resolve(reader.result)
-                reader.onerror = reject
-                reader.readAsArrayBuffer(file)
-            })
-
-            unzip(new Uint8Array(arrayBuffer), async (err, unzipped) => {
-                if (err) {
-                    setMaintenanceError(`Failed to unzip: ${err.message}`)
-                    setMaintenanceLoading(false)
-                    return
-                }
-
-                try {
-                    const dataFile = unzipped['data.json']
-                    if (!dataFile) throw new Error('Invalid backup: data.json missing')
-
-                    const backupData = JSON.parse(strFromU8(dataFile))
-                    
-                    const tablesOrder = [
-                        'roads_and_bridges_sections', 'report_rows', 'agriculture_damage_reports',
-                        'infrastructure_damage_reports', 'assistance_lgus_agencies_reports',
-                        'assistance_provided_reports', 'pre_emptive_evacuation_reports',
-                        'declaration_state_of_calamity_reports', 'work_suspension_reports',
-                        'class_suspension_reports', 'damaged_houses_reports',
-                        'communication_lines_reports', 'water_supply_reports',
-                        'power_reports', 'roads_and_bridges', 'related_incidents',
-                        'reports', 'event_signals', 'event_deployments',
-                        'activity_logs', 'notifications', 'situational_reports',
-                        'events', 'users'
-                    ]
-
-                    if (!window.confirm('WARNING: This will overwrite ALL existing data. Are you sure you want to proceed?')) {
-                        setMaintenanceLoading(false)
-                        return
-                    }
-
-                    setMaintenanceProgress('Clearing existing data...')
-                    for (const table of tablesOrder) {
-                        const { error } = await supabase.from(table).delete().neq('id', '00000000-0000-0000-0000-000000000000')
-                        if (error) console.warn(`Failed to clear ${table}:`, error)
-                    }
-
-                    setMaintenanceProgress('Restoring database records...')
-                    for (const table of [...tablesOrder].reverse()) {
-                        const rows = backupData.tables[table]
-                        if (rows && rows.length > 0) {
-                            setMaintenanceProgress(`Restoring table: ${table} (${rows.length} rows)...`)
-                            const { error } = await supabase.from(table).insert(rows)
-                            if (error) throw new Error(`Failed to restore ${table}: ${error.message}`)
-                        }
-                    }
-
-                    setMaintenanceProgress('Restoring storage files...')
-                    const bucket = 'consolidated-report-approvals'
-                    
-                    for (const [path, content] of Object.entries(unzipped)) {
-                        if (path.startsWith('storage/')) {
-                            const storagePath = path.replace('storage/', '')
-                            setMaintenanceProgress(`Uploading file: ${storagePath}...`)
-                            const { error } = await supabase.storage.from(bucket).upload(storagePath, content, {
-                                upsert: true,
-                                contentType: 'application/pdf'
-                            })
-                            if (error) console.error(`Failed to restore file ${storagePath}:`, error)
-                        }
-                    }
-
-                    setMaintenanceSuccess('System restored successfully! Please refresh the page.')
-                    setMaintenanceLoading(false)
-                    setMaintenanceProgress('')
-
-                } catch (innerErr) {
-                    setMaintenanceError(innerErr.message)
-                    setMaintenanceLoading(false)
-                }
-            })
-
-        } catch (err) {
-            setMaintenanceError(err.message || 'Restore failed')
-            setMaintenanceLoading(false)
-        }
+        alert('System restore is unavailable in local database mode.')
     }
 
     if (!isOpen) return null
