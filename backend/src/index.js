@@ -55,7 +55,7 @@ app.use(express.json());
 app.use('/uploads', express.static(uploadDir));
 
 // POST /api/upload
-app.post('/api/upload', upload.single('file'), (req, res) => {
+app.post('/upload', upload.single('file'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
   const url = `${process.env.VITE_API_URL || 'http://localhost:4000'}/uploads/${req.file.filename}`;
   res.json({ url, filename: req.file.filename });
@@ -66,15 +66,15 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-app.use('/api/auth', authRoutes);
-app.use('/api/events', eventsRoutes);
-app.use('/api/situational-reports', sitRepsRoutes);
-app.use('/api/users', usersRoutes);
-app.use('/api/notifications', notificationsRoutes);
-app.use('/api/reports', reportsRoutes);
-app.use('/api/signals', signalsRoutes);
-app.use('/api/deployments', deploymentsRoutes);
-app.use('/api/activity-logs', activityLogsRoutes);
+app.use('/auth', authRoutes);
+app.use('/events', eventsRoutes);
+app.use('/situational-reports', sitRepsRoutes);
+app.use('/users', usersRoutes);
+app.use('/notifications', notificationsRoutes);
+app.use('/reports', reportsRoutes);
+app.use('/signals', signalsRoutes);
+app.use('/deployments', deploymentsRoutes);
+app.use('/activity-logs', activityLogsRoutes);
 
 // --- Error Handler ---
 app.use((err, req, res, next) => {
