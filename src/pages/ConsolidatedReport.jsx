@@ -246,12 +246,12 @@ export default function ConsolidatedReport() {
           // 1. Handle Deletions
           if (deletedRowIds.length > 0) {
             const table = tableName === 'reports' ? 'report_rows' : tableName
-            await api.delete(`/api/reports/${table}/bulk`, { data: { ids: deletedRowIds } })
+            await api.delete(`/reports/${table}/bulk`, { data: { ids: deletedRowIds } })
           }
 
           // 2. Handle Upserts
           if (selectedCategory === 'affectedPopulation') {
-            const { data: reports } = await api.get('/api/reports/reports', {
+            const { data: reports } = await api.get('/reports/reports', {
               params: { event_id: selectedEvent.id, situational_report_id: selectedSitRep.id }
             })
             
@@ -259,7 +259,7 @@ export default function ConsolidatedReport() {
             if (reports?.length) {
               reportId = reports[0].id
             } else {
-              const { data: newReport } = await api.post('/api/reports/reports', { 
+              const { data: newReport } = await api.post('/reports/reports', { 
                 event_id: selectedEvent.id, 
                 situational_report_id: selectedSitRep.id 
               })
@@ -275,8 +275,8 @@ export default function ConsolidatedReport() {
               return { ...rest, report_id: reportId }
             })
 
-            if (toInsert.length > 0) await api.post('/api/reports/report_rows/bulk', toInsert)
-            if (toUpdate.length > 0) await api.patch('/api/reports/report_rows/bulk', toUpdate)
+            if (toInsert.length > 0) await api.post('/reports/report_rows/bulk', toInsert)
+            if (toUpdate.length > 0) await api.patch('/reports/report_rows/bulk', toUpdate)
 
           } else {
             const toInsert = lguDetailRows.filter(r => !r.id).map(row => {
@@ -296,8 +296,8 @@ export default function ConsolidatedReport() {
               }
             })
 
-            if (toInsert.length > 0) await api.post(`/api/reports/${tableName}/bulk`, toInsert)
-            if (toUpdate.length > 0) await api.patch(`/api/reports/${tableName}/bulk`, toUpdate)
+            if (toInsert.length > 0) await api.post(`/reports/${tableName}/bulk`, toInsert)
+            if (toUpdate.length > 0) await api.patch(`/reports/${tableName}/bulk`, toUpdate)
           }
 
           showSuccess('Success', 'Report details updated successfully.')
@@ -400,7 +400,7 @@ export default function ConsolidatedReport() {
         params.province = province
       }
       
-      const { data } = await api.get('/api/users', { params })
+      const { data } = await api.get('/users', { params })
       if (data) {
         const mapped = data.map(u => ({
           id: u.id,
@@ -1232,7 +1232,7 @@ export default function ConsolidatedReport() {
     if (!selectedSitRep || !selectedEvent) return
     setDrillDownLoading(true)
     try {
-      const { data: allRows } = await api.get(`/api/reports/${CATEGORY_TO_TABLE[category]}`, {
+      const { data: allRows } = await api.get(`/reports/${CATEGORY_TO_TABLE[category]}`, {
         params: {
           event_id: selectedEvent.id,
           situational_report_id: selectedSitRep.id
@@ -1305,12 +1305,12 @@ export default function ConsolidatedReport() {
       const formData = new FormData()
       formData.append('file', approvalFile)
       
-      const { data: uploadData } = await api.post('/api/upload', formData, {
+      const { data: uploadData } = await api.post('/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       })
       const pdfUrl = uploadData.url
 
-      await api.patch(`/api/situational-reports/${selectedSitRep.id}`, { 
+      await api.patch(`/situational-reports/${selectedSitRep.id}`, { 
         status: 'Pending Approval', 
         pending_pdf_url: pdfUrl 
       })
@@ -1323,7 +1323,7 @@ export default function ConsolidatedReport() {
       try {
         const userProvince = user?.province
         if (userProvince) {
-          const { data: approvers } = await api.get('/api/users', {
+          const { data: approvers } = await api.get('/users', {
             params: { province: userProvince, account_type: 'Provincial Approver' }
           })
           
@@ -1335,7 +1335,7 @@ export default function ConsolidatedReport() {
               message: `A new situational report "${selectedSitRep.title}" has been submitted for your approval.`,
               data: { sitrep_id: selectedSitRep.id, event_id: selectedEvent?.id }
             }))
-            await api.post('/api/notifications', notifications)
+            await api.post('/notifications', notifications)
           }
         }
       } catch (notifErr) {
@@ -1364,7 +1364,7 @@ export default function ConsolidatedReport() {
   // Handle "Edit Report" from approved view — reset to Pending
   const handleEditApprovedReport = async (event) => {
     try {
-      await api.patch(`/api/events/${event.id}`, { approval_status: 'Pending', approved_pdf_url: null })
+      await api.patch(`/events/${event.id}`, { approval_status: 'Pending', approved_pdf_url: null })
       setLocalApprovalMap(prev => ({
         ...prev,
         [event.id]: { status: 'Pending', url: null }
@@ -1386,7 +1386,7 @@ export default function ConsolidatedReport() {
     setLguStatusData({ submitted: [], pending: [] })
 
     try {
-      const { data: results } = await api.get('/api/reports/consolidated', {
+      const { data: results } = await api.get('/reports/consolidated', {
         params: {
           event_id: event.id,
           situational_report_ids: version.id
@@ -1519,7 +1519,7 @@ export default function ConsolidatedReport() {
       } else {
         const params = { event_id: event.id }
         if (!isRegional && user?.province) params.province = user.province
-        const { data: approvedSitreps } = await api.get('/api/situational-reports', { params })
+        const { data: approvedSitreps } = await api.get('/situational-reports', { params })
         sitRepIds = (approvedSitreps || []).map(r => r.id)
       }
 
@@ -1527,7 +1527,7 @@ export default function ConsolidatedReport() {
         return { categoryTotals: {}, byCityCategory: {} }
       }
 
-      const { data: results } = await api.get('/api/reports/consolidated', {
+      const { data: results } = await api.get('/reports/consolidated', {
         params: {
           event_id: event.id,
           situational_report_ids: sitRepIds.join(',')

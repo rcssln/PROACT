@@ -60,7 +60,7 @@ export default function SettingsModal({ isOpen, onClose, user, onLogout, onUserU
         
         if (user?.id) {
             try {
-                await api.patch(`/api/users/${user.id}`, { theme: newTheme })
+                await api.patch(`/users/${user.id}`, { theme: newTheme })
                 // Update global state and session
                 onUserUpdate?.({ ...user, theme: newTheme })
             } catch (err) {
@@ -100,7 +100,7 @@ export default function SettingsModal({ isOpen, onClose, user, onLogout, onUserU
         setSubmittingPwd(true)
 
         try {
-            await api.post('/api/auth/change-password', {
+            await api.post('/auth/change-password', {
                 currentPassword,
                 newPassword
             })

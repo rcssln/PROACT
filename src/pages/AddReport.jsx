@@ -558,7 +558,7 @@ export default function AddReport() {
       setLoading(true)
       setError(null)
 
-      const { data } = await api.get(`/api/reports/all-types?situational_report_id=${currentSituationalReport.id}`)
+      const { data } = await api.get(`/reports/all-types?situational_report_id=${currentSituationalReport.id}`)
       
       // Group evacuation entries by report_id
       const grouped = []
@@ -644,7 +644,7 @@ export default function AddReport() {
     
     if (['Approved', 'Pending Approval'].includes(currentSituationalReport.status) || currentSituationalReport.rejection_remarks) {
       try {
-        const { data: updatedSR } = await api.patch(`/api/situational-reports/${currentSituationalReport.id}`, { 
+        const { data: updatedSR } = await api.patch(`/situational-reports/${currentSituationalReport.id}`, { 
           status: 'Draft', 
           pending_pdf_url: null,
           rejection_remarks: null 
@@ -669,7 +669,7 @@ export default function AddReport() {
   const deleteReport = async (item) => {
     try {
       const table = item.tableName === 'reports' ? 'report_rows' : item.tableName
-      await api.delete(`/api/reports/${table}/bulk`, { data: { ids: [item.id] } })
+      await api.delete(`/reports/${table}/bulk`, { data: { ids: [item.id] } })
       
       await resetSitRepStatus()
       showSuccess('Success', 'Report deleted successfully')
@@ -684,7 +684,7 @@ export default function AddReport() {
     if (!sitRep) return null
 
     try {
-      const { data } = await api.get('/api/reports/consolidated', {
+      const { data } = await api.get('/reports/consolidated', {
         params: {
           event_id: selectedEvent?.id || sitRep.event_id,
           situational_report_ids: sitRep.id
@@ -732,7 +732,7 @@ export default function AddReport() {
       if (!isSuperAdmin && !isRegional && userProvince) {
         params.province = userProvince
       }
-      const { data } = await api.get('/api/users', { params })
+      const { data } = await api.get('/users', { params })
       if (data) {
         const mapped = data.map(u => ({
           id: u.id,
@@ -841,7 +841,7 @@ export default function AddReport() {
   const processConsolidatedExport = async (sr) => {
     try {
       setProcessingExportId(sr.id)
-      const { data: allData } = await api.get('/api/reports/all-types', {
+      const { data: allData } = await api.get('/reports/all-types', {
         params: { situational_report_id: sr.id }
       })
 
@@ -978,13 +978,13 @@ export default function AddReport() {
       formData.append('file', approvalFile)
       formData.append('category', 'approvals')
 
-      const { data: uploadData } = await api.post('/api/upload', formData, {
+      const { data: uploadData } = await api.post('/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       })
       
       const pdfUrl = uploadData.url
 
-      await api.patch(`/api/situational-reports/${currentSituationalReport.id}`, { 
+      await api.patch(`/situational-reports/${currentSituationalReport.id}`, { 
         status: 'Pending Approval', 
         pending_pdf_url: pdfUrl 
       })
@@ -995,7 +995,7 @@ export default function AddReport() {
       try {
         const province = user?.province
         if (province) {
-          const { data: approvers } = await api.get('/api/users', {
+          const { data: approvers } = await api.get('/users', {
             params: { province, account_type: 'Provincial Approver' }
           })
           
@@ -1007,7 +1007,7 @@ export default function AddReport() {
               message: `A new situational report "${currentSituationalReport.title}" has been submitted for your approval.`,
               data: { sitrep_id: currentSituationalReport.id, event_id: selectedEvent?.id }
             }))
-            await api.post('/api/notifications/bulk', notifications)
+            await api.post('/notifications/bulk', notifications)
           }
         }
       } catch (notifErr) {
@@ -1038,7 +1038,7 @@ export default function AddReport() {
       type: 'success',
       onConfirm: async () => {
         try {
-          await api.patch(`/api/situational-reports/${sitRep.id}`, { 
+          await api.patch(`/situational-reports/${sitRep.id}`, { 
             status: 'Approved',
             rejection_remarks: null,
             approved_pdf_url: sitRep.pending_pdf_url || sitRep.approved_pdf_url,
@@ -1065,7 +1065,7 @@ export default function AddReport() {
     if (!reviewSitRep) return
     setProcessingReview(true)
     try {
-      await api.patch(`/api/situational-reports/${reviewSitRep.id}`, { 
+      await api.patch(`/situational-reports/${reviewSitRep.id}`, { 
         status: 'Approved', 
         rejection_remarks: null,
         approved_pdf_url: reviewSitRep.pending_pdf_url || reviewSitRep.approved_pdf_url,
@@ -1076,7 +1076,7 @@ export default function AddReport() {
       try {
         const reportProvince = reviewSitRep.province || user?.province
         if (reportProvince) {
-          const { data: provincialUsers } = await api.get('/api/users', {
+          const { data: provincialUsers } = await api.get('/users', {
             params: { province: reportProvince, account_type: 'Provincial' }
           })
           
@@ -1088,7 +1088,7 @@ export default function AddReport() {
               message: `Your report "${reviewSitRep.title}" has been approved.`,
               data: { sitrep_id: reviewSitRep.id, event_id: selectedEvent?.id }
             }))
-            await api.post('/api/notifications/bulk', notifications)
+            await api.post('/notifications/bulk', notifications)
           }
         }
       } catch (notifErr) {
@@ -1113,7 +1113,7 @@ export default function AddReport() {
     }
     setProcessingReview(true)
     try {
-      await api.patch(`/api/situational-reports/${reviewSitRep.id}`, { 
+      await api.patch(`/situational-reports/${reviewSitRep.id}`, { 
         status: 'Draft', 
         rejection_remarks: rejectRemarks.trim() 
       })
@@ -1122,7 +1122,7 @@ export default function AddReport() {
       try {
         const reportProvince = reviewSitRep.province || user?.province
         if (reportProvince) {
-          const { data: provincialUsers } = await api.get('/api/users', {
+          const { data: provincialUsers } = await api.get('/users', {
             params: { province: reportProvince, account_type: 'Provincial' }
           })
           
@@ -1134,7 +1134,7 @@ export default function AddReport() {
               message: `Your report "${reviewSitRep.title}" was rejected. Remarks: ${rejectRemarks.trim()}`,
               data: { sitrep_id: reviewSitRep.id, event_id: selectedEvent?.id, remarks: rejectRemarks.trim() }
             }))
-            await api.post('/api/notifications/bulk', notifications)
+            await api.post('/notifications/bulk', notifications)
           }
         }
       } catch (notifErr) {
@@ -1510,13 +1510,13 @@ export default function AddReport() {
           // 1. Handle Deletions
           if (deletedRowIds.length > 0) {
             const deleteTable = activeCategoryModal === 'evacuation' ? 'report_rows' : table
-            await api.delete(`/api/reports/${deleteTable}/bulk`, { data: { ids: deletedRowIds } })
+            await api.delete(`/reports/${deleteTable}/bulk`, { data: { ids: deletedRowIds } })
           }
 
           if (activeCategoryModal === 'evacuation') {
             reportId = editingItemId
             if (!reportId) {
-              const { data: reportData } = await api.post('/api/reports/reports', {
+              const { data: reportData } = await api.post('/reports/reports', {
                 event_id: selectedEvent?.id,
                 situational_report_id: currentSituationalReport.id
               })
@@ -1542,8 +1542,8 @@ export default function AddReport() {
 
             console.log('DEBUG: Submitting evacuation data:', { reportId, toInsert, toUpdate })
 
-            if (toInsert.length > 0) await api.post('/api/reports/report_rows/bulk', toInsert)
-            if (toUpdate.length > 0) await api.patch('/api/reports/report_rows/bulk', toUpdate)
+            if (toInsert.length > 0) await api.post('/reports/report_rows/bulk', toInsert)
+            if (toUpdate.length > 0) await api.patch('/reports/report_rows/bulk', toUpdate)
 
           } else {
             const preparePayload = (row) => {
@@ -1709,8 +1709,8 @@ export default function AddReport() {
             const toInsert = validRows.filter(r => !r.id).map(r => preparePayload(r))
             const toUpdate = validRows.filter(r => r.id).map(r => ({ ...preparePayload(r), id: r.id }))
 
-            if (toInsert.length > 0) await api.post(`/api/reports/${table}/bulk`, toInsert)
-            if (toUpdate.length > 0) await api.patch(`/api/reports/${table}/bulk`, toUpdate)
+            if (toInsert.length > 0) await api.post(`/reports/${table}/bulk`, toInsert)
+            if (toUpdate.length > 0) await api.patch(`/reports/${table}/bulk`, toUpdate)
           }
 
           showSuccess('Success', `${categoryTitle} report(s) updated!`)

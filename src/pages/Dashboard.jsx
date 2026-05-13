@@ -631,7 +631,7 @@ export default function Dashboard() {
     }
 
     // Fetch Approved SitRep IDs for this event
-    const { data: approvedSitreps } = await api.get('/api/situational-reports', {
+    const { data: approvedSitreps } = await api.get('/situational-reports', {
       params: { event_id: currentEventId, status: 'Approved' }
     })
     const approvedIds = (approvedSitreps || []).map(s => s.id)
@@ -739,7 +739,7 @@ export default function Dashboard() {
 
     // 1. Fetch 14 days of data for all standard tables in parallel
     const tablePromises = tables.map(async ({ table, category, col, dateCol }) => {
-      const { data } = await api.get(`/api/reports/${table}`, {
+      const { data } = await api.get(`/reports/${table}`, {
         params: { 
           event_id: currentEventId,
           situational_report_id: approvedIdsCsv
@@ -853,7 +853,7 @@ export default function Dashboard() {
     // 2. Fetch 14 days of Reports/Rows
     const reportsPromise = (async () => {
       try {
-        const { data: reportsData } = await api.get('/api/reports/reports', {
+        const { data: reportsData } = await api.get('/reports/reports', {
           params: { event_id: currentEventId, situational_report_id: approvedIdsCsv }
         })
 
@@ -863,7 +863,7 @@ export default function Dashboard() {
         }
 
         const reportIds = reportsData.map(r => r.id)
-        const { data: rowsData } = await api.get('/api/reports/report_rows', {
+        const { data: rowsData } = await api.get('/reports/report_rows', {
           params: { report_id: reportIds.join(',') }
         })
 
@@ -936,7 +936,7 @@ export default function Dashboard() {
     // 3. Water Supply - Detailed logs for Infrastructure tab
     const waterPromise = (async () => {
       try {
-        const { data } = await api.get('/api/reports/water_supply_reports', {
+        const { data } = await api.get('/reports/water_supply_reports', {
           params: { event_id: currentEventId }
         })
         if (!data) return

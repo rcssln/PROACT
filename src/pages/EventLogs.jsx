@@ -29,7 +29,7 @@ export default function EventLogs() {
             setLoading(true)
             setError(null)
             try {
-                const { data } = await api.get('/api/activity-logs', { params: { limit: 1000 } })
+                const { data } = await api.get('/activity-logs', { params: { limit: 1000 } })
                 setLogs(data || [])
             } catch (err) {
                 console.error('Failed to load event logs:', err)

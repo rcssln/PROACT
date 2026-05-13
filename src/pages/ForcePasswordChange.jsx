@@ -39,12 +39,12 @@ export default function ForcePasswordChange({ user, onLogout }) {
                 setSubmitting(true)
 
                 try {
-                    await api.post('/api/auth/change-password', {
+                    await api.post('/auth/change-password', {
                         newPassword: password
                     })
 
                     // Log the action
-                    await api.post('/api/activity-logs', {
+                    await api.post('/activity-logs', {
                         action: 'Changed password',
                         details: 'Forced password change on first login'
                     })

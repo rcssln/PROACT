@@ -33,7 +33,7 @@ function App() {
 
       try {
         // Re-validate against the backend so tampered roles are never trusted
-        const { data: fresh } = await api.get('/api/auth/me')
+        const { data: fresh } = await api.get('/auth/me')
         if (!fresh || fresh.status === 'Inactive') {
           localStorage.removeItem('proact_token')
           localStorage.removeItem('proact_user')

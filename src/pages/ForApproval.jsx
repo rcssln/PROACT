@@ -56,7 +56,7 @@ export default function ForApproval() {
         params.province = user.province
       }
 
-      const { data } = await api.get('/api/situational-reports', { params })
+      const { data } = await api.get('/situational-reports', { params })
       setSitreps(data || [])
     } catch (err) {
       console.error('Error fetching pending sitreps:', err)
@@ -84,7 +84,7 @@ export default function ForApproval() {
       onConfirm: async () => {
         setProcessingReview(true)
         try {
-          await api.patch(`/api/situational-reports/${reviewSitRep.id}`, { 
+          await api.patch(`/situational-reports/${reviewSitRep.id}`, { 
             status: 'Approved', 
             rejection_remarks: null,
             approved_pdf_url: reviewSitRep.pending_pdf_url || reviewSitRep.approved_pdf_url,
@@ -98,7 +98,7 @@ export default function ForApproval() {
           try {
             const reportProvince = reviewSitRep.province || user?.province
             if (reportProvince) {
-              const { data: provincialUsers } = await api.get('/api/users', {
+              const { data: provincialUsers } = await api.get('/users', {
                 params: { province: reportProvince, account_type: 'Provincial' }
               })
               
@@ -110,7 +110,7 @@ export default function ForApproval() {
                   message: `Your report "${reviewSitRep.title}" has been approved.`,
                   data: { sitrep_id: reviewSitRep.id, event_id: reviewSitRep.event_id }
                 }))
-                await api.post('/api/notifications/bulk', notifications)
+                await api.post('/notifications/bulk', notifications)
               }
             }
           } catch (notifErr) {
@@ -142,7 +142,7 @@ export default function ForApproval() {
       onConfirm: async () => {
         setProcessingReview(true)
         try {
-          await api.patch(`/api/situational-reports/${reviewSitRep.id}`, { 
+          await api.patch(`/situational-reports/${reviewSitRep.id}`, { 
             status: 'Draft', 
             rejection_remarks: rejectRemarks.trim(),
             pending_pdf_url: null 
@@ -152,7 +152,7 @@ export default function ForApproval() {
           try {
             const reportProvince = reviewSitRep.province || user?.province
             if (reportProvince) {
-              const { data: provincialUsers } = await api.get('/api/users', {
+              const { data: provincialUsers } = await api.get('/users', {
                 params: { province: reportProvince, account_type: 'Provincial' }
               })
               
@@ -164,7 +164,7 @@ export default function ForApproval() {
                   message: `Your report "${reviewSitRep.title}" was rejected. Remarks: ${rejectRemarks.trim()}`,
                   data: { sitrep_id: reviewSitRep.id, event_id: reviewSitRep.event_id, remarks: rejectRemarks.trim() }
                 }))
-                await api.post('/api/notifications/bulk', notifications)
+                await api.post('/notifications/bulk', notifications)
               }
             }
           } catch (notifErr) {

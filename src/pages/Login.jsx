@@ -19,7 +19,7 @@ export default function Login({ onLogin }) {
     if (!email?.trim() || !password) return
     setSubmitting(true)
     try {
-      const { data } = await api.post('/api/auth/login', {
+      const { data } = await api.post('/auth/login', {
         email: email.trim().toLowerCase(),
         password
       })
@@ -29,7 +29,7 @@ export default function Login({ onLogin }) {
       localStorage.setItem('proact_user', JSON.stringify(data.user))
 
       // Log successful login (fire and forget)
-      api.post('/api/activity-logs', {
+      api.post('/activity-logs', {
         action: 'Logged in',
         details: 'User authenticated successfully'
       }).catch(() => {})

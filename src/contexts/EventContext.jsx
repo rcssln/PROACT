@@ -155,7 +155,7 @@ export function EventProvider({ children, user }) {
   const fetchSituationalReports = useCallback(async (eventId) => {
     if (!eventId) return
     try {
-      const { data } = await api.get('/api/situational-reports', { params: { event_id: eventId } })
+      const { data } = await api.get('/situational-reports', { params: { event_id: eventId } })
       setSituationalReports(data || [])
       return data
     } catch (err) {
@@ -167,7 +167,7 @@ export function EventProvider({ children, user }) {
   const fetchEventDeployments = useCallback(async (eventId) => {
     if (!eventId) return
     try {
-      const { data } = await api.get('/api/deployments', { params: { event_id: eventId } })
+      const { data } = await api.get('/deployments', { params: { event_id: eventId } })
       setEventDeployments(data || [])
       return data
     } catch (err) {
@@ -179,7 +179,7 @@ export function EventProvider({ children, user }) {
   const fetchUserSignal = useCallback(async (eventId) => {
     if (!user || !eventId) { setUserSignal(null); return }
     try {
-      const { data } = await api.get('/api/signals/user', { params: { event_id: eventId } })
+      const { data } = await api.get('/signals/user', { params: { event_id: eventId } })
       setUserSignal(data?.signal || null)
     } catch (err) {
       console.error('Error fetching user signal:', err)
@@ -190,7 +190,7 @@ export function EventProvider({ children, user }) {
   const fetchEvents = useCallback(async () => {
     if (!user) return
     try {
-      const { data } = await api.get('/api/events')
+      const { data } = await api.get('/events')
       const mappedEvents = (data || []).map(mapEvent)
       console.log('[EventContext] Fetched events:', mappedEvents.length)
       setEvents(mappedEvents)
@@ -213,7 +213,7 @@ export function EventProvider({ children, user }) {
   const fetchNotifications = useCallback(async () => {
     if (!user) return
     try {
-      const { data } = await api.get('/api/notifications')
+      const { data } = await api.get('/notifications')
       setNotifications(data || [])
       const unread = (data || []).filter(n => !n.is_read)
       setUnreadCount(unread.length)
@@ -235,7 +235,7 @@ export function EventProvider({ children, user }) {
     const adminTypes = ['Regional Admin', 'Provincial Admin', 'LGU Admin', 'Super Admin']
     if (!adminTypes.includes(user.account_type) && user.role !== 'Super Admin') return
     try {
-      const { data } = await api.get('/api/users/pending-count')
+      const { data } = await api.get('/users/pending-count')
       setPendingUsersCount(data?.count || 0)
     } catch (err) {
       console.error('Error fetching pending users count:', err)
@@ -247,7 +247,7 @@ export function EventProvider({ children, user }) {
     const isApprover = user.account_type === 'Provincial Approver' || user.account_type === 'Super Admin' || user.role === 'Super Admin'
     if (!isApprover) { setPendingApprovalsCount(0); return }
     try {
-      const { data } = await api.get('/api/situational-reports', {
+      const { data } = await api.get('/situational-reports', {
         params: { status: 'Pending Approval', count_only: true, event_id: 'all' }
       })
       setPendingApprovalsCount(Array.isArray(data) ? data.length : (data?.count || 0))
@@ -258,7 +258,7 @@ export function EventProvider({ children, user }) {
 
   const markNotificationAsRead = useCallback(async (notifId) => {
     try {
-      await api.patch(`/api/notifications/${notifId}/read`)
+      await api.patch(`/notifications/${notifId}/read`)
       setNotifications(prev => prev.map(n => n.id === notifId ? { ...n, is_read: true } : n))
       setUnreadCount(prev => Math.max(0, prev - 1))
     } catch (err) {
@@ -277,7 +277,7 @@ export function EventProvider({ children, user }) {
       })
       if (relevantNotifs.length === 0) return
       const ids = relevantNotifs.map(n => n.id)
-      await api.post('/api/notifications/mark-many-read', { ids })
+      await api.post('/notifications/mark-many-read', { ids })
       setNotifications(prev => prev.map(n => ids.includes(n.id) ? { ...n, is_read: true } : n))
       setUnreadCount(prev => Math.max(0, prev - ids.length))
     } catch (err) {
@@ -407,7 +407,7 @@ export function EventProvider({ children, user }) {
   const sendSituationalReport = useCallback(async (reportId) => {
     if (!reportId) return false
     try {
-      const { data } = await api.patch(`/api/situational-reports/${reportId}`, { status: 'Sent' })
+      const { data } = await api.patch(`/situational-reports/${reportId}`, { status: 'Sent' })
       setSituationalReports(prev => prev.map(r => r.id === reportId ? data : r))
       if (currentSituationalReport?.id === reportId) {
         setCurrentSituationalReport(data)
@@ -424,7 +424,7 @@ export function EventProvider({ children, user }) {
   const createSituationalReport = useCallback(async (eventId, title, options = {}) => {
     if (!eventId) return null
     try {
-      const { data } = await api.post('/api/situational-reports', { 
+      const { data } = await api.post('/situational-reports', { 
         event_id: eventId, 
         title, 
         target_lgus: options.targetLgus || [],
@@ -442,7 +442,7 @@ export function EventProvider({ children, user }) {
   const updateSituationalReport = useCallback(async (reportId, updates) => {
     if (!reportId) return null
     try {
-      const { data } = await api.patch(`/api/situational-reports/${reportId}`, {
+      const { data } = await api.patch(`/situational-reports/${reportId}`, {
         title: updates.title,
         target_lgus: updates.targetLgus,
         status: updates.status
@@ -463,7 +463,7 @@ export function EventProvider({ children, user }) {
     if (!provinces || provinces.length === 0) return
     try {
       // Find all users in affected provinces
-      const { data: usersToNotify } = await api.get('/api/users', {
+      const { data: usersToNotify } = await api.get('/users', {
         params: { province: provinces, account_type: ['Provincial', 'Provincial Admin', 'LGU', 'LGU Admin'], status: 'Active' }
       })
 
@@ -479,7 +479,7 @@ export function EventProvider({ children, user }) {
           }))
         
         if (notifs.length > 0) {
-          await api.post('/api/notifications/bulk', notifs)
+          await api.post('/notifications/bulk', notifs)
         }
       }
     } catch (err) {
@@ -506,7 +506,7 @@ export function EventProvider({ children, user }) {
         affected_provinces: event.affectedProvinces || []
       }
       
-      const { data } = await api.post('/api/events', payload)
+      const { data } = await api.post('/events', payload)
       const newEvent = mapEvent(data)
       // Removed manual setEvents call - handled by socket events:created
       showToast('Event Created', `Successfully created event: ${newEvent.name}`, 'success')
@@ -540,7 +540,7 @@ export function EventProvider({ children, user }) {
       if (updates.deployedAt !== undefined) payload.deployed_at = updates.deployedAt || null
       if (updates.deployedSnapshot !== undefined) payload.deployed_snapshot = updates.deployedSnapshot || null
 
-      const { data } = await api.patch(`/api/events/${id}`, payload)
+      const { data } = await api.patch(`/events/${id}`, payload)
       const updated = mapEvent(data)
       // Removed manual setEvents call - handled by socket events:updated
       showToast('Event Updated', `Successfully updated event details.`, 'success')
@@ -554,7 +554,7 @@ export function EventProvider({ children, user }) {
     if (!eventId) return []
     setLoadingSignals(true)
     try {
-      const { data } = await api.get('/api/signals', { params: { event_id: eventId } })
+      const { data } = await api.get('/signals', { params: { event_id: eventId } })
       
       const deduplicated = (data || []).reduce((acc, current) => {
         const key = `${current.city?.toLowerCase() || ''}-${current.barangay?.toLowerCase() || ''}`;
@@ -580,7 +580,7 @@ export function EventProvider({ children, user }) {
       let locationName = barangay || city || province
       
       if (signal === null) {
-        await api.post('/api/signals/clear', { event_id: eventId, province, city, barangay })
+        await api.post('/signals/clear', { event_id: eventId, province, city, barangay })
         setEventSignals(prev => prev.filter(s => {
           const isMatch = s.event_id === eventId && 
             s.province?.toLowerCase() === province?.toLowerCase() &&
@@ -592,7 +592,7 @@ export function EventProvider({ children, user }) {
         return true
       }
 
-      const { data } = await api.post('/api/signals/assign', {
+      const { data } = await api.post('/signals/assign', {
         event_id: eventId,
         province,
         city: city || null,
@@ -627,7 +627,7 @@ export function EventProvider({ children, user }) {
     try {
       if (signal === null) {
         for (const city of locations) {
-          await api.post('/api/signals/clear', { event_id: eventId, province, city, barangay: null })
+          await api.post('/signals/clear', { event_id: eventId, province, city, barangay: null })
         }
         
         setEventSignals(prev => prev.filter(s => {
@@ -647,7 +647,7 @@ export function EventProvider({ children, user }) {
         signal
       }))
 
-      const { data } = await api.post('/api/signals/bulk-assign', { assignments })
+      const { data } = await api.post('/signals/bulk-assign', { assignments })
       
       if (data) {
         setEventSignals(prev => {
@@ -672,7 +672,7 @@ export function EventProvider({ children, user }) {
     if (!user) return false
     try {
       const deployedAt = new Date().toISOString()
-      const { data: dbEvent } = await api.get(`/api/events/${eventId}`)
+      const { data: dbEvent } = await api.get(`/events/${eventId}`)
       
       const snapshot = {
         name: dbEvent.name,
@@ -687,7 +687,7 @@ export function EventProvider({ children, user }) {
         deployedAt: deployedAt
       }
 
-      const { data } = await api.patch(`/api/events/${eventId}`, { 
+      const { data } = await api.patch(`/events/${eventId}`, { 
         is_deployed: true, 
         deployed_at: deployedAt,
         deployed_snapshot: snapshot 
@@ -709,7 +709,7 @@ export function EventProvider({ children, user }) {
   const deployToLgu = useCallback(async (deployData) => {
     if (!user) return false
     try {
-      const { data } = await api.post('/api/deployments', {
+      const { data } = await api.post('/deployments', {
         event_id: deployData.event_id,
         province: deployData.province,
         cities: deployData.cities,
@@ -736,7 +736,7 @@ export function EventProvider({ children, user }) {
 
   const deleteEvent = useCallback(async (id) => {
     try {
-      await api.delete(`/api/events/${id}`)
+      await api.delete(`/events/${id}`)
       // Removed manual setEvents call - handled by socket events:deleted
       if (currentEventId === id) setCurrentEventId(null)
       showToast('Event Deleted', 'The event and all its associated data have been removed.', 'success')
@@ -764,7 +764,7 @@ export function EventProvider({ children, user }) {
     closeSelectEventModal()
     if (onSelectCallback) onSelectCallback(event)
     if (user && event) {
-      api.post('/api/activity-logs', { action: 'Selected event for report', details: `Event: ${event.name}` })
+      api.post('/activity-logs', { action: 'Selected event for report', details: `Event: ${event.name}` })
         .catch(err => console.error('Error logging event selection:', err))
     }
     if (targetPath) navigate(targetPath)
@@ -773,7 +773,7 @@ export function EventProvider({ children, user }) {
   const switchEvent = useCallback((eventId) => {
     const event = events.find(e => e.id === eventId)
     if (user && event) {
-      api.post('/api/activity-logs', { action: 'Switched dashboard event', details: `Event: ${event.name}` })
+      api.post('/activity-logs', { action: 'Switched dashboard event', details: `Event: ${event.name}` })
         .catch(err => console.error('Error logging event switch:', err))
     }
     setCurrentEventId(eventId)

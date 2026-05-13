@@ -93,7 +93,7 @@ export default function Users() {
     try {
       setError(null)
       setLoading(true)
-      const { data } = await api.get('/api/users')
+      const { data } = await api.get('/users')
       setUsers(data || [])
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to load users')
@@ -234,7 +234,7 @@ export default function Users() {
       onConfirm: async () => {
         setSubmitting(true)
         try {
-          const { data } = await api.post('/api/users', {
+          const { data } = await api.post('/users', {
             email: form.email.trim(),
             first_name: form.firstName.trim(),
             last_name: form.lastName.trim(),
@@ -323,7 +323,7 @@ export default function Users() {
       }
       
       // 1. Perform the update
-      await api.patch(`/api/users/${editingUser.id}`, payload)
+      await api.patch(`/users/${editingUser.id}`, payload)
       
       // 2. Success! Close modal first to give visual feedback
       closeEditModal()
