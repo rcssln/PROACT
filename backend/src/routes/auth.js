@@ -57,8 +57,9 @@ router.post('/login', async (req, res) => {
 
     res.json({ token, user: safeUser });
   } catch (err) {
-    console.error('[Auth/login]', err);
-    res.status(500).json({ error: 'Server error' });
+    console.error('[Auth/login] ERROR:', err.message);
+    console.error('[Auth/login] STACK:', err.stack);
+    res.status(500).json({ error: 'Server error', detail: err.message });
   }
 });
 

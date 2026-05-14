@@ -430,6 +430,15 @@ export default function AddReport() {
   const { user } = useOutletContext() || {}
   const { events, currentEventId, openSelectEventModal, selectedEventForReport, showSuccess, showConfirm, notifications, showToast } = useEvents()
 
+  const T = {
+    blue: '#3b82f6',
+    indigo: '#6366f1',
+    teal: '#00c9a0',
+    orange: '#f97316',
+    red: '#ef4444',
+    slate: '#64748b'
+  }
+
   const unreadNotifs = useMemo(() => notifications?.filter(n => !n.is_read) || [], [notifications])
 
   const hasUnread = useCallback((eventId, sitrepId = null) => {
@@ -545,6 +554,7 @@ export default function AddReport() {
   }, [userProvince]);
 
   const [targetLgus, setTargetLgus] = useState([])
+  const [selectedProvinces, setSelectedProvinces] = useState([])
   const [lguSearch, setLguSearch] = useState('')
 
   const fetchReports = useCallback(async () => {
@@ -668,10 +678,10 @@ export default function AddReport() {
 
   const deleteReport = async (item) => {
     try {
+      await resetSitRepStatus()
       const table = item.tableName === 'reports' ? 'report_rows' : item.tableName
       await api.delete(`/reports/${table}/bulk`, { data: { ids: [item.id] } })
       
-      await resetSitRepStatus()
       showSuccess('Success', 'Report deleted successfully')
       fetchReports()
     } catch (err) {
@@ -991,24 +1001,34 @@ export default function AddReport() {
 
       if (selectedEvent) fetchSituationalReports(selectedEvent.id)
 
-      // Notify Provincial Approvers
+      // Notify Approvers (Provincial Approvers in same province + Super Admins/Regional)
       try {
         const province = user?.province
-        if (province) {
-          const { data: approvers } = await api.get('/users', {
-            params: { province, account_type: 'Provincial Approver' }
-          })
-          
-          if (approvers?.length > 0) {
-            const notifications = approvers.map(u => ({
-              user_id: u.id,
-              type: 'sitrep_submission',
-              title: 'New Sitrep Submission',
-              message: `A new situational report "${currentSituationalReport.title}" has been submitted for your approval.`,
-              data: { sitrep_id: currentSituationalReport.id, event_id: selectedEvent?.id }
-            }))
-            await api.post('/notifications/bulk', notifications)
+        const { data: approvers } = await api.get('/users', {
+          params: { 
+            account_type: ['Provincial Approver', 'Super Admin', 'Regional Admin', 'Regional'],
+            status: 'Active'
           }
+        })
+        
+        // Filter: Provincial Approvers must match province, others get everything
+        const targetUsers = (approvers || []).filter(u => {
+          if (u.id === user?.id) return false
+          if (u.account_type === 'Provincial Approver') {
+            return u.province === province
+          }
+          return true // Super Admin / Regional see everything
+        })
+
+        if (targetUsers.length > 0) {
+          const notifications = targetUsers.map(u => ({
+            user_id: u.id,
+            type: 'sitrep_submission',
+            title: 'New Sitrep Submission',
+            message: `A new situational report "${currentSituationalReport.title}" has been submitted for your approval.`,
+            data: { sitrep_id: currentSituationalReport.id, event_id: selectedEvent?.id }
+          }))
+          await api.post('/notifications/bulk', notifications)
         }
       } catch (notifErr) {
         console.error('Failed to send submission notifications:', notifErr)
@@ -1391,7 +1411,8 @@ export default function AddReport() {
           setSubmitting(true)
           const newSR = await createSituationalReport(selectedEvent.id, newSitRepTitle.trim(), {
             pingedReportTypes: pingedCategories,
-            targetLgus: targetLgus
+            targetLgus: targetLgus,
+            province: selectedProvinces.length === 1 ? selectedProvinces[0] : (selectedProvinces.length > 1 ? 'Region 1' : userProvince)
           })
           if (newSR) {
             setCurrentSituationalReport(newSR)
@@ -1503,6 +1524,7 @@ export default function AddReport() {
       onConfirm: async () => {
         setSubmitting(true)
         try {
+          await resetSitRepStatus()
           const validRows = rows.filter((r) => r.barangay || (activeCategoryModal === 'roads' && r.roadBridgeName))
           const table = CATEGORY_TO_TABLE[activeCategoryModal]
           let reportId = null
@@ -1714,7 +1736,6 @@ export default function AddReport() {
           }
 
           showSuccess('Success', `${categoryTitle} report(s) updated!`)
-          await resetSitRepStatus()
           await fetchReports()
           if (currentSituationalReport?.id) {
             await markSitRepNotificationsAsRead(currentSituationalReport.id)
@@ -1766,8 +1787,8 @@ export default function AddReport() {
           return (
             <tr>
               {!isLGU && <th className="col-city">City</th>}
-              <th style={{ textAlign: 'center' }}>Road Section/Bridge</th>
               <th className="col-barangay">Barangay</th>
+              <th style={{ textAlign: 'center' }}>Road Section/Bridge</th>
               <th style={{ textAlign: 'center' }}>Classification</th>
               <th style={{ textAlign: 'center' }}>Status</th>
               <th style={{ textAlign: 'center' }}>Date/Time Not Passable</th>
@@ -1936,9 +1957,7 @@ export default function AddReport() {
     const tableRows = () => {
       return rows.map((row, index) => (
         <tr key={index} className="report-table-data-row">
-          {activeCategoryModal === 'roads' && (
-            <td><input type="text" value={row.roadBridgeName} onChange={(e) => handleRowChange(index, 'roadBridgeName', e.target.value)} placeholder="Name..." style={{ width: '150px' }} /></td>
-          )}
+
           {!isLGU && (
             <td className="col-city">
               <SearchableSelect
@@ -1961,6 +1980,9 @@ export default function AddReport() {
               placeholder="Select..."
             />
           </td>
+          {activeCategoryModal === 'roads' && (
+            <td><input type="text" value={row.roadBridgeName} onChange={(e) => handleRowChange(index, 'roadBridgeName', e.target.value)} placeholder="Name..." style={{ width: '150px' }} /></td>
+          )}
           {activeCategoryModal === 'power' && (
             <>
               <td>
@@ -2507,6 +2529,7 @@ export default function AddReport() {
                         setNewSitRepTitle(`Situational Report No. ${situationalReports.length + 1}`)
                         setPingedCategories(Object.keys(CATEGORY_LABELS))
                         setTargetLgus([])
+                        setSelectedProvinces(userProvince ? [userProvince] : [])
                         setShowNewSitRepModal(true)
                       } else {
                         setShowCategoryModal(true)
@@ -2564,8 +2587,8 @@ export default function AddReport() {
                   <tr>
                     <th style={{ textAlign: 'left' }}>Event Name</th>
                     <th style={{ textAlign: 'left' }}>Event Type</th>
-                    <th style={{ textAlign: 'left' }}>Alert Status</th>
-                    <th style={{ textAlign: 'left' }}>Reference Date</th>
+                    <th style={{ textAlign: 'left', width: '120px' }}>Alert Status</th>
+                    <th style={{ textAlign: 'left', width: '150px' }}>Reference Date</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2609,7 +2632,7 @@ export default function AddReport() {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={5} style={{ textAlign: 'center', padding: '3rem', color: '#64748b' }}>
+                      <td colSpan={4} style={{ textAlign: 'center', padding: '3rem', color: '#64748b' }}>
                         No events found matching your search.
                       </td>
                     </tr>
@@ -2648,6 +2671,9 @@ export default function AddReport() {
                   <tr>
                     <th style={{ width: '150px', textAlign: 'left' }}>Report Number</th>
                     <th style={{ textAlign: 'left' }}>Report Title</th>
+                    {(isSuperAdmin || isRegional) && (
+                      <th style={{ width: '150px', textAlign: 'left' }}>Province</th>
+                    )}
                     <th style={{ width: '180px', textAlign: 'left' }}>Date Created</th>
                     <th style={{ width: '150px', textAlign: 'left' }}>Status</th>
                     <th className="col-action" style={{ width: '280px', textAlign: 'center' }}>ACTIONS</th>
@@ -2686,6 +2712,11 @@ export default function AddReport() {
                             </div>
                           )}
                         </td>
+                        {(isSuperAdmin || isRegional) && (
+                          <td style={{ color: '#64748b', fontSize: '0.875rem' }}>
+                            {sr.province || '-'}
+                          </td>
+                        )}
                         <td className="col-date">
                           {sr.created_at ? new Date(sr.created_at).toLocaleString() : 'No date'}
                         </td>
@@ -2710,19 +2741,19 @@ export default function AddReport() {
                                 {(isLGU || user?.account_type === 'LGU Admin') ? 'View Details' : 'Manage Entries'}
                               </Button>
                               
-                              {(user?.account_type === 'Provincial' || user?.account_type === 'Provincial Admin') && (!sr.status || ['draft', 'sent'].includes(sr.status.toLowerCase())) && (
+                              {(!sr.status || ['draft', 'sent'].includes(sr.status.toLowerCase())) && (
                                 <Button
                                   variant="solid"
                                   color="success"
                                   size="sm"
                                   onClick={() => handleUploadPdfClick(sr)}
-                                  title="Send Report"
+                                  title="Send"
                                   icon={<PaperPlaneRight size={14} />}
                                 >
                                   Send
                                 </Button>
                               )}
-                              {(user?.account_type === 'Provincial' || user?.account_type === 'Provincial Admin') && sr.status?.toLowerCase() === 'pending approval' && (
+                              {sr.status?.toLowerCase() === 'pending approval' && (
                                 <Button
                                   variant="solid"
                                   color="info"
@@ -2732,19 +2763,6 @@ export default function AddReport() {
                                   icon={<Upload size={14} />}
                                 >
                                   Re-upload
-                                </Button>
-                              )}
-                              {(user?.account_type === 'Regional' || user?.account_type === 'Regional Admin' || user?.account_type === 'Super Admin') && (
-                                <Button
-                                  variant="solid"
-                                  color="success"
-                                  size="sm"
-                                  onClick={() => handleReportDownload(sr)}
-                                  title="Download Report"
-                                  isLoading={processingExportId === sr.id}
-                                  icon={<Download size={14} />}
-                                >
-                                  Download
                                 </Button>
                               )}
                             </div>
@@ -3304,6 +3322,46 @@ export default function AddReport() {
             />
           </div>
 
+          {(isSuperAdmin || isRegional) && (
+            <div>
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: '500', color: '#64748b', marginBottom: '0.75rem' }}>Select Provinces to Include</label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                {PROVINCE_NAMES.map(p => {
+                  const isActive = selectedProvinces.includes(p)
+                  return (
+                    <button
+                      key={p}
+                      onClick={() => {
+                        if (isActive) {
+                          setSelectedProvinces(prev => prev.filter(x => x !== p))
+                          // Optional: Remove LGUs from this province when untoggled
+                          const lgusInProvince = getLguNames(p)
+                          setTargetLgus(prev => prev.filter(l => !lgusInProvince.includes(l)))
+                        } else {
+                          setSelectedProvinces(prev => [...prev, p])
+                        }
+                      }}
+                      style={{
+                        padding: '6px 12px',
+                        borderRadius: '20px',
+                        fontSize: '0.8125rem',
+                        fontWeight: '600',
+                        border: '1px solid',
+                        borderColor: isActive ? T.blue : '#e2e8f0',
+                        background: isActive ? 'rgba(59,130,246,0.1)' : '#fff',
+                        color: isActive ? T.blue : '#64748b',
+                        cursor: 'pointer',
+                        transition: 'all 0.2s'
+                      }}
+                    >
+                      {p}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
               <label style={{ fontSize: '0.875rem', fontWeight: '500', color: '#64748b' }}>Target LGUs ({targetLgus.length})</label>
@@ -3311,8 +3369,10 @@ export default function AddReport() {
                 variant="subtle"
                 size="sm"
                 onClick={() => {
-                  const names = getLguNames(userProvince)
-                  setTargetLgus(prev => Array.from(new Set([...prev, ...names])).sort())
+                  const allNames = selectedProvinces.length > 0 
+                    ? selectedProvinces.flatMap(p => getLguNames(p))
+                    : getLguNames(userProvince)
+                  setTargetLgus(prev => Array.from(new Set([...prev, ...allNames])).sort())
                 }}
               >
                 Select All LGUs
@@ -3320,9 +3380,16 @@ export default function AddReport() {
             </div>
 
             <div style={{ marginBottom: '1rem' }}>
-              <label style={{ display: 'block', fontSize: '0.75rem', color: '#94a3b8', marginBottom: '4px' }}>Add LGU from {userProvince || 'Region'}</label>
+              <label style={{ display: 'block', fontSize: '0.75rem', color: '#94a3b8', marginBottom: '4px' }}>
+                Add LGU from {selectedProvinces.join(', ') || userProvince || 'Region'}
+              </label>
               <SearchableSelect
-                options={getLguNames(userProvince).filter(name => !targetLgus.includes(name)).map(name => ({ value: name, label: name }))}
+                options={
+                  (selectedProvinces.length > 0 ? selectedProvinces : [userProvince || ''])
+                  .flatMap(p => getLguNames(p))
+                  .filter(name => !targetLgus.includes(name))
+                  .map(name => ({ value: name, label: name }))
+                }
                 value=""
                 onChange={(e) => {
                   const val = e.target.value;

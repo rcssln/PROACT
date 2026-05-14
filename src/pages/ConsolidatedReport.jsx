@@ -254,14 +254,14 @@ export default function ConsolidatedReport() {
             const { data: reports } = await api.get('/reports/reports', {
               params: { event_id: selectedEvent.id, situational_report_id: selectedSitRep.id }
             })
-            
+
             let reportId
             if (reports?.length) {
               reportId = reports[0].id
             } else {
-              const { data: newReport } = await api.post('/reports/reports', { 
-                event_id: selectedEvent.id, 
-                situational_report_id: selectedSitRep.id 
+              const { data: newReport } = await api.post('/reports/reports', {
+                event_id: selectedEvent.id,
+                situational_report_id: selectedSitRep.id
               })
               reportId = newReport.id
             }
@@ -281,18 +281,18 @@ export default function ConsolidatedReport() {
           } else {
             const toInsert = lguDetailRows.filter(r => !r.id).map(row => {
               const { id, ...rest } = row
-              return { 
-                ...rest, 
-                event_id: selectedEvent.id, 
-                situational_report_id: selectedSitRep.id 
+              return {
+                ...rest,
+                event_id: selectedEvent.id,
+                situational_report_id: selectedSitRep.id
               }
             })
             const toUpdate = lguDetailRows.filter(r => r.id).map(row => {
               const { ...rest } = row
-              return { 
-                ...rest, 
-                event_id: selectedEvent.id, 
-                situational_report_id: selectedSitRep.id 
+              return {
+                ...rest,
+                event_id: selectedEvent.id,
+                situational_report_id: selectedSitRep.id
               }
             })
 
@@ -405,7 +405,7 @@ export default function ConsolidatedReport() {
       } else if (isRegional && province) {
         params.province = province
       }
-      
+
       const { data } = await api.get('/users', { params })
       if (data) {
         const mapped = data.map(u => ({
@@ -449,7 +449,7 @@ export default function ConsolidatedReport() {
 
   const handleConfirmDownload = () => {
     if (!generatedSummaryData) return
-    
+
     // If there's an approved PDF, just download it (though the modal might be skipped)
     if (selectedSitRep?.approved_pdf_url && selectedSitRep?.status === 'Approved') {
       const a = document.createElement('a')
@@ -665,11 +665,11 @@ export default function ConsolidatedReport() {
             <td><input type="number" value={row.outside_families_now || 0} onChange={(e) => handleRowChange(idx, 'outside_families_now', parseInt(e.target.value) || 0)} /></td>
             <td><input type="number" value={row.outside_persons_now || 0} onChange={(e) => handleRowChange(idx, 'outside_persons_now', parseInt(e.target.value) || 0)} /></td>
             <td className="col-actions">
-              <Button 
-                variant="ghost" 
-                color="danger" 
-                size="sm" 
-                onClick={() => handleDeleteRow(idx)} 
+              <Button
+                variant="ghost"
+                color="danger"
+                size="sm"
+                onClick={() => handleDeleteRow(idx)}
                 title="Delete Row"
                 icon={<Trash size={14} />}
               />
@@ -706,8 +706,8 @@ export default function ConsolidatedReport() {
               />
             </td>
             <td>
-              <div 
-                className="remarks-trigger" 
+              <div
+                className="remarks-trigger"
                 onClick={() => openTextEditorModal(idx, 'description', row.description, 'Edit Description')}
               >
                 {row.description || <span className="placeholder">Add description...</span>}
@@ -715,11 +715,11 @@ export default function ConsolidatedReport() {
               </div>
             </td>
             <td className="col-actions">
-              <Button 
-                variant="ghost" 
-                color="danger" 
-                size="sm" 
-                onClick={() => handleDeleteRow(idx)} 
+              <Button
+                variant="ghost"
+                color="danger"
+                size="sm"
+                onClick={() => handleDeleteRow(idx)}
                 title="Delete Row"
                 icon={<Trash size={14} />}
               />
@@ -764,11 +764,11 @@ export default function ConsolidatedReport() {
               />
             </td>
             <td className="col-actions">
-              <Button 
-                variant="ghost" 
-                color="danger" 
-                size="sm" 
-                onClick={() => handleDeleteRow(idx)} 
+              <Button
+                variant="ghost"
+                color="danger"
+                size="sm"
+                onClick={() => handleDeleteRow(idx)}
                 title="Delete Row"
                 icon={<Trash size={14} />}
               />
@@ -814,11 +814,11 @@ export default function ConsolidatedReport() {
               />
             </td>
             <td className="col-actions">
-              <Button 
-                variant="ghost" 
-                color="danger" 
-                size="sm" 
-                onClick={() => handleDeleteRow(idx)} 
+              <Button
+                variant="ghost"
+                color="danger"
+                size="sm"
+                onClick={() => handleDeleteRow(idx)}
                 title="Delete Row"
                 icon={<Trash size={14} />}
               />
@@ -842,11 +842,11 @@ export default function ConsolidatedReport() {
             <td><input type="number" value={(Number(row.totally_damaged || 0) + Number(row.partially_damaged || 0))} readOnly style={{ fontWeight: 600 }} /></td>
             <td><input type="number" value={row.amount_php || 0} onChange={(e) => handleRowChange(idx, 'amount_php', parseInt(e.target.value) || 0)} /></td>
             <td className="col-actions">
-              <Button 
-                variant="ghost" 
-                color="danger" 
-                size="sm" 
-                onClick={() => handleDeleteRow(idx)} 
+              <Button
+                variant="ghost"
+                color="danger"
+                size="sm"
+                onClick={() => handleDeleteRow(idx)}
                 title="Delete Row"
                 icon={<Trash size={14} />}
               />
@@ -885,11 +885,11 @@ export default function ConsolidatedReport() {
               />
             </td>
             <td className="col-actions">
-              <Button 
-                variant="ghost" 
-                color="danger" 
-                size="sm" 
-                onClick={() => handleDeleteRow(idx)} 
+              <Button
+                variant="ghost"
+                color="danger"
+                size="sm"
+                onClick={() => handleDeleteRow(idx)}
                 title="Delete Row"
                 icon={<Trash size={14} />}
               />
@@ -910,18 +910,18 @@ export default function ConsolidatedReport() {
             </td>
             <td><input type="number" value={row.no_families_assisted || 0} onChange={(e) => handleRowChange(idx, 'no_families_assisted', parseInt(e.target.value) || 0)} /></td>
             <td><input value={`${row.fnfi_qty || ''} ${row.fnfi_unit || ''}`} onChange={(e) => {
-               const [q, u] = e.target.value.split(' ')
-               handleRowChange(idx, 'fnfi_qty', q)
-               handleRowChange(idx, 'fnfi_unit', u)
+              const [q, u] = e.target.value.split(' ')
+              handleRowChange(idx, 'fnfi_qty', q)
+              handleRowChange(idx, 'fnfi_unit', u)
             }} /></td>
             <td><input type="number" value={row.fnfi_amount || 0} onChange={(e) => handleRowChange(idx, 'fnfi_amount', parseInt(e.target.value) || 0)} /></td>
             <td><input value={row.fnfi_source || row.source} onChange={(e) => handleRowChange(idx, row.fnfi_source !== undefined ? 'fnfi_source' : 'source', e.target.value)} /></td>
             <td className="col-actions">
-              <Button 
-                variant="ghost" 
-                color="danger" 
-                size="sm" 
-                onClick={() => handleDeleteRow(idx)} 
+              <Button
+                variant="ghost"
+                color="danger"
+                size="sm"
+                onClick={() => handleDeleteRow(idx)}
                 title="Delete Row"
                 icon={<Trash size={14} />}
               />
@@ -966,11 +966,11 @@ export default function ConsolidatedReport() {
               />
             </td>
             <td className="col-actions">
-              <Button 
-                variant="ghost" 
-                color="danger" 
-                size="sm" 
-                onClick={() => handleDeleteRow(idx)} 
+              <Button
+                variant="ghost"
+                color="danger"
+                size="sm"
+                onClick={() => handleDeleteRow(idx)}
                 title="Delete Row"
                 icon={<Trash size={14} />}
               />
@@ -992,8 +992,8 @@ export default function ConsolidatedReport() {
             <td><input type="number" value={row.families || 0} onChange={(e) => handleRowChange(idx, 'families', parseInt(e.target.value) || 0)} /></td>
             <td><input type="number" value={row.persons || 0} onChange={(e) => handleRowChange(idx, 'persons', parseInt(e.target.value) || 0)} /></td>
             <td>
-              <div 
-                className="remarks-trigger" 
+              <div
+                className="remarks-trigger"
                 onClick={() => openTextEditorModal(idx, 'remarks', row.remarks, 'Edit Remarks')}
               >
                 {row.remarks || <span className="placeholder">Add remarks...</span>}
@@ -1001,11 +1001,11 @@ export default function ConsolidatedReport() {
               </div>
             </td>
             <td className="col-actions">
-              <Button 
-                variant="ghost" 
-                color="danger" 
-                size="sm" 
-                onClick={() => handleDeleteRow(idx)} 
+              <Button
+                variant="ghost"
+                color="danger"
+                size="sm"
+                onClick={() => handleDeleteRow(idx)}
                 title="Delete Row"
                 icon={<Trash size={14} />}
               />
@@ -1034,8 +1034,8 @@ export default function ConsolidatedReport() {
               />
             </td>
             <td>
-              <div 
-                className="remarks-trigger" 
+              <div
+                className="remarks-trigger"
                 onClick={() => openTextEditorModal(idx, 'remarks', row.remarks, 'Edit Remarks')}
               >
                 {row.remarks || <span className="placeholder">Add remarks...</span>}
@@ -1043,11 +1043,11 @@ export default function ConsolidatedReport() {
               </div>
             </td>
             <td className="col-actions">
-              <Button 
-                variant="ghost" 
-                color="danger" 
-                size="sm" 
-                onClick={() => handleDeleteRow(idx)} 
+              <Button
+                variant="ghost"
+                color="danger"
+                size="sm"
+                onClick={() => handleDeleteRow(idx)}
                 title="Delete Row"
                 icon={<Trash size={14} />}
               />
@@ -1080,8 +1080,8 @@ export default function ConsolidatedReport() {
               />
             </td>
             <td>
-              <div 
-                className="remarks-trigger" 
+              <div
+                className="remarks-trigger"
                 onClick={() => openTextEditorModal(idx, 'remarks', row.remarks, 'Edit Remarks')}
               >
                 {row.remarks || <span className="placeholder">Add remarks...</span>}
@@ -1089,11 +1089,11 @@ export default function ConsolidatedReport() {
               </div>
             </td>
             <td className="col-actions">
-              <Button 
-                variant="ghost" 
-                color="danger" 
-                size="sm" 
-                onClick={() => handleDeleteRow(idx)} 
+              <Button
+                variant="ghost"
+                color="danger"
+                size="sm"
+                onClick={() => handleDeleteRow(idx)}
                 title="Delete Row"
                 icon={<Trash size={14} />}
               />
@@ -1125,8 +1125,8 @@ export default function ConsolidatedReport() {
             <td><input type="number" value={row.volume_loss || 0} onChange={(e) => handleRowChange(idx, 'volume_loss', parseFloat(e.target.value) || 0)} /></td>
             <td><input type="number" value={row.value_loss || row.cost_of_damage || row.production_loss_value || 0} onChange={(e) => handleRowChange(idx, row.production_loss_value !== undefined ? 'production_loss_value' : (row.cost_of_damage !== undefined ? 'cost_of_damage' : 'value_loss'), parseInt(e.target.value) || 0)} /></td>
             <td>
-              <div 
-                className="remarks-trigger" 
+              <div
+                className="remarks-trigger"
                 onClick={() => openTextEditorModal(idx, 'remarks', row.remarks, 'Edit Remarks')}
               >
                 {row.remarks || <span className="placeholder">Add remarks...</span>}
@@ -1134,11 +1134,11 @@ export default function ConsolidatedReport() {
               </div>
             </td>
             <td className="col-actions">
-              <Button 
-                variant="ghost" 
-                color="danger" 
-                size="sm" 
-                onClick={() => handleDeleteRow(idx)} 
+              <Button
+                variant="ghost"
+                color="danger"
+                size="sm"
+                onClick={() => handleDeleteRow(idx)}
                 title="Delete Row"
                 icon={<Trash size={14} />}
               />
@@ -1159,8 +1159,8 @@ export default function ConsolidatedReport() {
             <td><input value={row.type || row.infra_type || ''} onChange={(e) => handleRowChange(idx, row.infra_type !== undefined ? 'infra_type' : 'type', e.target.value)} /></td>
             <td><input value={row.infrastructure_name || row.infra_name || ''} onChange={(e) => handleRowChange(idx, row.infra_name !== undefined ? 'infra_name' : 'infrastructure_name', e.target.value)} /></td>
             <td>
-              <div 
-                className="remarks-trigger" 
+              <div
+                className="remarks-trigger"
                 onClick={() => openTextEditorModal(idx, 'damage_description', row.damage_description, 'Edit Damage Description')}
               >
                 {row.damage_description || <span className="placeholder">Add description...</span>}
@@ -1169,8 +1169,8 @@ export default function ConsolidatedReport() {
             </td>
             <td><input type="number" value={row.cost || row.estimated_cost || 0} onChange={(e) => handleRowChange(idx, row.estimated_cost !== undefined ? 'estimated_cost' : 'cost', parseInt(e.target.value) || 0)} /></td>
             <td>
-              <div 
-                className="remarks-trigger" 
+              <div
+                className="remarks-trigger"
                 onClick={() => openTextEditorModal(idx, 'remarks', row.remarks, 'Edit Remarks')}
               >
                 {row.remarks || <span className="placeholder">Add remarks...</span>}
@@ -1178,11 +1178,11 @@ export default function ConsolidatedReport() {
               </div>
             </td>
             <td className="col-actions">
-              <Button 
-                variant="ghost" 
-                color="danger" 
-                size="sm" 
-                onClick={() => handleDeleteRow(idx)} 
+              <Button
+                variant="ghost"
+                color="danger"
+                size="sm"
+                onClick={() => handleDeleteRow(idx)}
                 title="Delete Row"
                 icon={<Trash size={14} />}
               />
@@ -1211,8 +1211,8 @@ export default function ConsolidatedReport() {
               />
             </td>
             <td>
-              <div 
-                className="remarks-trigger" 
+              <div
+                className="remarks-trigger"
                 onClick={() => openTextEditorModal(idx, 'remarks', row.remarks, 'Edit Remarks')}
               >
                 {row.remarks || <span className="placeholder">Add remarks...</span>}
@@ -1220,11 +1220,11 @@ export default function ConsolidatedReport() {
               </div>
             </td>
             <td className="col-actions">
-              <Button 
-                variant="ghost" 
-                color="danger" 
-                size="sm" 
-                onClick={() => handleDeleteRow(idx)} 
+              <Button
+                variant="ghost"
+                color="danger"
+                size="sm"
+                onClick={() => handleDeleteRow(idx)}
                 title="Delete Row"
                 icon={<Trash size={14} />}
               />
@@ -1244,7 +1244,7 @@ export default function ConsolidatedReport() {
           situational_report_id: selectedSitRep.id
         }
       })
-      
+
       if (!allRows?.length) {
         alert('No data to export for this category.')
         return
@@ -1310,39 +1310,49 @@ export default function ConsolidatedReport() {
     try {
       const formData = new FormData()
       formData.append('file', approvalFile)
-      
+
       const { data: uploadData } = await api.post('/upload', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       })
       const pdfUrl = uploadData.url
 
-      await api.patch(`/situational-reports/${selectedSitRep.id}`, { 
-        status: 'Pending Approval', 
-        pending_pdf_url: pdfUrl 
+      await api.patch(`/situational-reports/${selectedSitRep.id}`, {
+        status: 'Pending Approval',
+        pending_pdf_url: pdfUrl
       })
 
       setSitRepVersions(prev => prev.map(v =>
         v.id === selectedSitRep.id ? { ...v, status: 'Pending Approval', pending_pdf_url: pdfUrl } : v
       ))
 
-      // Notify Provincial Approvers
+      // Notify Approvers (Provincial Approvers in same province + Super Admins/Regional)
       try {
         const userProvince = user?.province
-        if (userProvince) {
-          const { data: approvers } = await api.get('/users', {
-            params: { province: userProvince, account_type: 'Provincial Approver' }
-          })
-          
-          if (approvers?.length > 0) {
-            const notifications = approvers.map(u => ({
-              user_id: u.id,
-              type: 'sitrep_submission',
-              title: 'New Sitrep Submission',
-              message: `A new situational report "${selectedSitRep.title}" has been submitted for your approval.`,
-              data: { sitrep_id: selectedSitRep.id, event_id: selectedEvent?.id }
-            }))
-            await api.post('/notifications', notifications)
+        const { data: approvers } = await api.get('/users', {
+          params: {
+            account_type: ['Provincial Approver', 'Super Admin', 'Regional Admin', 'Regional'],
+            status: 'Active'
           }
+        })
+
+        // Filter: Provincial Approvers must match province, others get everything
+        const targetUsers = (approvers || []).filter(u => {
+          if (u.id === user?.id) return false
+          if (u.account_type === 'Provincial Approver') {
+            return u.province === userProvince
+          }
+          return true // Super Admin / Regional see everything
+        })
+
+        if (targetUsers.length > 0) {
+          const notifications = targetUsers.map(u => ({
+            user_id: u.id,
+            type: 'sitrep_submission',
+            title: 'New Sitrep Submission',
+            message: `A new situational report "${selectedSitRep.title}" has been submitted for your approval.`,
+            data: { sitrep_id: selectedSitRep.id, event_id: selectedEvent?.id }
+          }))
+          await api.post('/notifications/bulk', notifications)
         }
       } catch (notifErr) {
         console.error('Failed to send submission notifications:', notifErr)
@@ -1462,22 +1472,18 @@ export default function ConsolidatedReport() {
   const filteredSitReps = useMemo(() => {
     if (!selectedEvent) return []
     let list = sitRepVersions || []
-    
-    if (isProvincialApprover) {
-      list = list.filter(r => ['approved', 'pending approval'].includes((r.status || 'Draft').toLowerCase()))
-    } else if (isRegional || (!isSuperAdmin && !isProvincial)) {
-      list = list.filter(r => (r.status || 'Draft').toLowerCase() === 'approved')
-    }
 
-    return list.filter(r => 
+    list = list.filter(r => (r.status || 'Draft').toLowerCase() === 'approved')
+
+    return list.filter(r =>
       r.title?.toLowerCase().includes(searchTerm.toLowerCase())
     )
-  }, [sitRepVersions, selectedEvent, searchTerm, isProvincialApprover, isSuperAdmin, isRegional])
+  }, [sitRepVersions, selectedEvent, searchTerm])
 
   const filteredCategories = useMemo(() => {
     if (!searchTerm) return CATEGORY_ORDER
     const low = searchTerm.toLowerCase()
-    return CATEGORY_ORDER.filter(catKey => 
+    return CATEGORY_ORDER.filter(catKey =>
       CATEGORY_LABELS[catKey]?.toLowerCase().includes(low)
     )
   }, [searchTerm])
@@ -1486,7 +1492,7 @@ export default function ConsolidatedReport() {
     if (!searchTerm) return lguDetailRows
     const low = searchTerm.toLowerCase()
     return lguDetailRows.filter(row => {
-      return Object.values(row).some(val => 
+      return Object.values(row).some(val =>
         val !== null && val !== undefined && String(val).toLowerCase().includes(low)
       )
     })
@@ -1506,7 +1512,7 @@ export default function ConsolidatedReport() {
     if (sortKey !== columnKey) return <CaretDown size={14} className="consolidated-sort-icon inactive" />
     return sortAsc ? <CaretUp size={14} className="consolidated-sort-icon" /> : <CaretDown size={14} className="consolidated-sort-icon" />
   }
-  
+
   const fetchEventConsolidatedData = async (event, situationalReportId = null) => {
     const totalByCity = {}
     const byCityCategory = {}
@@ -1523,10 +1529,9 @@ export default function ConsolidatedReport() {
       if (situationalReportId) {
         sitRepIds = [situationalReportId]
       } else {
-        const params = { event_id: event.id }
+        const params = { event_id: event.id, status: 'Approved' }
         if (!isRegional && user?.province) params.province = user.province
         const { data: approvedSitreps } = await api.get('/situational-reports', { params })
-        sitRepIds = (approvedSitreps || []).map(r => r.id)
       }
 
       if (sitRepIds.length === 0 && !situationalReportId) {
@@ -1572,7 +1577,7 @@ export default function ConsolidatedReport() {
           // Original detailed aggregation logic...
           if (category === 'affectedPopulation') {
             if (!byCityCategory[city].affectedPopulation) {
-              byCityCategory[city].affectedPopulation = { 
+              byCityCategory[city].affectedPopulation = {
                 families: 0, persons: 0, brgy_count: 0, ecs_cum: 0, ecs_now: 0,
                 in_fam_cum: 0, in_fam_now: 0, in_per_cum: 0, in_per_now: 0,
                 out_fam_cum: 0, out_fam_now: 0, out_per_cum: 0, out_per_now: 0
@@ -1592,9 +1597,9 @@ export default function ConsolidatedReport() {
             byCityCategory[city].affectedPopulation.out_per_cum += Number(row.outside_persons_cum || 0)
             byCityCategory[city].affectedPopulation.out_per_now += Number(row.outside_persons_now || 0)
           } else if (category === 'relatedIncidents') {
-            if (!byCityCategory[city][category]) byCityCategory[city][category] = { 
-              total: 0, ongoing: 0, resolved: 0, flooded: 0, subsided: 0, receding: 0, 
-              fallenDebris: 0, stormSurge: 0, other: 0 
+            if (!byCityCategory[city][category]) byCityCategory[city][category] = {
+              total: 0, ongoing: 0, resolved: 0, flooded: 0, subsided: 0, receding: 0,
+              fallenDebris: 0, stormSurge: 0, other: 0
             }
             byCityCategory[city][category].total++
             const type = (row.type_of_incident || '').toLowerCase()
@@ -1698,7 +1703,7 @@ export default function ConsolidatedReport() {
             out_per_cum: s.out_per_cum + (cityCats[cat]?.out_per_cum || 0),
             out_per_now: s.out_per_now + (cityCats[cat]?.out_per_now || 0)
           }),
-          { 
+          {
             families: 0, persons: 0, brgy_count: 0, ecs_cum: 0, ecs_now: 0,
             in_fam_cum: 0, in_fam_now: 0, in_per_cum: 0, in_per_now: 0,
             out_fam_cum: 0, out_fam_now: 0, out_per_cum: 0, out_per_now: 0
@@ -1822,7 +1827,7 @@ export default function ConsolidatedReport() {
     try {
       const data = await fetchEventConsolidatedData(event, sitRepId)
       if (!data) return
-      
+
       generateConsolidatedCsv({
         eventName: event.name,
         province: province || 'Region 1',
@@ -1854,6 +1859,7 @@ export default function ConsolidatedReport() {
       setProcessingId(null)
     }
   }
+
 
   // Sit Rep Version Handlers
 
@@ -1939,7 +1945,7 @@ export default function ConsolidatedReport() {
             <table className="consolidated-report-table">
               <thead>
                 <tr>
-                  <th style={{ width: '40%' }}>
+                  <th style={{ width: '30%' }}>
                     <Button variant="ghost" className="consolidated-th-sort" onClick={() => handleSort('name')}>
                       Event Name
                       {sortKey === 'name'
@@ -1947,7 +1953,7 @@ export default function ConsolidatedReport() {
                         : <CaretDown size={13} className="consolidated-sort-icon inactive" />}
                     </Button>
                   </th>
-                  <th style={{ width: '25%' }}>
+                  <th style={{ width: '20%' }}>
                     <Button variant="ghost" className="consolidated-th-sort" onClick={() => handleSort('startDate')}>
                       Date of Event
                       {sortKey === 'startDate'
@@ -1955,8 +1961,11 @@ export default function ConsolidatedReport() {
                         : <CaretDown size={13} className="consolidated-sort-icon inactive" />}
                     </Button>
                   </th>
-                  <th style={{ textAlign: 'center', width: '20%' }}>Alert Lvl</th>
-                  <th className="col-action" style={{ width: '250px', textAlign: 'center' }}>Actions</th>
+                  {(isRegional || isSuperAdmin) && (
+                    <th style={{ width: '20%' }}>Province</th>
+                  )}
+                  <th style={{ textAlign: 'center', width: '10%' }}>Alert Lvl</th>
+                  <th className="col-action" style={{ width: '20%', textAlign: 'center' }}>Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -1973,9 +1982,9 @@ export default function ConsolidatedReport() {
                     <tr key={event.id}>
                       <td className="event-name-cell">
                         {hasUnread(event.id) && (
-                          <span 
-                            className="table-ping" 
-                            title="Clear Notifications" 
+                          <span
+                            className="table-ping"
+                            title="Clear Notifications"
                             onClick={(e) => {
                               e.stopPropagation();
                               markEventNotificationsAsRead(event.id);
@@ -1992,6 +2001,13 @@ export default function ConsolidatedReport() {
                           year: 'numeric'
                         }) : '-'}
                       </td>
+                      {(isRegional || isSuperAdmin) && (
+                        <td style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', fontWeight: 500 }}>
+                          {event.affectedProvinces?.length > 0
+                            ? event.affectedProvinces.join(', ')
+                            : 'Region 1'}
+                        </td>
+                      )}
                       <td style={{ textAlign: 'center' }}>
                         <span className={`alert-pill alert-${(event.alertStatus || 'white').toLowerCase()}`}>
                           {(event.alertStatus || 'white').toUpperCase()}
@@ -2015,17 +2031,6 @@ export default function ConsolidatedReport() {
                           >
                             Sit Rep
                           </Button>
-                          <Button
-                            variant="subtle"
-                            color="success"
-                            size="sm"
-                            onClick={() => handleDownloadCsv(null, event)}
-                            isLoading={processingId === `csv-${event.id}`}
-                            title="Download Consolidated CSV (ZIP)"
-                            leftIcon={<Download size={14} />}
-                          >
-                            CSV
-                          </Button>
                         </div>
                       </td>
                     </tr>
@@ -2038,7 +2043,10 @@ export default function ConsolidatedReport() {
             <table className="consolidated-report-table">
               <thead>
                 <tr>
-                  <th style={{ width: '45%' }}>Title</th>
+                  <th style={{ width: '35%' }}>Title</th>
+                  {(isSuperAdmin || isRegional) && (
+                    <th style={{ width: '15%' }}>Province</th>
+                  )}
                   <th style={{ width: '25%' }}>Created At</th>
                   <th style={{ width: '10%', textAlign: 'center' }}>Status</th>
                   <th className="col-action" style={{ width: '250px', textAlign: 'center' }}>Actions</th>
@@ -2047,7 +2055,7 @@ export default function ConsolidatedReport() {
               <tbody>
                 {versionsLoading ? (
                   <tr>
-                    <td colSpan="4" className="consolidated-report-loading">
+                    <td colSpan="5" className="consolidated-report-loading">
                       <LoadingSpinner small label="Loading versions..." />
                     </td>
                   </tr>
@@ -2058,9 +2066,9 @@ export default function ConsolidatedReport() {
                     <tr key={v.id}>
                       <td className="event-name-cell">
                         {hasUnread(selectedEvent?.id, v.id) && (
-                          <span 
-                            className="table-ping" 
-                            title="Clear Notifications" 
+                          <span
+                            className="table-ping"
+                            title="Clear Notifications"
                             onClick={(e) => {
                               e.stopPropagation();
                               markSitRepNotificationsAsRead(v.id);
@@ -2070,6 +2078,9 @@ export default function ConsolidatedReport() {
                         )}
                         {v.title}
                       </td>
+                      {(isRegional || isSuperAdmin) && (
+                        <td style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', fontWeight: 500 }}>{v.province || '-'}</td>
+                      )}
                       <td className="event-date-cell">
                         {new Date(v.created_at).toLocaleString('en-US', {
                           month: 'short',

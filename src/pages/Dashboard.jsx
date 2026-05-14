@@ -210,8 +210,12 @@ export default function Dashboard() {
     }
     return rawCurrentEvent
   }, [rawCurrentEvent])
-  const provinceFilter = (user?.account_type === 'Provincial' || user?.account_type === 'Provincial Admin') ? (user?.province || null) : null
-  const canManageEvents = user?.account_type === 'Provincial' || user?.account_type === 'Provincial Admin' || user?.account_type === 'Regional' || user?.account_type === 'Regional Admin' || user?.role === 'Super Admin' || user?.account_type === 'Super Admin'
+  const isLguUser = user?.account_type === 'LGU' || user?.account_type === 'LGU Admin'
+  const isProvincialUser = user?.account_type === 'Provincial' || user?.account_type === 'Provincial Admin' || user?.account_type === 'Provincial Approver'
+  const isRegionalUser = user?.account_type === 'Regional' || user?.account_type === 'Regional Admin' || user?.role === 'Super Admin' || user?.account_type === 'Super Admin'
+
+  const provinceFilter = isProvincialUser ? (user?.province || null) : null
+  const canManageEvents = isProvincialUser || isRegionalUser
   const T = {
     blue: '#3b82f6',    // Vivid Blue
     purple: '#8b5cf6',  // Vivid Purple
@@ -244,6 +248,11 @@ export default function Dashboard() {
   const [isEditingExistingEvent, setIsEditingExistingEvent] = useState(false)
   const [editForm, setEditForm] = useState({ name: '', color: '#6366f1', startDate: '', endDate: '', eventType: 'calamity', alertStatus: 'white', pingedReportTypes: [] })
   const [activeTab, setActiveTab] = useState('All Reports')
+  const [selectedDashboardSitRepId, setSelectedDashboardSitRepId] = useState('')
+  const [eventDropdownOpen, setEventDropdownOpen] = useState(false)
+  const [sitRepDropdownOpen, setSitRepDropdownOpen] = useState(false)
+  const eventDropdownRef = useRef(null)
+  const sitRepDropdownRef = useRef(null)
   const tabsRef = useRef(null)
   const isDragging = useRef(false)
   const isMouseDown = useRef(false)
@@ -265,6 +274,12 @@ export default function Dashboard() {
     const handleClickOutside = (e) => {
       if (notifRef.current && !notifRef.current.contains(e.target)) {
         setShowNotifications(false)
+      }
+      if (eventDropdownRef.current && !eventDropdownRef.current.contains(e.target)) {
+        setEventDropdownOpen(false)
+      }
+      if (sitRepDropdownRef.current && !sitRepDropdownRef.current.contains(e.target)) {
+        setSitRepDropdownOpen(false)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
@@ -630,20 +645,37 @@ export default function Dashboard() {
       }
     }
 
-    // Fetch Approved SitRep IDs for this event
-    const { data: approvedSitreps } = await api.get('/situational-reports', {
-      params: { event_id: currentEventId, status: 'Approved' }
+    // Fetch all SitReps for this event
+    const { data: allSitreps } = await api.get('/situational-reports', {
+      params: { event_id: currentEventId }
     })
-    // Only use the latest approved situational report to avoid double-counting or stale data
-    const latestSitRep = (approvedSitreps || []).length > 0 ? [approvedSitreps[0]] : []
-    const approvedIds = latestSitRep.map(s => s.id)
-    const approvedIdsCsv = approvedIds.join(',')
+
+    // Group by province and find latest approved for aggregation
+    const latestApprovedPerProvince = (allSitreps || []).reduce((acc, sr) => {
+      if (sr.status === 'Approved') {
+        const prov = sr.province || 'Unknown'
+        if (!acc[prov] || new Date(sr.created_at) > new Date(acc[prov].created_at)) {
+          acc[prov] = sr
+        }
+      }
+      return acc
+    }, {})
+
+    let approvedIdsCsv = ''
+    let approvedIds = []
+    if (selectedDashboardSitRepId) {
+      approvedIdsCsv = selectedDashboardSitRepId
+      approvedIds = [selectedDashboardSitRepId]
+    } else {
+      approvedIds = Object.values(latestApprovedPerProvince).map(s => s.id)
+      approvedIdsCsv = approvedIds.join(',') || '00000000-0000-0000-0000-000000000000'
+    }
 
     if (approvedIds.length === 0) {
       console.warn('[Dashboard] No situational reports with "Approved" status found for event:', currentEventId)
     }
 
-    const lguCityFilter = user?.account_type === 'LGU' ? (user?.city || null) : null
+    const lguCityFilter = isLguUser ? (user?.city || null) : null
 
 
     let referenceDate = new Date()
@@ -725,7 +757,7 @@ export default function Dashboard() {
     const details = {
       sexDistribution: { male: 0, female: 0 },
       evacStatus: { inside: 0, outside: 0, total: 0 },
-      byProvince: {}, // { 'Pangasinan': { persons: 0, families: 0, inside: 0, outside: 0, dmg: 0, served: 0, ecs: 0, powerInt: 0, powerRes: 0, roadsNotPassable: 0, brgys: Set } }
+      byProvince: {}, // { 'Pangasinan': { persons: 0, families: 0, inside: 0, outside: 0, dmg: 0, served: 0, ecs: 0, powerInt: 0, powerRes: 0, roadsNotPassable: 0, roadsPassable: 0, brgys: Set } }
       byCity: {},
       infrastructure: [],
       incidents: [],
@@ -736,10 +768,13 @@ export default function Dashboard() {
       agriByClass: {},
       infraDamage: [],
       populationByLgu: {},
-      damagedHouses: [],
       commLines: [],
-      ageTally: { kids: 0, adults: 0, seniors: 0 }
+      ageTally: { kids: 0, adults: 0, seniors: 0 },
+      sitRepStatus: allSitreps || []
     }
+
+    // Helper for deduplicating infrastructure
+    const latestInfra = {};
 
     // 1. Fetch 14 days of data for all standard tables in parallel
     const tablePromises = tables.map(async ({ table, category, col, dateCol }) => {
@@ -756,12 +791,19 @@ export default function Dashboard() {
         const city = row.city || row.mun || toCity(brgy);
         const province = getProvinceForCity(city) || 'Unknown';
 
+        // Hierarchical Filter Scoping
+        const isLguUser = user?.account_type === 'LGU' || user?.account_type === 'LGU Admin'
+        const isProvincialUser = user?.account_type === 'Provincial' || user?.account_type === 'Provincial Admin' || user?.account_type === 'Provincial Approver'
+        
+        if (isLguUser && city !== user?.city) return
+        if (isProvincialUser && province !== user?.province) return
+
         // Initialize province stats
         if (!details.byProvince[province]) {
-          details.byProvince[province] = { persons: 0, families: 0, inside: 0, outside: 0, dmg: 0, served: 0, ecs: 0, powerInt: 0, powerRes: 0, roadsNotPassable: 0, brgys: new Set() };
+          details.byProvince[province] = { persons: 0, families: 0, inside: 0, outside: 0, dmg: 0, served: 0, ecs: 0, powerInt: 0, powerRes: 0, roadsNotPassable: 0, roadsPassable: 0, brgys: new Set() };
         }
         if (!details.byCity[city]) {
-          details.byCity[city] = { persons: 0, families: 0, inside: 0, outside: 0, dmg: 0, served: 0, ecs: 0, powerInt: 0, powerRes: 0, roadsNotPassable: 0, brgys: new Set() };
+          details.byCity[city] = { persons: 0, families: 0, inside: 0, outside: 0, dmg: 0, served: 0, ecs: 0, powerInt: 0, powerRes: 0, roadsNotPassable: 0, roadsPassable: 0, brgys: new Set() };
         }
         if (brgy) {
           details.byProvince[province].brgys.add(brgy);
@@ -779,7 +821,10 @@ export default function Dashboard() {
           details.byCity[city].dmg_partial = (details.byCity[city].dmg_partial || 0) + partial;
         }
         if (category === 'communicationLines') {
-          details.infrastructure.push({ type: 'communication', city, loc: brgy, status: row.status_of_communication });
+          const key = `comm-${city}-${brgy}`;
+          if (!latestInfra[key] || new Date(row.created_at) > new Date(latestInfra[key].created_at)) {
+            latestInfra[key] = { ...row, category, city, brgy, province };
+          }
           details.commLines.push({ name: brgy, city, status: row.status_of_communication });
         }
         if (category === 'assistanceProvided') {
@@ -794,23 +839,20 @@ export default function Dashboard() {
           details.incidents.push({ type: row.type_of_incident, loc: brgy, city, status: row.status, date: row.date_of_occurrence, time: row.time_of_occurrence, description: row.description, created_at: row.created_at });
         }
         if (category === 'power') {
-          details.infrastructure.push({ name: brgy, city, type: 'power', status: row.date_restored ? 'restored' : 'interrupted', restored: row.date_restored });
-          if (!row.date_restored) {
-            details.byProvince[province].powerInt++;
-            details.byCity[city].powerInt++;
-          } else {
-            details.byProvince[province].powerRes++;
-            details.byCity[city].powerRes++;
+          const key = `power-${city}-${brgy}`;
+          if (!latestInfra[key] || new Date(row.created_at) > new Date(latestInfra[key].created_at)) {
+            latestInfra[key] = { ...row, category, city, brgy, province };
           }
         }
+
         if (category === 'roadsAndBridges') {
-          details.infrastructure.push({ name: brgy, city, type: 'road', class: row.classification, status: row.status });
-          if (row.status?.toLowerCase().includes('not passable')) {
-            details.byProvince[province].roadsNotPassable++;
-            details.byCity[city].roadsNotPassable++;
+          const key = `road-${city}-${brgy}`;
+          if (!latestInfra[key] || new Date(row.created_at) > new Date(latestInfra[key].created_at)) {
+            latestInfra[key] = { ...row, category, city, brgy, province };
           }
         }
         if (category === 'preEmptiveEvacuation') {
+          amount = Number(row.families || row.total || 0);
           details.sexDistribution.male += Number(row.male_count || 0);
           details.sexDistribution.female += Number(row.female_count || 0);
           details.preEvacuation.push({
@@ -839,6 +881,10 @@ export default function Dashboard() {
 
         if (category === 'infrastructureDamage') {
           amount = Number(row.cost || 0);
+          const infraType = (row.type || '').toLowerCase();
+          const isPowerRelated = infraType.includes('power') || infraType.includes('electric');
+          const isWaterRelated = infraType.includes('water');
+          
           details.infraDamage.push({
             name: row.infrastructure_name || brgy,
             city,
@@ -847,7 +893,26 @@ export default function Dashboard() {
             cost: Number(row.cost || 0),
             qty: row.quantity
           });
-          details.infrastructure.push({ name: row.infrastructure_name || brgy, city, type: row.type || 'infrastructure', status: row.status });
+
+          // Map to general infrastructure status if type matches
+          if (isPowerRelated) {
+            const isOngoing = (row.status || '').toLowerCase().includes('ongoing') || (row.status || '').toLowerCase().includes('damaged');
+            const statusStr = isOngoing ? 'interrupted' : 'restored';
+            details.infrastructure.push({ name: row.infrastructure_name || brgy, city, type: 'power', status: statusStr });
+            
+            if (isOngoing) {
+              details.byProvince[province].powerInt++;
+              details.byCity[city].powerInt++;
+            } else {
+              details.byProvince[province].powerRes++;
+              details.byCity[city].powerRes++;
+            }
+          } else if (isWaterRelated) {
+            const isOngoing = (row.status || '').toLowerCase().includes('ongoing') || (row.status || '').toLowerCase().includes('damaged');
+            details.infrastructure.push({ name: row.infrastructure_name || brgy, city, type: 'water', status: isOngoing ? 'interrupted' : 'operational' });
+          } else {
+            details.infrastructure.push({ name: row.infrastructure_name || brgy, city, type: 'infrastructure', status: row.status });
+          }
         }
 
         addToStats(category, brgy, amount, row[dateCol], city)
@@ -890,11 +955,18 @@ export default function Dashboard() {
             const city = row.city || toCity(row.barangay);
             const province = getProvinceForCity(city) || 'Unknown';
 
+            // Hierarchical Filter Scoping
+            const isLguUser = user?.account_type === 'LGU' || user?.account_type === 'LGU Admin'
+            const isProvincialUser = user?.account_type === 'Provincial' || user?.account_type === 'Provincial Admin' || user?.account_type === 'Provincial Approver'
+            
+            if (isLguUser && city !== user?.city) return
+            if (isProvincialUser && province !== user?.province) return
+
             if (!details.byProvince[province]) {
-              details.byProvince[province] = { persons: 0, families: 0, inside: 0, outside: 0, dmg: 0, served: 0, ecs: 0, powerInt: 0, powerRes: 0, roadsNotPassable: 0, brgys: new Set() };
+              details.byProvince[province] = { persons: 0, families: 0, inside: 0, outside: 0, dmg: 0, served: 0, ecs: 0, powerInt: 0, powerRes: 0, roadsNotPassable: 0, roadsPassable: 0, brgys: new Set() };
             }
             if (!details.byCity[city]) {
-              details.byCity[city] = { persons: 0, families: 0, inside: 0, outside: 0, dmg: 0, served: 0, ecs: 0, powerInt: 0, powerRes: 0, roadsNotPassable: 0, brgys: new Set() };
+              details.byCity[city] = { persons: 0, families: 0, inside: 0, outside: 0, dmg: 0, served: 0, ecs: 0, powerInt: 0, powerRes: 0, roadsNotPassable: 0, roadsPassable: 0, brgys: new Set() };
             }
 
             details.byProvince[province].persons += per;
@@ -952,15 +1024,26 @@ export default function Dashboard() {
           const type = row.type || 'N/A'
           const brgy = row.barangay || 'N/A';
           const city = row.city || row.mun || toCity(brgy);
+          const province = getProvinceForCity(city) || 'Unknown';
+
+          // Hierarchical Filter Scoping
+          const isLguUser = user?.account_type === 'LGU' || user?.account_type === 'LGU Admin'
+          const isProvincialUser = user?.account_type === 'Provincial' || user?.account_type === 'Provincial Admin' || user?.account_type === 'Provincial Approver'
+          
+          if (isLguUser && city !== user?.city) return
+          if (isProvincialUser && province !== user?.province) return
+
+          // Deduplicate water
+          const key = `water-${city}-${brgy}`;
+          if (!latestInfra[key] || new Date(row.created_at) > new Date(latestInfra[key].created_at)) {
+            latestInfra[key] = { ...row, category: 'water', city, brgy: brgy, province };
+          }
 
           if (isCurrent) {
             byBarangayCategory['waterSupply'] = byBarangayCategory['waterSupply'] || {}
             byBarangayCategory['waterSupply'][type] = (byBarangayCategory['waterSupply'][type] || 0) + 1
             const d = row.created_at.split('T')[0]
             if (dayCounts[d] !== undefined) dayCounts[d] += 1
-
-            const city = row.city || toCity(brgy);
-            details.infrastructure.push({ mun: city, area: brgy, type: 'water', status: row.date_restored ? 'operational' : 'interrupted', int: row.created_at, res: row.date_restored });
           }
         })
       } catch (err) {
@@ -969,6 +1052,81 @@ export default function Dashboard() {
     })()
 
     await Promise.all([...tablePromises, reportsPromise, waterPromise]);
+
+    // After all data is fetched and deduplicated, finalize infrastructure stats
+    Object.values(latestInfra).forEach(row => {
+      const { category, city, brgy, province } = row;
+      
+      if (category === 'power') {
+        const statusRaw = String(row.status || '').toLowerCase().trim();
+        const isRestored = (statusRaw === 'restored') || (!!row.date_restored && statusRaw !== 'ongoing');
+        const statusStr = isRestored ? 'restored' : 'interrupted';
+
+        details.infrastructure.push({ 
+          name: brgy, 
+          city, 
+          type: 'power', 
+          status: statusStr, 
+          restored: row.date_restored,
+          provider: row.service_provider,
+          created_at: row.created_at
+        });
+        
+        if (isRestored) {
+          details.byProvince[province].powerRes++;
+          details.byCity[city].powerRes++;
+        } else {
+          details.byProvince[province].powerInt++;
+          details.byCity[city].powerInt++;
+        }
+      }
+
+      if (category === 'roadsAndBridges') {
+        const isNotPassable = row.status?.toLowerCase().includes('not passable');
+        const isPassable = !isNotPassable && row.status?.toLowerCase().includes('passable');
+        
+        details.infrastructure.push({ 
+          name: brgy || row.road_bridge_name || row.road_section || row.name, 
+          city, 
+          type: 'road', 
+          class: row.classification, 
+          status: isNotPassable ? 'notPassable' : (isPassable ? 'passable' : row.status),
+          originalStatus: row.status,
+          created_at: row.created_at
+        });
+        
+        if (isNotPassable) {
+          details.byProvince[province].roadsNotPassable++;
+          details.byCity[city].roadsNotPassable++;
+        } else if (isPassable) {
+          details.byProvince[province].roadsPassable++;
+          details.byCity[city].roadsPassable++;
+        }
+      }
+
+      if (category === 'communicationLines') {
+        const statusRaw = String(row.status_of_communication || '').toLowerCase().trim();
+        const isRestored = statusRaw === 'restored' || (!!row.date_restored && statusRaw !== 'ongoing');
+        const statusStr = isRestored ? 'restored' : 'interrupted';
+
+        details.infrastructure.push({ type: 'communication', city, loc: brgy, status: statusStr, created_at: row.created_at });
+      }
+
+      if (category === 'water') {
+        const statusRaw = (row.status || '').toLowerCase().trim();
+        const isOperational = (statusRaw === 'restored' || statusRaw === 'operational') || (!!row.date_restored && statusRaw !== 'ongoing');
+        details.infrastructure.push({ 
+          mun: city, 
+          area: brgy, 
+          type: 'water', 
+          status: isOperational ? 'operational' : 'interrupted', 
+          int: row.created_at, 
+          res: row.date_restored,
+          provider: row.service_provider,
+          created_at: row.created_at
+        });
+      }
+    });
 
     const topCityEntry = Object.entries(totalByCity).sort((a, b) => b[1] - a[1])[0];
     const topCity = topCityEntry ? topCityEntry[0] : null;
@@ -1022,7 +1180,7 @@ export default function Dashboard() {
     }));
 
     return { topCity, total, totalTrend, top4, categoryCards, overviewData, trendChartData, details };
-  }, [currentEventId, toCity, currentEvent, user]);
+  }, [currentEventId, toCity, currentEvent, user, selectedDashboardSitRepId]);
 
   useEffect(() => {
     // Guard: wait until events have finished loading before fetching dashboard data.
@@ -1614,7 +1772,14 @@ CHRONOLOGY OF EVENTS`;
         {/* Top Header */}
         <header className="dash-header">
           <div className="dash-header-left">
-            <h1 className="dash-header-title">Dashboard</h1>
+            <h1 className="dash-header-title">
+              Dashboard
+              {!isRegionalUser && (
+                <span style={{ fontSize: '0.85rem', fontWeight: 500, color: 'var(--text-muted)', marginLeft: '12px', background: 'var(--bg-page)', padding: '4px 10px', borderRadius: '6px', border: '1px solid var(--border-color)' }}>
+                  {isLguUser ? `Local Unit: ${user?.city}` : `Province: ${user?.province}`}
+                </span>
+              )}
+            </h1>
           </div>
           <div className="dashboard-header-right">
             <NotificationBell onNotificationClick={handleNotificationClick} />
@@ -1679,10 +1844,12 @@ CHRONOLOGY OF EVENTS`;
         </section>
 
 
-        {/* Draggable Tab Navigation */}
-        <div className="tabs-nav-wrapper">
+        {/* Draggable Tab Navigation and Filters */}
+        <div className="tabs-nav-wrapper" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          
           <div
             className="card-tabs-container"
+            style={{ flex: 1 }}
             ref={tabsRef}
             onMouseDown={handleMouseDown}
             onMouseLeave={handleMouseLeave}
@@ -1703,6 +1870,100 @@ CHRONOLOGY OF EVENTS`;
                 );
               })}
             </div>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '0 16px', borderLeft: '1px solid var(--border-color)', flexShrink: 0 }}>
+
+            {/* Event Custom Dropdown */}
+            <div className="dash-custom-dropdown" ref={eventDropdownRef} style={{ position: 'relative' }}>
+              <button
+                className={`dash-dropdown-trigger ${eventDropdownOpen ? 'open' : ''}`}
+                onClick={() => { setEventDropdownOpen(v => !v); setSitRepDropdownOpen(false); }}
+              >
+                <span className="dash-dropdown-label">
+                  <span className="dash-dropdown-prefix">Event</span>
+                  <span className="dash-dropdown-value">{events.find(e => e.id === currentEventId)?.name || 'Select Event'}</span>
+                </span>
+                <CaretRight className={`dash-dropdown-caret ${eventDropdownOpen ? 'rotated' : ''}`} size={12} weight="bold" />
+              </button>
+              {eventDropdownOpen && (
+                <div className="dash-dropdown-menu">
+                  {events.map(e => (
+                    <button
+                      key={e.id}
+                      className={`dash-dropdown-item ${e.id === currentEventId ? 'active' : ''}`}
+                      onClick={() => { switchEvent(e.id); setSelectedDashboardSitRepId(''); setEventDropdownOpen(false); }}
+                    >
+                      <span className="dash-dropdown-item-dot" />
+                      {e.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* SitRep Custom Dropdown */}
+            {(() => {
+              const approvedSitReps = (result?.details?.sitRepStatus || [])
+                .filter(sr => sr.status === 'Approved')
+                .filter(sr => isProvincialUser && user?.province ? sr.province === user.province : true)
+                .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+              const selectedSr = approvedSitReps.find(sr => sr.id === selectedDashboardSitRepId);
+              return (
+                <div className="dash-custom-dropdown" ref={sitRepDropdownRef} style={{ position: 'relative' }}>
+                  <button
+                    className={`dash-dropdown-trigger ${sitRepDropdownOpen ? 'open' : ''}`}
+                    onClick={() => { setSitRepDropdownOpen(v => !v); setEventDropdownOpen(false); }}
+                  >
+                    <span className="dash-dropdown-label">
+                      <span className="dash-dropdown-prefix">SitRep</span>
+                      <span className="dash-dropdown-value">{selectedSr ? selectedSr.title : 'Latest Approved'}</span>
+                    </span>
+                    <CaretRight className={`dash-dropdown-caret ${sitRepDropdownOpen ? 'rotated' : ''}`} size={12} weight="bold" />
+                  </button>
+                  {sitRepDropdownOpen && (
+                    <div className="dash-dropdown-menu" style={{ right: 0, left: 'auto', minWidth: '240px' }}>
+                      <button
+                        className={`dash-dropdown-item ${!selectedDashboardSitRepId ? 'active' : ''}`}
+                        onClick={() => { setSelectedDashboardSitRepId(''); setSitRepDropdownOpen(false); }}
+                      >
+                        <span className="dash-dropdown-item-dot" />
+                        Latest Approved (All)
+                      </button>
+                      {approvedSitReps.map(sr => (
+                        <button
+                          key={sr.id}
+                          className={`dash-dropdown-item ${sr.id === selectedDashboardSitRepId ? 'active' : ''}`}
+                          onClick={() => { setSelectedDashboardSitRepId(sr.id); setSitRepDropdownOpen(false); }}
+                        >
+                          <span className="dash-dropdown-item-dot" />
+                          <span>
+                            <div style={{ fontWeight: 600, fontSize: '12px' }}>{sr.title}</div>
+                            <div style={{ fontSize: '10px', opacity: 0.6, marginTop: '1px' }}>{sr.province}</div>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
+            {/* Back Button */}
+            <button
+              className="dash-back-btn"
+              onClick={() => {
+                const latestDeployed = events.find(e => e.isDeployed) || events[0];
+                if (latestDeployed) switchEvent(latestDeployed.id);
+                setSelectedDashboardSitRepId('');
+                setEventDropdownOpen(false);
+                setSitRepDropdownOpen(false);
+              }}
+              title="Reset to latest deployed event"
+            >
+              <CaretLeft size={13} weight="bold" />
+              Back
+            </button>
           </div>
         </div>
 
@@ -1876,6 +2137,159 @@ CHRONOLOGY OF EVENTS`;
                       </div>
                     </div>
                   </div>
+
+                  {/* Provincial SitRep Status Table (Regional Only) */}
+                  {isRegionalUser && (
+                    <div className="premium-card" style={{ marginBottom: 14 }}>
+                      <div className="premium-card-header">
+                        <div className="premium-card-title">Provincial SitRep Status</div>
+                        <span style={{ fontSize: '10px', color: T.blue, background: 'rgba(59,130,246,0.1)', padding: '2px 8px', borderRadius: '4px' }}>LATEST UPDATES</span>
+                      </div>
+                      <div style={{ overflowX: 'auto' }}>
+                        <table className="premium-table">
+                          <thead>
+                            <tr>
+                              <th>Province</th>
+                              <th>Latest SitRep Title</th>
+                              <th>Status</th>
+                              <th style={{ textAlign: 'left' }}>Submission Date</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {PROVINCE_NAMES.map(province => {
+                              const latestSr = (result?.details?.sitRepStatus || [])
+                                .filter(sr => sr.province === province)
+                                .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))[0];
+                              
+                              return (
+                                <tr key={province} className="trow">
+                                  <td style={{ fontWeight: 700, color: 'var(--text-main)', fontSize: '12px' }}>{province.toUpperCase()}</td>
+                                  <td>{latestSr ? latestSr.title : <span style={{ color: '#94a3b8' }}>No Submission</span>}</td>
+                                  <td>
+                                    {latestSr ? (
+                                      <span style={{
+                                        fontSize: '9px',
+                                        fontWeight: 800,
+                                        background: latestSr.status === 'Approved' ? 'rgba(0,201,160,0.1)' : 'rgba(249,115,22,0.1)',
+                                        color: latestSr.status === 'Approved' ? T.teal : T.orange,
+                                        padding: '2px 6px',
+                                        borderRadius: '4px'
+                                      }}>
+                                        {latestSr.status.toUpperCase()}
+                                      </span>
+                                    ) : '—'}
+                                  </td>
+                                  <td style={{ textAlign: 'left', fontSize: '10px', color: 'var(--text-muted)', fontFamily: 'DM Mono' }}>
+                                    {latestSr ? new Date(latestSr.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : '—'}
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Recent SitRep Submissions (Regional Only) */}
+                  {isRegionalUser && (
+                    <div className="premium-card" style={{ marginBottom: 14 }}>
+                      <div className="premium-card-header">
+                        <div className="premium-card-title">Recent Situational Reports</div>
+                        <span style={{ fontSize: '10px', color: T.blue, background: 'rgba(59,130,246,0.1)', padding: '2px 8px', borderRadius: '4px' }}>ALL SUBMISSIONS</span>
+                      </div>
+                      <div style={{ overflowX: 'auto', maxHeight: '400px' }}>
+                        <table className="premium-table">
+                          <thead>
+                            <tr>
+                              <th>Report Title</th>
+                              <th>Province</th>
+                              <th>Status</th>
+                              <th style={{ textAlign: 'left' }}>Date</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {(result?.details?.sitRepStatus || []).length > 0 ? (
+                              [...result.details.sitRepStatus]
+                                .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+                                .slice(0, 10)
+                                .map((sr, i) => (
+                                  <tr key={i} className="trow">
+                                    <td style={{ fontWeight: 600, color: 'var(--text-main)', fontSize: '12px' }}>{sr.title}</td>
+                                    <td>{sr.province}</td>
+                                    <td>
+                                      <span style={{
+                                        fontSize: '9px',
+                                        fontWeight: 800,
+                                        background: sr.status === 'Approved' ? 'rgba(0,201,160,0.1)' : 'rgba(249,115,22,0.1)',
+                                        color: sr.status === 'Approved' ? T.teal : T.orange,
+                                        padding: '2px 6px',
+                                        borderRadius: '4px'
+                                      }}>
+                                        {(sr.status || 'Draft').toUpperCase()}
+                                      </span>
+                                    </td>
+                                    <td style={{ textAlign: 'left', fontSize: '10px', color: 'var(--text-muted)', fontFamily: 'DM Mono' }}>
+                                      {new Date(sr.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}
+                                    </td>
+                                  </tr>
+                                ))
+                            ) : (
+                              <tr><td colSpan="4" style={{ textAlign: 'center', padding: '2rem', color: '#94a3b8' }}>No situational reports found</td></tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Provincial Data Summary Table (Regional Only) */}
+                  {isRegionalUser && (
+                    <div className="premium-card" style={{ marginBottom: 14 }}>
+                      <div className="premium-card-header">
+                        <div className="premium-card-title">Provincial Data Summary</div>
+                        <span style={{ fontSize: '10px', color: T.teal, background: 'rgba(20,184,166,0.1)', padding: '2px 8px', borderRadius: '4px' }}>CONSOLIDATED</span>
+                      </div>
+                      <div style={{ overflowX: 'auto' }}>
+                        <table className="premium-table">
+                          <thead>
+                            <tr>
+                              <th>Province</th>
+                              <th style={{ textAlign: 'left' }}>Families</th>
+                              <th style={{ textAlign: 'left' }}>Persons</th>
+                              <th style={{ textAlign: 'left' }}>In ECs</th>
+                              <th style={{ textAlign: 'left' }}>Out ECs</th>
+                              <th style={{ textAlign: 'left' }}>Total Served</th>
+                              <th style={{ textAlign: 'left' }}>Active ECs</th>
+                              <th style={{ textAlign: 'left' }}>Dmg Houses</th>
+                              <th style={{ textAlign: 'left' }}>Power Out</th>
+                              <th style={{ textAlign: 'left' }}>Roads Blocked</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {Object.keys(result?.details?.byProvince || {}).length > 0 ? (
+                              Object.entries(result.details.byProvince).map(([province, stats], i) => (
+                                <tr key={province} className="trow">
+                                  <td style={{ fontWeight: 700, color: 'var(--text-main)', fontSize: '12px' }}>{province.toUpperCase()}</td>
+                                  <td style={{ textAlign: 'left', fontFamily: 'DM Mono', fontSize: '11px' }}>{stats.families.toLocaleString()}</td>
+                                  <td style={{ textAlign: 'left', fontFamily: 'DM Mono', fontSize: '11px', fontWeight: 700 }}>{stats.persons.toLocaleString()}</td>
+                                  <td style={{ textAlign: 'left', fontFamily: 'DM Mono', fontSize: '11px' }}>{stats.inside.toLocaleString()}</td>
+                                  <td style={{ textAlign: 'left', fontFamily: 'DM Mono', fontSize: '11px' }}>{stats.outside.toLocaleString()}</td>
+                                  <td style={{ textAlign: 'left', fontFamily: 'DM Mono', fontSize: '11px', color: T.teal, fontWeight: 700 }}>{stats.served.toLocaleString()}</td>
+                                  <td style={{ textAlign: 'left', fontFamily: 'DM Mono', fontSize: '11px' }}>{stats.ecs}</td>
+                                  <td style={{ textAlign: 'left', fontFamily: 'DM Mono', fontSize: '11px' }}>{stats.dmg.toLocaleString()}</td>
+                                  <td style={{ textAlign: 'left', fontFamily: 'DM Mono', fontSize: '11px', color: stats.powerInt > 0 ? T.rose : 'inherit' }}>{stats.powerInt}</td>
+                                  <td style={{ textAlign: 'left', fontFamily: 'DM Mono', fontSize: '11px', color: stats.roadsNotPassable > 0 ? T.rose : 'inherit' }}>{stats.roadsNotPassable}</td>
+                                </tr>
+                              ))
+                            ) : (
+                              <tr><td colSpan="10" style={{ textAlign: 'left', color: '#94a3b8', padding: '2rem' }}>No provincial data available</td></tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Bottom Table: City/Municipality Summary */}
                   <div className="premium-card">
@@ -2103,6 +2517,9 @@ CHRONOLOGY OF EVENTS`;
                             <th>Incident Type</th>
                             <th>Barangay / Location</th>
                             <th>Municipality</th>
+                            {isRegionalUser && (
+                              <th>Province</th>
+                            )}
                             <th>Status</th>
                             <th>Occurred</th>
                           </tr>
@@ -2116,6 +2533,11 @@ CHRONOLOGY OF EVENTS`;
                                 </td>
                                 <td style={{ fontSize: '11px' }}>{inc.loc}</td>
                                 <td style={{ fontSize: '11px' }}>{inc.city}</td>
+                                {isRegionalUser && (
+                                  <td style={{ fontSize: '11px', fontWeight: 600, color: '#475569' }}>
+                                    {getProvinceForCity(inc.city) || '-'}
+                                  </td>
+                                )}
                                 <td>
                                   <span style={{
                                     fontSize: '9px',
@@ -2152,7 +2574,7 @@ CHRONOLOGY OF EVENTS`;
                       </div>
                       <div style={{ height: '260px', minWidth: 0 }}>
                         <ResponsiveContainer width="100%" height="100%">
-                          <BarChart data={Object.entries(result?.details?.byCity || {}).sort((a, b) => (b[1].powerInt + b[1].powerRes) - (a[1].powerInt + a[1].powerRes)).slice(0, 4).map(([name, stats]) => ({ name, int: stats.powerInt, res: stats.powerRes }))} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                          <BarChart data={Object.entries(result?.details?.byCity || {}).sort((a, b) => (b[1].powerInt + b[1].powerRes) - (a[1].powerInt + a[1].powerRes)).slice(0, 8).map(([name, stats]) => ({ name, int: stats.powerInt, res: stats.powerRes }))} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
                             <XAxis dataKey="name" tick={{ fontSize: 9, fill: '#64748b' }} axisLine={false} tickLine={false} interval={0} />
                             <YAxis tick={{ fontSize: 9, fill: '#64748b' }} axisLine={false} tickLine={false} />
@@ -2164,7 +2586,7 @@ CHRONOLOGY OF EVENTS`;
                         </ResponsiveContainer>
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginTop: 14 }}>
-                        {Object.entries(result?.details?.byCity || {}).sort((a, b) => (b[1].powerInt + b[1].powerRes) - (a[1].powerInt + a[1].powerRes)).slice(0, 4).map(([city, stats], idx) => {
+                        {Object.entries(result?.details?.byCity || {}).sort((a, b) => (b[1].powerInt + b[1].powerRes) - (a[1].powerInt + a[1].powerRes)).slice(0, 8).map(([city, stats], idx) => {
                           const total = stats.powerInt + stats.powerRes;
                           const pct = total === 0 ? 0 : Math.round((stats.powerRes / total) * 100);
                           return (
@@ -2206,10 +2628,10 @@ CHRONOLOGY OF EVENTS`;
                           <thead><tr><th>Classification</th><th style={{ textAlign: 'left' }}>Not Passable</th><th style={{ textAlign: 'left' }}>Passable</th></tr></thead>
                           <tbody>
                             {[
-                              { name: 'National (Primary)', np: details?.infrastructure?.filter(r => r.type === 'road' && r.class === 'Primary' && !r.status?.toLowerCase().includes('passable')).length || 0, p: details?.infrastructure?.filter(r => r.type === 'road' && r.class === 'Primary' && r.status?.toLowerCase().includes('passable')).length || 0 },
-                              { name: 'National (Secondary)', np: details?.infrastructure?.filter(r => r.type === 'road' && r.class === 'Secondary' && !r.status?.toLowerCase().includes('passable')).length || 0, p: details?.infrastructure?.filter(r => r.type === 'road' && r.class === 'Secondary' && r.status?.toLowerCase().includes('passable')).length || 0 },
-                              { name: 'Provincial', np: details?.infrastructure?.filter(r => r.type === 'road' && r.class === 'Provincial' && !r.status?.toLowerCase().includes('passable')).length || 0, p: details?.infrastructure?.filter(r => r.type === 'road' && r.class === 'Provincial' && r.status?.toLowerCase().includes('passable')).length || 0 },
-                              { name: 'City/Muni', np: details?.infrastructure?.filter(r => r.type === 'road' && r.class === 'City' && !r.status?.toLowerCase().includes('passable')).length || 0, p: details?.infrastructure?.filter(r => r.type === 'road' && r.class === 'City' && r.status?.toLowerCase().includes('passable')).length || 0 }
+                              { name: 'National (Primary)', np: details?.infrastructure?.filter(r => r.type === 'road' && r.class === 'Primary' && r.status === 'notPassable').length || 0, p: details?.infrastructure?.filter(r => r.type === 'road' && r.class === 'Primary' && r.status === 'passable').length || 0 },
+                              { name: 'National (Secondary)', np: details?.infrastructure?.filter(r => r.type === 'road' && r.class === 'Secondary' && r.status === 'notPassable').length || 0, p: details?.infrastructure?.filter(r => r.type === 'road' && r.class === 'Secondary' && r.status === 'passable').length || 0 },
+                              { name: 'Provincial', np: details?.infrastructure?.filter(r => r.type === 'road' && r.class === 'Provincial' && r.status === 'notPassable').length || 0, p: details?.infrastructure?.filter(r => r.type === 'road' && r.class === 'Provincial' && r.status === 'passable').length || 0 },
+                              { name: 'City/Muni', np: details?.infrastructure?.filter(r => r.type === 'road' && r.class === 'City' && r.status === 'notPassable').length || 0, p: details?.infrastructure?.filter(r => r.type === 'road' && r.class === 'City' && r.status === 'passable').length || 0 }
                             ].map((row, i) => (
                               <tr key={i}>
                                 <td style={{ fontSize: '10px' }}>{row.name}</td>
@@ -2248,24 +2670,80 @@ CHRONOLOGY OF EVENTS`;
                     <div className="premium-card">
                       <div className="premium-card-header">
                         <div className="premium-card-title">Water Supply</div>
+                        <span style={{ fontSize: '10px', color: T.blue, background: 'rgba(59,130,246,0.1)', padding: '2px 8px', borderRadius: '4px' }}>LATEST</span>
                       </div>
-                      <div style={{ overflowX: 'auto' }}>
+                      <div style={{ overflowX: 'auto', maxHeight: '300px' }}>
                         <table className="premium-table">
                           <thead><tr><th>Municipality</th><th>Area</th><th>Status</th></tr></thead>
                           <tbody>
-                            {details.infrastructure.filter(i => i.type === 'water').slice(0, 4).map((w, i) => (
-                              <tr key={i}>
-                                <td>{w.city}</td>
-                                <td style={{ fontSize: '10px' }}>{w.loc}</td>
-                                <td>
-                                  <span style={{ fontSize: '9px', fontWeight: 800, background: w.status === 'operational' ? 'rgba(0,201,160,0.1)' : 'rgba(240,69,69,0.1)', color: w.status === 'operational' ? T.teal : T.rose, padding: '2px 6px', borderRadius: '4px' }}>
-                                    {w.status?.toUpperCase()}
-                                  </span>
-                                </td>
-                              </tr>
-                            ))}
-                            {details.infrastructure.filter(i => i.type === 'water').length === 0 && (
-                              <tr><td colSpan="3" style={{ textAlign: 'left', color: '#94a3b8', padding: '1rem' }}>No water utility interruptions reported</td></tr>
+                            {details.infrastructure.filter(i => i.type === 'water').length > 0 ? (
+                              details.infrastructure.filter(i => i.type === 'water').sort((a,b) => (a.status === 'interrupted' ? -1 : 1)).map((w, i) => (
+                                <tr key={i} className="trow">
+                                  <td>{w.city || w.mun}</td>
+                                  <td style={{ fontSize: '10px' }}>{w.name || w.area || 'Entire Municipality'}</td>
+                                  <td>
+                                    <span style={{ fontSize: '9px', fontWeight: 800, background: w.status === 'operational' ? 'rgba(0,201,160,0.1)' : 'rgba(240,69,69,0.1)', color: w.status === 'operational' ? T.teal : T.rose, padding: '2px 6px', borderRadius: '4px' }}>
+                                      {w.status?.toUpperCase()}
+                                    </span>
+                                  </td>
+                                </tr>
+                              ))
+                            ) : (
+                              <tr><td colSpan="3" style={{ textAlign: 'left', color: '#94a3b8', padding: '1.5rem' }}>No water utility interruptions reported</td></tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 14, marginTop: 14 }}>
+                    {/* Power Supply Full List */}
+                    <div className="premium-card">
+                      <div className="premium-card-header">
+                        <div className="premium-card-title">Detailed Power Interruption Log</div>
+                        <span style={{ fontSize: '10px', color: T.rose, background: 'rgba(244,63,94,0.1)', padding: '2px 8px', borderRadius: '4px' }}>ALL AREAS</span>
+                      </div>
+                      <div style={{ overflowX: 'auto', maxHeight: '400px' }}>
+                        <table className="premium-table">
+                          <thead>
+                            <tr>
+                              <th>Municipality</th>
+                              <th>Barangay / Area</th>
+                              <th>Service Provider</th>
+                              <th>Status</th>
+                              <th>Restoration</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {details.infrastructure.filter(i => i.type === 'power').length > 0 ? (
+                              details.infrastructure
+                                .filter(i => i.type === 'power')
+                                .sort((a,b) => (a.status === 'interrupted' ? -1 : 1))
+                                .map((p, i) => (
+                                <tr key={i} className="trow">
+                                  <td style={{ fontWeight: 600 }}>{p.city}</td>
+                                  <td style={{ fontSize: '11px' }}>{p.name || 'Entire Municipality'}</td>
+                                  <td style={{ fontSize: '11px', color: '#64748b' }}>{p.provider || '—'}</td>
+                                  <td>
+                                    <span style={{ 
+                                      fontSize: '9px', 
+                                      fontWeight: 800, 
+                                      background: p.status === 'interrupted' ? 'rgba(244,63,94,0.1)' : 'rgba(0,201,160,0.1)', 
+                                      color: p.status === 'interrupted' ? T.rose : T.teal, 
+                                      padding: '2px 6px', 
+                                      borderRadius: '4px' 
+                                    }}>
+                                      {p.status?.toUpperCase()}
+                                    </span>
+                                  </td>
+                                  <td style={{ fontSize: '10px', color: '#64748b', fontFamily: 'DM Mono' }}>
+                                    {p.restored ? new Date(p.restored).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '—'}
+                                  </td>
+                                </tr>
+                              ))
+                            ) : (
+                              <tr><td colSpan="5" style={{ textAlign: 'left', color: '#94a3b8', padding: '3rem' }}>No power interruption records found in latest reports</td></tr>
                             )}
                           </tbody>
                         </table>

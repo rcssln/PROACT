@@ -32,6 +32,9 @@ router.get('/all-types', authenticate, async (req, res) => {
   const { situational_report_id } = req.query;
   if (!situational_report_id) return res.status(400).json({ error: 'situational_report_id is required' });
 
+  const user = req.user;
+  const isRegional = ['Regional Admin', 'Regional', 'Super Admin', 'Regional Approver'].includes(user.account_type) || user.role === 'Super Admin';
+
   try {
     const tables = [
       { name: 'related_incidents', label: 'Related Incidents', id: 'incidents' },
@@ -51,17 +54,29 @@ router.get('/all-types', authenticate, async (req, res) => {
     ];
 
     const results = [];
-    
+
     // 1. Handle regular sub-tables
     await Promise.all(tables.map(async (table) => {
-      const { rows } = await pool.query(
-        `SELECT * FROM ${table.name} WHERE situational_report_id = $1`,
-        [situational_report_id]
-      );
+      let query = `SELECT t.* FROM ${table.name} t`;
+      const conditions = [`t.situational_report_id = $1`];
+      const params = [situational_report_id];
+
+      if (!isRegional) {
+        if ((user.account_type === 'LGU' || user.account_type === 'LGU Admin') && user.city) {
+          params.push(user.city);
+          conditions.push(`t.city = $${params.length}`);
+        } else if (user.province) {
+          query += ` INNER JOIN situational_reports sr ON t.situational_report_id = sr.id`;
+          params.push(user.province);
+          conditions.push(`(sr.province = $${params.length} OR sr.province IS NULL)`);
+        }
+      }
+
+      const { rows } = await pool.query(`${query} WHERE ${conditions.join(' AND ')}`, params);
       rows.forEach(r => {
         let subject = r.barangay || r.city || r.road_bridge_name || r.telecompany || r.infrastructure_name || 'Report Entry';
         let summary = r.type || r.classification || r.status || '';
-        
+
         if (table.id === 'power' || table.id === 'water') {
           summary = `${r.status || 'Ongoing'} | ${r.service_provider || ''}`;
         } else if (table.id === 'roads') {
@@ -83,17 +98,30 @@ router.get('/all-types', authenticate, async (req, res) => {
     }));
 
     // 2. Handle Affected Population (reports -> report_rows)
-    const { rows: reports } = await pool.query(
-      'SELECT id, created_at FROM reports WHERE situational_report_id = $1',
-      [situational_report_id]
-    );
+    let reportsQuery = 'SELECT t.id, t.created_at FROM reports t';
+    const reportsConditions = [`t.situational_report_id = $1`];
+    const reportsParams = [situational_report_id];
+
+    if (!isRegional && user.province) {
+      reportsQuery += ` INNER JOIN situational_reports sr ON t.situational_report_id = sr.id`;
+      reportsParams.push(user.province);
+      reportsConditions.push(`(sr.province = $${reportsParams.length} OR sr.province IS NULL)`);
+    }
+
+    const { rows: reports } = await pool.query(`${reportsQuery} WHERE ${reportsConditions.join(' AND ')}`, reportsParams);
 
     if (reports.length > 0) {
       const reportIds = reports.map(r => r.id);
-      const { rows: reportRows } = await pool.query(
-        'SELECT * FROM report_rows WHERE report_id = ANY($1::uuid[])',
-        [reportIds]
-      );
+      let rowsQuery = 'SELECT t.* FROM report_rows t';
+      const rowsConditions = [`t.report_id = ANY($1::uuid[])`];
+      const rowsParams = [reportIds];
+
+      if (!isRegional && (user.account_type === 'LGU' || user.account_type === 'LGU Admin') && user.city) {
+        rowsParams.push(user.city);
+        rowsConditions.push(`t.city = $${rowsParams.length}`);
+      }
+
+      const { rows: reportRows } = await pool.query(`${rowsQuery} WHERE ${rowsConditions.join(' AND ')}`, rowsParams);
       reportRows.forEach(r => {
         results.push({
           ...r,
@@ -129,19 +157,47 @@ router.get('/consolidated', authenticate, async (req, res) => {
     ];
 
     const rawData = {};
-    const sitRepIds = situational_report_ids ? situational_report_ids.split(',') : [];
+    const sitRepIds = (typeof situational_report_ids === 'string')
+      ? situational_report_ids.split(',').map(id => id.trim()).filter(id => id !== '')
+      : [];
+
+    // If situational_report_ids was explicitly passed as an empty string, return empty results
+    if (typeof situational_report_ids === 'string' && sitRepIds.length === 0) {
+      return res.json({ categoryTotals: {}, byCityCategory: {}, details: {}, data: [] });
+    }
+
+    const user = req.user;
+    const isRegional = ['Regional Admin', 'Regional', 'Super Admin', 'Regional Approver'].includes(user.account_type) || user.role === 'Super Admin';
 
     await Promise.all(tables.map(async (table) => {
-      let query = `SELECT * FROM ${table} WHERE event_id = $1`;
-      let params = [event_id];
-
-      if (sitRepIds.length > 0) {
-        query += ` AND situational_report_id = ANY($2::uuid[])`;
-        params.push(sitRepIds);
+      let baseQuery = '';
+      if (table === 'reports') {
+        baseQuery = `SELECT t.*, sr.province FROM ${table} t INNER JOIN situational_reports sr ON t.situational_report_id = sr.id`;
+      } else {
+        baseQuery = `SELECT t.*, sr.province FROM ${table} t INNER JOIN situational_reports sr ON t.situational_report_id = sr.id`;
       }
 
+      const conditions = [`t.event_id = $1`];
+      const params = [event_id];
+
+      if (!isRegional) {
+        if ((user.account_type === 'LGU' || user.account_type === 'LGU Admin') && user.city) {
+          params.push(user.city);
+          conditions.push(`t.city = $${params.length}`);
+        } else if (user.province) {
+          params.push(user.province);
+          conditions.push(`(sr.province = $${params.length} OR sr.province IS NULL)`);
+        }
+      }
+
+      if (sitRepIds.length > 0) {
+        params.push(sitRepIds);
+        conditions.push(`t.situational_report_id = ANY($${params.length}::uuid[])`);
+      }
+
+      const query = `${baseQuery} WHERE ${conditions.join(' AND ')}`;
       const { rows } = await pool.query(query, params);
-      
+
       if (table === 'reports' && rows.length > 0) {
         const reportIds = rows.map(r => r.id);
         const { rows: reportRows } = await pool.query(
@@ -202,9 +258,9 @@ router.get('/consolidated', authenticate, async (req, res) => {
       const update = (obj) => {
         obj.total++;
         if (type.includes('flood')) {
-           if (status.includes('subs')) obj.subsided++;
-           else if (status.includes('rece')) obj.receding++;
-           else obj.flooded++;
+          if (status.includes('subs')) obj.subsided++;
+          else if (status.includes('rece')) obj.receding++;
+          else obj.flooded++;
         } else if (type.includes('debris') || type.includes('tree')) obj.fallenDebris++;
         else if (type.includes('surge')) obj.stormSurge++;
         else obj.other++;
@@ -370,27 +426,63 @@ router.get('/:table', authenticate, async (req, res) => {
   }
 
   const { event_id, situational_report_id, report_id } = req.query;
+  const user = req.user;
+  const isRegional = ['Regional Admin', 'Regional', 'Super Admin', 'Regional Approver'].includes(user.account_type) || user.role === 'Super Admin';
+
+  let baseQuery = '';
+  if (table === 'report_rows') {
+    baseQuery = `SELECT t.*, sr.province FROM ${table} t INNER JOIN reports r ON t.report_id = r.id INNER JOIN situational_reports sr ON r.situational_report_id = sr.id`;
+  } else {
+    baseQuery = `SELECT t.*, sr.province FROM ${table} t INNER JOIN situational_reports sr ON t.situational_report_id = sr.id`;
+  }
+
   const conditions = [];
   const params = [];
 
+  // Hierarchical Scoping Logic
+  if (!isRegional) {
+    if ((user.account_type === 'LGU' || user.account_type === 'LGU Admin') && user.city) {
+      params.push(user.city);
+      conditions.push(`t.city = $${params.length}`);
+    } else if (user.province) {
+      params.push(user.province);
+      conditions.push(`(sr.province = $${params.length} OR sr.province IS NULL)`);
+    }
+  }
+
   if (event_id) {
     params.push(event_id);
-    conditions.push(`event_id = $${params.length}`);
+    conditions.push(`t.event_id = $${params.length}`);
   }
-  if (situational_report_id) {
-    const ids = situational_report_id.split(',').map(id => id.trim());
-    params.push(ids);
-    conditions.push(`situational_report_id = ANY($${params.length}::uuid[])`);
+  if (typeof situational_report_id === 'string') {
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const ids = situational_report_id.split(',')
+      .map(id => id.trim())
+      .filter(id => id !== '' && uuidRegex.test(id));
+
+    if (ids.length > 0) {
+      params.push(ids);
+      conditions.push(`t.situational_report_id = ANY($${params.length}::uuid[])`);
+    } else {
+      // If situational_report_id is explicitly passed but has no valid IDs, it must match nothing.
+      conditions.push('1=0');
+    }
   }
-  if (report_id) {
-    const ids = report_id.split(',').map(id => id.trim());
-    params.push(ids);
-    conditions.push(`report_id = ANY($${params.length}::uuid[])`);
+  if (typeof report_id === 'string') {
+    const ids = report_id.split(',').map(id => id.trim()).filter(id => id !== '');
+    if (ids.length > 0) {
+      params.push(ids);
+      conditions.push(`t.report_id = ANY($${params.length}::uuid[])`);
+    } else {
+      // If report_id is explicitly passed but empty, it should match nothing
+      conditions.push('1=0');
+    }
   }
 
   const where = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
   try {
-    const { rows } = await pool.query(`SELECT * FROM ${table} ${where} ORDER BY created_at DESC`, params);
+    const query = `${baseQuery} ${where} ORDER BY t.created_at DESC`;
+    const { rows } = await pool.query(query, params);
     res.json(rows);
   } catch (err) {
     console.error(`[Reports/GET/${table}] CRITICAL ERROR:`, err.message);

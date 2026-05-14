@@ -151,7 +151,7 @@ export default function Sidebar({ user, onLogout, onUserUpdate, isCollapsed, onT
             )}
           </NavLink>
         )}
-        {(accountType === 'Provincial Approver' || isSuperAdmin) && (
+        {(accountType === 'Provincial Approver' || isSuperAdmin || isRegional) && (
           <NavLink
             to="/for-approval"
             className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
