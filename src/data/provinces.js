@@ -21,8 +21,24 @@ export function getCitiesForProvince(provinceName) {
 /** Get province that contains the given city/LGU. Returns '' if unknown. */
 export function getProvinceForCity(cityName) {
   if (!cityName) return ''
+  
+  // 1. Try exact match first
   for (const [province, cities] of Object.entries(PROVINCES_WITH_CITIES)) {
     if (cities.some((c) => c.toLowerCase() === String(cityName).toLowerCase())) return province
   }
+
+  // 2. Try stripping province suffix e.g. "Santo Tomas (La Union)" -> "Santo Tomas"
+  const stripped = String(cityName).replace(/\s*\(.*\)$/, '');
+  const suffixMatch = String(cityName).match(/\((.*)\)$/);
+  const suffix = suffixMatch ? suffixMatch[1].toLowerCase() : null;
+
+  for (const [province, cities] of Object.entries(PROVINCES_WITH_CITIES)) {
+    if (cities.some((c) => c.toLowerCase() === stripped.toLowerCase())) {
+      // If there was a suffix, it MUST match the province name to avoid cross-province overlaps (e.g. Santo Tomas in both LU and Pangasinan)
+      if (suffix && suffix !== province.toLowerCase()) continue;
+      return province
+    }
+  }
+  
   return ''
 }

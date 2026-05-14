@@ -244,7 +244,7 @@ export function EventProvider({ children, user }) {
 
   const fetchPendingApprovalsCount = useCallback(async () => {
     if (!user) return
-    const isApprover = user.account_type === 'Provincial Approver' || user.account_type === 'Super Admin' || user.role === 'Super Admin'
+    const isApprover = ['Provincial Approver', 'Super Admin', 'Regional Admin', 'Regional'].includes(user.account_type) || user.role === 'Super Admin'
     if (!isApprover) { setPendingApprovalsCount(0); return }
     try {
       const { data } = await api.get('/situational-reports', {
@@ -466,7 +466,8 @@ export function EventProvider({ children, user }) {
         event_id: eventId, 
         title, 
         target_lgus: options.targetLgus || [],
-        pinged_report_types: options.pingedReportTypes || []
+        pinged_report_types: options.pingedReportTypes || [],
+        province: options.province || null
       })
       
       setSituationalReports(prev => [data, ...prev])

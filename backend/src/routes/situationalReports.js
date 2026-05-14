@@ -8,24 +8,30 @@ const router = express.Router();
 router.get('/', authenticate, async (req, res) => {
   const { event_id, status, count_only } = req.query;
   try {
-    let query = 'SELECT * FROM situational_reports WHERE 1=1';
+    let query = `
+      SELECT sr.*, 
+             json_build_object('id', e.id, 'name', e.name) as events
+      FROM situational_reports sr
+      LEFT JOIN events e ON sr.event_id = e.id
+      WHERE 1=1
+    `;
     const params = [];
 
     if (event_id && event_id !== 'all') {
       params.push(event_id);
-      query += ` AND event_id = $${params.length}`;
+      query += ` AND sr.event_id = $${params.length}`;
     }
 
     if (status) {
       params.push(status);
-      query += ` AND status = $${params.length}`;
+      query += ` AND sr.status = $${params.length}`;
     }
 
     // Provincial-level scoping
-    const isRegional = ['Regional Admin', 'Regional', 'Super Admin'].includes(req.user.account_type) || req.user.role === 'Super Admin';
+    const isRegional = ['Regional Admin', 'Regional', 'Super Admin', 'Regional Approver'].includes(req.user.account_type) || req.user.role === 'Super Admin';
     if (!isRegional && req.user.province) {
       params.push(req.user.province);
-      query += ` AND province = $${params.length}`;
+      query += ` AND (sr.province = $${params.length} OR sr.province IS NULL)`;
     }
 
     if (count_only === 'true') {
@@ -34,7 +40,7 @@ router.get('/', authenticate, async (req, res) => {
       return res.json({ count: parseInt(rows[0].count) });
     }
 
-    query += ' ORDER BY report_number DESC';
+    query += ' ORDER BY sr.created_at DESC, sr.report_number DESC';
     const { rows } = await pool.query(query, params);
     res.json(rows);
   } catch (err) {
@@ -57,7 +63,7 @@ router.get('/:id', authenticate, async (req, res) => {
 
 // POST /api/situational-reports
 router.post('/', authenticate, async (req, res) => {
-  const { event_id, title, target_lgus, pinged_report_types } = req.body;
+  const { event_id, title, target_lgus, pinged_report_types, province } = req.body;
   const user = req.user;
   try {
     // Get next report number
@@ -71,7 +77,7 @@ router.post('/', authenticate, async (req, res) => {
     const { rows } = await pool.query(
       `INSERT INTO situational_reports (event_id, report_number, title, target_lgus, province, created_by)
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
-      [event_id, nextNumber, finalTitle, target_lgus || [], user.province || null, user.id]
+      [event_id, nextNumber, finalTitle, target_lgus || [], province || user.province || null, user.id]
     );
 
     const sitRep = rows[0];

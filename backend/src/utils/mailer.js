@@ -1,25 +1,33 @@
-const axios = require('axios');
+const nodemailer = require('nodemailer');
 
 /**
- * Sends a welcome email using the Brevo API directly via HTTP.
- * This avoids issues with the SDK constructor.
+ * Sends a welcome email using Outlook via Nodemailer.
  */
 const sendWelcomeEmail = async (userEmail, firstName, tempPassword) => {
-  const apiKey = process.env.BREVO_API_KEY;
-  const senderEmail = process.env.BREVO_SENDER_EMAIL || 'crtpatongan@gmail.com';
-  const senderName = process.env.BREVO_SENDER_NAME || 'DOST DRRMO';
+  const outlookEmail = process.env.OUTLOOK_EMAIL;
+  const outlookPassword = process.env.OUTLOOK_PASSWORD;
+  const senderName = process.env.OUTLOOK_SENDER_NAME || 'DOST DRRMO';
   const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
 
-  if (!apiKey || apiKey === 'your_api_key_here') {
-    console.warn('[Mailer] BREVO_API_KEY is not configured. Skipping email.');
-    return { success: false, error: 'API Key not configured' };
+  if (!outlookEmail || !outlookPassword || outlookEmail === 'your_email@outlook.com') {
+    console.warn('[Mailer] OUTLOOK_EMAIL or OUTLOOK_PASSWORD is not configured. Skipping email.');
+    return { success: false, error: 'Outlook credentials not configured' };
   }
 
-  const emailData = {
-    sender: { name: senderName, email: senderEmail },
-    to: [{ email: userEmail, name: firstName }],
-    subject: "Welcome to PROACT - Your Account Details",
-    htmlContent: `
+  const transporter = nodemailer.createTransport({
+    host: 'smtp-mail.outlook.com', // or smtp.office365.com
+    port: 587,
+    secure: false, // true for 465, false for other ports
+    auth: {
+      user: outlookEmail,
+      pass: outlookPassword,
+    },
+    tls: {
+      ciphers: 'SSLv3'
+    }
+  });
+
+  const htmlContent = `
       <!DOCTYPE html>
       <html>
       <head>
@@ -150,23 +158,21 @@ const sendWelcomeEmail = async (userEmail, firstName, tempPassword) => {
         </div>
       </body>
       </html>
-    `
-  };
+  `;
 
   try {
-    const response = await axios.post('https://api.brevo.com/v3/smtp/email', emailData, {
-      headers: {
-        'api-key': apiKey,
-        'Content-Type': 'application/json'
-      }
+    const info = await transporter.sendMail({
+      from: `"${senderName}" <${outlookEmail}>`,
+      to: userEmail,
+      subject: "Welcome to PROACT - Your Account Details",
+      html: htmlContent
     });
 
-    console.log('[Mailer] Email sent successfully to:', userEmail);
-    return { success: true, messageId: response.data.messageId };
+    console.log('[Mailer] Email sent successfully to:', userEmail, 'MessageId:', info.messageId);
+    return { success: true, messageId: info.messageId };
   } catch (error) {
-    const errorMsg = error.response?.data?.message || error.message;
-    console.error('[Mailer] Brevo API Error:', errorMsg);
-    return { success: false, error: errorMsg };
+    console.error('[Mailer] Nodemailer Error:', error.message);
+    return { success: false, error: error.message };
   }
 };
 

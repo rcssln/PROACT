@@ -2498,3 +2498,197 @@
 	line-height: 1.4;
 	color: var(--text-muted);
 }
+
+/* ─── Dashboard Custom Dropdowns ─────────────────────────────── */
+.dash-custom-dropdown {
+	position: relative;
+	display: inline-flex;
+}
+
+.dash-dropdown-trigger {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 6px 10px 6px 12px;
+	border-radius: 8px;
+	border: 1px solid var(--border-color);
+	background: var(--glass-bg);
+	backdrop-filter: blur(12px);
+	-webkit-backdrop-filter: blur(12px);
+	cursor: pointer;
+	font-family: inherit;
+	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+	white-space: nowrap;
+	max-width: 200px;
+}
+
+.dash-dropdown-trigger:hover {
+	border-color: rgba(99, 102, 241, 0.4);
+	background: rgba(99, 102, 241, 0.05);
+	box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.08);
+}
+
+.dash-dropdown-trigger.open {
+	border-color: rgba(99, 102, 241, 0.5);
+	background: rgba(99, 102, 241, 0.07);
+	box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+
+.dash-dropdown-label {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	min-width: 0;
+	flex: 1;
+	overflow: hidden;
+}
+
+.dash-dropdown-prefix {
+	font-size: 9px;
+	font-weight: 800;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--accent, #6366f1);
+	line-height: 1;
+	margin-bottom: 2px;
+}
+
+.dash-dropdown-value {
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--text-main);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	max-width: 130px;
+	line-height: 1;
+}
+
+.dash-dropdown-caret {
+	color: var(--text-muted);
+	flex-shrink: 0;
+	transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+	transform: rotate(90deg);
+}
+
+.dash-dropdown-caret.rotated {
+	transform: rotate(270deg);
+}
+
+.dash-dropdown-menu {
+	position: absolute;
+	top: calc(100% + 6px);
+	left: 0;
+	min-width: 180px;
+	background: var(--bg-card);
+	backdrop-filter: blur(20px);
+	-webkit-backdrop-filter: blur(20px);
+	border: 1px solid var(--border-color);
+	border-radius: 10px;
+	box-shadow:
+		0 4px 6px -1px rgba(0, 0, 0, 0.1),
+		0 20px 40px -8px rgba(0, 0, 0, 0.15),
+		0 0 0 1px rgba(255,255,255,0.03);
+	z-index: 9999;
+	overflow: hidden;
+	animation: dropdownReveal 0.15s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+	max-height: 260px;
+	overflow-y: auto;
+	scrollbar-width: thin;
+	scrollbar-color: rgba(148, 163, 184, 0.3) transparent;
+}
+
+.dash-dropdown-menu::-webkit-scrollbar {
+	width: 4px;
+}
+
+.dash-dropdown-menu::-webkit-scrollbar-thumb {
+	background: rgba(148, 163, 184, 0.3);
+	border-radius: 4px;
+}
+
+@keyframes dropdownReveal {
+	from {
+		opacity: 0;
+		transform: translateY(-6px) scale(0.97);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0) scale(1);
+	}
+}
+
+.dash-dropdown-item {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	width: 100%;
+	padding: 9px 14px;
+	background: transparent;
+	border: none;
+	cursor: pointer;
+	font-family: inherit;
+	font-size: 12px;
+	font-weight: 500;
+	color: var(--text-main);
+	text-align: left;
+	transition: background 0.12s ease;
+	border-bottom: 1px solid var(--border-color);
+}
+
+.dash-dropdown-item:last-child {
+	border-bottom: none;
+}
+
+.dash-dropdown-item:hover {
+	background: rgba(99, 102, 241, 0.06);
+	color: var(--accent, #6366f1);
+}
+
+.dash-dropdown-item.active {
+	background: rgba(99, 102, 241, 0.1);
+	color: var(--accent, #6366f1);
+}
+
+.dash-dropdown-item.active .dash-dropdown-item-dot {
+	background: var(--accent, #6366f1);
+	box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+}
+
+.dash-dropdown-item-dot {
+	width: 6px;
+	height: 6px;
+	border-radius: 50%;
+	background: var(--border-color);
+	flex-shrink: 0;
+	transition: all 0.15s ease;
+}
+
+/* ─── Back Button ─────────────────────────────────────────────── */
+.dash-back-btn {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	padding: 6px 12px;
+	border-radius: 8px;
+	border: 1px solid var(--border-color);
+	background: var(--glass-bg);
+	backdrop-filter: blur(12px);
+	-webkit-backdrop-filter: blur(12px);
+	cursor: pointer;
+	font-family: inherit;
+	font-size: 12px;
+	font-weight: 700;
+	color: var(--text-muted);
+	white-space: nowrap;
+	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+	letter-spacing: 0.01em;
+}
+
+.dash-back-btn:hover {
+	border-color: rgba(99, 102, 241, 0.4);
+	background: rgba(99, 102, 241, 0.05);
+	color: var(--accent, #6366f1);
+	box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.08);
+	transform: translateX(-1px);
+}

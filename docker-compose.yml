@@ -16,7 +16,7 @@ services:
     ports:
       - "4000:4000"
     volumes:
-      - rdrrmc-volume:/app/uploads
+      - ./backend/uploads:/app/uploads
 
 
   frontend:
@@ -36,7 +36,6 @@ services:
 
 volumes:
   db_data:
-  rdrrmc-volume:
 
 networks:
   proact_network:
