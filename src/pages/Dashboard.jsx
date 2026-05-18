@@ -3200,13 +3200,40 @@ CHRONOLOGY OF EVENTS`;
               </select>
             </div>
             <div className="form-group">
-              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#475569', marginBottom: '8px' }}>Theme Color</label>
-              <input
-                type="color"
-                value={editForm.color}
-                onChange={(e) => setEditForm((f) => ({ ...f, color: e.target.value }))}
-                style={{ width: '100%', height: '42px', padding: '2px', borderRadius: '8px', border: '1px solid #e2e8f0' }}
-              />
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#475569', marginBottom: '8px' }}>Alert Color Status</label>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                {[
+                  { value: 'red', label: 'Red (Critical)', color: '#ef4444', bg: 'rgba(239, 68, 68, 0.1)', text: '#b91c1c' },
+                  { value: 'blue', label: 'Blue (Standard)', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.1)', text: '#1d4ed8' },
+                  { value: 'white', label: 'White (Normal)', color: '#94a3b8', bg: '#f8fafc', text: '#475569' }
+                ].map(item => (
+                  <button
+                    key={item.value}
+                    type="button"
+                    onClick={() => setEditForm(f => ({ ...f, alertStatus: item.value, color: item.color }))}
+                    style={{
+                      flex: 1,
+                      padding: '10px',
+                      borderRadius: '8px',
+                      border: '1.5px solid',
+                      borderColor: editForm.alertStatus === item.value ? item.color : '#e2e8f0',
+                      background: editForm.alertStatus === item.value ? item.bg : 'white',
+                      color: editForm.alertStatus === item.value ? item.text : '#475569',
+                      fontSize: '0.8125rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: item.color, border: '1px solid rgba(0,0,0,0.1)' }} />
+                    {item.label.split(' ')[0]}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 

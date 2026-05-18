@@ -727,6 +727,45 @@ export default function ManageEvents() {
                 </div>
 
                 <div style={{ gridColumn: 'span 2' }}>
+                  <label style={LABEL_STYLE}>Alert Color Status</label>
+                  <div style={{ display: 'flex', gap: '12px', marginTop: '4px' }}>
+                    {[
+                      { value: 'red', label: 'Red (Critical)', color: '#ef4444', bg: 'rgba(239, 68, 68, 0.1)', border: '#fca5a5', text: '#b91c1c' },
+                      { value: 'blue', label: 'Blue (Standard)', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.1)', border: '#bfdbfe', text: '#1d4ed8' },
+                      { value: 'white', label: 'White (Normal)', color: '#94a3b8', bg: '#f8fafc', border: '#e2e8f0', text: '#475569' }
+                    ].map(item => (
+                      <button
+                        key={item.value}
+                        type="button"
+                        onClick={() => setForm({ ...form, alertStatus: item.value, color: item.color })}
+                        disabled={editingId && user.account_type !== 'Regional Admin' && user.account_type !== 'Super Admin'}
+                        style={{
+                          flex: 1,
+                          padding: '10px 14px',
+                          borderRadius: '10px',
+                          border: '1.5px solid',
+                          borderColor: form.alertStatus === item.value ? item.color : '#e2e8f0',
+                          background: form.alertStatus === item.value ? item.bg : 'white',
+                          color: form.alertStatus === item.value ? item.text : '#475569',
+                          fontSize: '0.8125rem',
+                          fontWeight: 800,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '8px',
+                          transition: 'all 0.2s',
+                          opacity: (editingId && user.account_type !== 'Regional Admin' && user.account_type !== 'Super Admin') ? 0.7 : 1
+                        }}
+                      >
+                        <span style={{ width: '12px', height: '12px', borderRadius: '50%', background: item.color, border: '1px solid rgba(0,0,0,0.1)' }} />
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{ gridColumn: 'span 2' }}>
                   <label style={LABEL_STYLE}>Specific Alert Level / Category</label>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
                     {ALERT_LEVELS[form.eventType]?.map(lvl => (
