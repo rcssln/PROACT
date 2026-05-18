@@ -1836,7 +1836,9 @@ CHRONOLOGY OF EVENTS`;
               <div className="meta-icon"><Warning size={18} /></div>
               <div className="meta-content">
                 <span className="meta-label">Type</span>
-                <span className="meta-value" style={{ textTransform: 'capitalize' }}>{currentEvent?.eventType || 'Operational'}</span>
+                <span className="meta-value" style={{ textTransform: 'capitalize' }}>
+                  {currentEvent?.eventType === 'typhoon' ? 'Tropical Cyclone' : (currentEvent?.eventType || 'Operational')}
+                </span>
               </div>
             </div>
             
