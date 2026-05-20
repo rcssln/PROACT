@@ -21,6 +21,11 @@
 	opacity: 0.8;
 }
 
+.login-footer .highlight-name {
+	color: #2563eb;
+	font-weight: 700;
+}
+
 .login-card {
 	width: 100%;
 	max-width: 440px;
