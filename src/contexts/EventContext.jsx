@@ -247,7 +247,20 @@ export function EventProvider({ children, user }) {
 
   const fetchPendingApprovalsCount = useCallback(async () => {
     if (!user) return
+    const isLguApprover = user.account_type === 'LGU Approver'
     const isApprover = ['Provincial Approver', 'Super Admin', 'Regional Admin', 'Regional'].includes(user.account_type) || user.role === 'Super Admin'
+    
+    if (isLguApprover) {
+      // LGU Approvers get count from the new lgu-submissions endpoint
+      try {
+        const { data } = await api.get('/lgu-submissions/pending-count')
+        setPendingApprovalsCount(data?.count || 0)
+      } catch (err) {
+        console.error('Error fetching LGU pending approvals count:', err)
+      }
+      return
+    }
+    
     if (!isApprover) { setPendingApprovalsCount(0); return }
     try {
       const { data } = await api.get('/situational-reports', {
@@ -478,6 +491,9 @@ export function EventProvider({ children, user }) {
       }
       if (options.copyFromId) {
         payload.copy_from_id = options.copyFromId
+      }
+      if (options.skip_auto_clone !== undefined) {
+        payload.skip_auto_clone = options.skip_auto_clone
       }
       const { data } = await api.post('/situational-reports', payload)
       

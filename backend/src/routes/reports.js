@@ -61,8 +61,10 @@ router.get('/all-types', authenticate, async (req, res) => {
       const conditions = [`t.situational_report_id = $1`];
       const params = [situational_report_id];
 
+      const isLgu = ['LGU', 'LGU Admin', 'LGU Approver'].includes(user.account_type);
+
       if (!isRegional) {
-        if ((user.account_type === 'LGU' || user.account_type === 'LGU Admin') && user.city) {
+        if (isLgu && user.city) {
           params.push(user.city);
           conditions.push(`t.city = $${params.length}`);
         } else if (user.province) {
@@ -70,6 +72,15 @@ router.get('/all-types', authenticate, async (req, res) => {
           params.push(user.province);
           conditions.push(`(sr.province = $${params.length} OR sr.province IS NULL)`);
         }
+      }
+
+      if (!isLgu) {
+        conditions.push(`(t.city IS NULL OR t.city = '' OR EXISTS (
+          SELECT 1 FROM lgu_submissions ls 
+          WHERE ls.situational_report_id = t.situational_report_id 
+            AND ls.city = t.city 
+            AND ls.status = 'Approved'
+        ))`);
       }
 
       const { rows } = await pool.query(`${query} WHERE ${conditions.join(' AND ')}`, params);
@@ -112,13 +123,26 @@ router.get('/all-types', authenticate, async (req, res) => {
 
     if (reports.length > 0) {
       const reportIds = reports.map(r => r.id);
-      let rowsQuery = 'SELECT t.* FROM report_rows t';
+      let rowsQuery = `
+        SELECT t.*, r.situational_report_id 
+        FROM report_rows t 
+        INNER JOIN reports r ON t.report_id = r.id
+      `;
       const rowsConditions = [`t.report_id = ANY($1::uuid[])`];
       const rowsParams = [reportIds];
 
-      if (!isRegional && (user.account_type === 'LGU' || user.account_type === 'LGU Admin') && user.city) {
+      const isLgu = ['LGU', 'LGU Admin', 'LGU Approver'].includes(user.account_type);
+
+      if (isLgu && user.city) {
         rowsParams.push(user.city);
         rowsConditions.push(`t.city = $${rowsParams.length}`);
+      } else if (!isLgu) {
+        rowsConditions.push(`(t.city IS NULL OR t.city = '' OR EXISTS (
+          SELECT 1 FROM lgu_submissions ls 
+          WHERE ls.situational_report_id = r.situational_report_id 
+            AND ls.city = t.city 
+            AND ls.status = 'Approved'
+        ))`);
       }
 
       const { rows: reportRows } = await pool.query(`${rowsQuery} WHERE ${rowsConditions.join(' AND ')}`, rowsParams);
@@ -180,14 +204,24 @@ router.get('/consolidated', authenticate, async (req, res) => {
       const conditions = [`t.event_id = $1`];
       const params = [event_id];
 
+      const isLgu = ['LGU', 'LGU Admin', 'LGU Approver'].includes(user.account_type);
       if (!isRegional) {
-        if ((user.account_type === 'LGU' || user.account_type === 'LGU Admin') && user.city) {
+        if (isLgu && user.city) {
           params.push(user.city);
           conditions.push(`t.city = $${params.length}`);
         } else if (user.province) {
           params.push(user.province);
           conditions.push(`(sr.province = $${params.length} OR sr.province IS NULL)`);
         }
+      }
+
+      if (!isLgu && table !== 'reports') {
+        conditions.push(`(t.city IS NULL OR t.city = '' OR EXISTS (
+          SELECT 1 FROM lgu_submissions ls 
+          WHERE ls.situational_report_id = t.situational_report_id 
+            AND ls.city = t.city 
+            AND ls.status = 'Approved'
+        ))`);
       }
 
       if (sitRepIds.length > 0) {
@@ -200,10 +234,22 @@ router.get('/consolidated', authenticate, async (req, res) => {
 
       if (table === 'reports' && rows.length > 0) {
         const reportIds = rows.map(r => r.id);
-        const { rows: reportRows } = await pool.query(
-          'SELECT * FROM report_rows WHERE report_id = ANY($1::uuid[])',
-          [reportIds]
-        );
+        let query = `
+          SELECT rr.*, r.situational_report_id 
+          FROM report_rows rr 
+          INNER JOIN reports r ON rr.report_id = r.id 
+          WHERE rr.report_id = ANY($1::uuid[])
+        `;
+        const params = [reportIds];
+        if (!isLgu) {
+          query += ` AND (rr.city IS NULL OR rr.city = '' OR EXISTS (
+            SELECT 1 FROM lgu_submissions ls 
+            WHERE ls.situational_report_id = r.situational_report_id 
+              AND ls.city = rr.city 
+              AND ls.status = 'Approved'
+          ))`;
+        }
+        const { rows: reportRows } = await pool.query(query, params);
         rawData['affected_population'] = reportRows;
       } else {
         rawData[table] = rows;
@@ -440,13 +486,32 @@ router.get('/:table', authenticate, async (req, res) => {
   const params = [];
 
   // Hierarchical Scoping Logic
+  const isLgu = ['LGU', 'LGU Admin', 'LGU Approver'].includes(user.account_type);
   if (!isRegional) {
-    if ((user.account_type === 'LGU' || user.account_type === 'LGU Admin') && user.city) {
+    if (isLgu && user.city) {
       params.push(user.city);
       conditions.push(`t.city = $${params.length}`);
     } else if (user.province) {
       params.push(user.province);
       conditions.push(`(sr.province = $${params.length} OR sr.province IS NULL)`);
+    }
+  }
+
+  if (!isLgu) {
+    if (table === 'report_rows') {
+      conditions.push(`(t.city IS NULL OR t.city = '' OR EXISTS (
+        SELECT 1 FROM lgu_submissions ls 
+        WHERE ls.situational_report_id = r.situational_report_id 
+          AND ls.city = t.city 
+          AND ls.status = 'Approved'
+      ))`);
+    } else if (table !== 'reports') {
+      conditions.push(`(t.city IS NULL OR t.city = '' OR EXISTS (
+        SELECT 1 FROM lgu_submissions ls 
+        WHERE ls.situational_report_id = t.situational_report_id 
+          AND ls.city = t.city 
+          AND ls.status = 'Approved'
+      ))`);
     }
   }
 

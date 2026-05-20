@@ -15,6 +15,7 @@ export default function Sidebar({ user, onLogout, onUserUpdate, isCollapsed, onT
   const isRegionalAdmin = accountType === 'Regional Admin'
   const isProvincialAdmin = accountType === 'Provincial Admin'
   const isLguAdmin = accountType === 'LGU Admin'
+  const isLguApprover = accountType === 'LGU Approver'
   const isSuperAdmin = user?.role === 'Super Admin' || accountType === 'Super Admin'
   // Any admin type (can see Users sidebar)
   const isAdmin = isRegionalAdmin || isProvincialAdmin || isLguAdmin || isSuperAdmin
@@ -136,7 +137,7 @@ export default function Sidebar({ user, onLogout, onUserUpdate, isCollapsed, onT
             </NavLink>
           </div>
         )}
-        {!isRegional && accountType !== 'Provincial Approver' && (
+        {!isRegional && accountType !== 'Provincial Approver' && !isLguApprover && (
           <NavLink
             to="/add-report"
             className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
@@ -151,7 +152,7 @@ export default function Sidebar({ user, onLogout, onUserUpdate, isCollapsed, onT
             )}
           </NavLink>
         )}
-        {(accountType === 'Provincial Approver' || isSuperAdmin || isRegional) && (
+        {(accountType === 'Provincial Approver' || accountType === 'LGU Approver' || isSuperAdmin || isRegional) && (
           <NavLink
             to="/for-approval"
             className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}

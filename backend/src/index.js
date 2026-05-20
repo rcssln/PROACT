@@ -16,6 +16,7 @@ const reportsRoutes = require('./routes/reports');
 const signalsRoutes = require('./routes/signals');
 const deploymentsRoutes = require('./routes/deployments');
 const activityLogsRoutes = require('./routes/activityLogs');
+const lguSubmissionsRoutes = require('./routes/lguSubmissions');
 const { seedAdmin } = require('./seed');
 
 const app = express();
@@ -78,6 +79,7 @@ app.use('/situational-reports', sitRepsRoutes);
 app.use('/users', usersRoutes);
 app.use('/notifications', notificationsRoutes);
 app.use('/reports', reportsRoutes);
+app.use('/lgu-submissions', lguSubmissionsRoutes);
 app.use('/signals', signalsRoutes);
 app.use('/deployments', deploymentsRoutes);
 app.use('/activity-logs', activityLogsRoutes);

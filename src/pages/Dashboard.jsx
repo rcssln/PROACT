@@ -1845,9 +1845,16 @@ CHRONOLOGY OF EVENTS`;
             <div className="meta-item">
               <div className="meta-icon"><Info size={18} /></div>
               <div className="meta-content">
-                <span className="meta-label">{userSignal ? 'My Signal' : 'Alert Level'}</span>
+                <span className="meta-label">
+                  {userSignal ? 'My Signal' : (currentEvent?.eventType === 'earthquake' ? 'Magnitude' : 'Alert Level')}
+                </span>
                 <span className="meta-value" style={{ whiteSpace: 'nowrap' }}>
-                  {userSignal ? `Public Warning Signal ${userSignal}` : (currentEvent?.alertLevel || 'No Alert')}
+                  {userSignal 
+                    ? `Public Warning Signal ${userSignal}` 
+                    : (currentEvent?.eventType === 'earthquake' && currentEvent?.alertLevel?.startsWith('Magnitude ')
+                        ? currentEvent.alertLevel.replace('Magnitude ', '') 
+                        : (currentEvent?.alertLevel || 'No Alert'))
+                  }
                 </span>
               </div>
             </div>
