@@ -1570,6 +1570,8 @@ export default function ConsolidatedReport() {
           const city = toCity(row, 'barangay')
           if (!city) return
 
+          // Guard: initialize array if category key is unmapped/unknown
+          if (!Array.isArray(details[category])) details[category] = []
           details[category].push({ ...row, city })
           totalByCity[city] = (totalByCity[city] || 0) + 1
           if (!byCityCategory[city]) byCityCategory[city] = {}

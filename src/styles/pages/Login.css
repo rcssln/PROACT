@@ -5,6 +5,25 @@
 	justify-content: center;
 	background: transparent;
 	padding: 1.5rem;
+	position: relative;
+}
+
+.login-footer {
+	position: absolute;
+	bottom: 1.5rem;
+	left: 50%;
+	transform: translateX(-50%);
+	font-size: 0.8125rem;
+	color: #64748b;
+	font-weight: 500;
+	text-align: center;
+	letter-spacing: 0.02em;
+	opacity: 0.8;
+}
+
+.login-footer .highlight-name {
+	color: #2563eb;
+	font-weight: 700;
 }
 
 .login-card {

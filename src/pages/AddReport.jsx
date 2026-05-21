@@ -503,6 +503,7 @@ export default function AddReport() {
   const [editingSitRep, setEditingSitRep] = useState(null)
   const [newSitRepTitle, setNewSitRepTitle] = useState('')
   const [pingedCategories, setPingedCategories] = useState([])
+  const [shouldInheritData, setShouldInheritData] = useState(true)
 
   // Signatories State
   const [showSignatoriesModal, setShowSignatoriesModal] = useState(false)
@@ -536,6 +537,11 @@ export default function AddReport() {
   const [showRejectInput, setShowRejectInput] = useState(false)
   const [processingReview, setProcessingReview] = useState(false)
   const APPROVAL_BUCKET = 'consolidated-report-approvals'
+
+  // LGU Submission state
+  const [lguSubmissionStatus, setLguSubmissionStatus] = useState(null) // null | 'Draft' | 'Pending LGU Approval' | 'Approved' | 'Rejected'
+  const [lguSubmissionRemarks, setLguSubmissionRemarks] = useState(null)
+  const [submittingLgu, setSubmittingLgu] = useState(false)
   const isProvincial = user?.account_type === 'Provincial' || user?.account_type === 'Provincial Admin'
   const isLGU = user?.account_type === 'LGU' || user?.account_type === 'LGU Admin'
   const isProvincialApprover = user?.account_type === 'Provincial Approver'
@@ -648,6 +654,52 @@ export default function AddReport() {
       setLoading(false)
     }
   }, [currentSituationalReport, user])
+
+  // Fetch LGU submission status for the current SitRep whenever entries view is active
+  useEffect(() => {
+    if (!isLGU || !currentSituationalReport?.id || !user?.city) {
+      setLguSubmissionStatus(null)
+      setLguSubmissionRemarks(null)
+      return
+    }
+    let cancelled = false
+    api.get('/lgu-submissions/status', {
+      params: { situational_report_id: currentSituationalReport.id, city: user.city }
+    }).then(({ data }) => {
+      if (!cancelled) {
+        setLguSubmissionStatus(data?.status || 'Draft')
+        setLguSubmissionRemarks(data?.rejection_remarks || null)
+      }
+    }).catch(err => {
+      console.error('[LGU] Failed to fetch submission status:', err)
+    })
+    return () => { cancelled = true }
+  }, [isLGU, currentSituationalReport?.id, user?.city])
+
+  const handleLguSubmit = async () => {
+    if (!currentSituationalReport?.id || !user?.city) return
+    showConfirm({
+      title: 'Submit for LGU Approval',
+      message: `Submit your data for "${currentSituationalReport.title}" to the LGU Approver of ${user.city}?`,
+      onConfirm: async () => {
+        setSubmittingLgu(true)
+        try {
+          await api.post('/lgu-submissions/submit', {
+            situational_report_id: currentSituationalReport.id,
+            city: user.city
+          })
+          setLguSubmissionStatus('Pending LGU Approval')
+          setLguSubmissionRemarks(null)
+          showSuccess('Submitted!', `Your data for "${currentSituationalReport.title}" has been submitted for LGU approval.`)
+        } catch (err) {
+          console.error('[LGU] Submit error:', err)
+          showSuccess('Error', err.response?.data?.error || err.message || 'Failed to submit for approval.')
+        } finally {
+          setSubmittingLgu(false)
+        }
+      }
+    })
+  }
 
   const resetSitRepStatus = async () => {
     if (!currentSituationalReport) return
@@ -1409,16 +1461,44 @@ export default function AddReport() {
       onConfirm: async () => {
         try {
           setSubmitting(true)
+
+          // Determine if we should copy from the most recent SitRep
+          console.log('[AddReport] situationalReports list:', situationalReports);
+          
+          // Sort by report_number DESC, then by created_at DESC as fallback
+          const sortedSitReps = [...situationalReports].sort((a, b) => {
+            const numA = parseInt(a.report_number) || 0;
+            const numB = parseInt(b.report_number) || 0;
+            if (numB !== numA) return numB - numA;
+            return new Date(b.created_at) - new Date(a.created_at);
+          });
+          
+          const previousSitRep = sortedSitReps[0]
+          console.log('[AddReport] previousSitRep found for cloning:', previousSitRep);
+          
+          const copyFromId = shouldInheritData && previousSitRep ? previousSitRep.id : undefined
+          console.log('[AddReport] shouldInheritData:', shouldInheritData);
+          console.log('[AddReport] final copyFromId to send:', copyFromId);
+
           const newSR = await createSituationalReport(selectedEvent.id, newSitRepTitle.trim(), {
             pingedReportTypes: pingedCategories,
             targetLgus: targetLgus,
-            province: selectedProvinces.length === 1 ? selectedProvinces[0] : (selectedProvinces.length > 1 ? 'Region 1' : userProvince)
+            province: selectedProvinces.length === 1 ? selectedProvinces[0] : (selectedProvinces.length > 1 ? 'Region 1' : userProvince),
+            copyFromId,
+            skip_auto_clone: !shouldInheritData
           })
           if (newSR) {
+            console.log('[AddReport] SitRep created successfully:', newSR);
+            const clonedMsg = newSR.autoCloned || newSR.cloned_from_id 
+              ? ' with data automatically cloned from the previous report.' 
+              : '.';
+            showSuccess('Report Created', `Successfully created ${newSR.title}${clonedMsg}`)
+            
             setCurrentSituationalReport(newSR)
             setShowNewSitRepModal(false)
             setNewSitRepTitle('')
             setPingedCategories([])
+            setShouldInheritData(true)
             setView('entries')
           } else {
             showSuccess('Error', 'Failed to create Situation Report.')
@@ -2516,6 +2596,34 @@ export default function AddReport() {
                     >
                       Download Report
                     </Button>
+
+                    {/* LGU Submit for Approval button */}
+                    {isLGU && currentSituationalReport && (
+                      <Button
+                        variant="solid"
+                        color={lguSubmissionStatus === 'Pending LGU Approval' ? 'warning' : lguSubmissionStatus === 'Approved' ? 'success' : 'primary'}
+                        onClick={lguSubmissionStatus === 'Pending LGU Approval' || lguSubmissionStatus === 'Approved' ? undefined : handleLguSubmit}
+                        disabled={submittingLgu || lguSubmissionStatus === 'Pending LGU Approval' || lguSubmissionStatus === 'Approved'}
+                        isLoading={submittingLgu}
+                        className="toolbar-action-btn"
+                        leftIcon={
+                          lguSubmissionStatus === 'Pending LGU Approval' ? <ArrowsClockwise size={16} /> :
+                          lguSubmissionStatus === 'Approved' ? <CheckCircle size={16} /> :
+                          <PaperPlaneRight size={16} />
+                        }
+                        title={
+                          lguSubmissionStatus === 'Rejected' ? `Rejected: ${lguSubmissionRemarks || 'No remarks'}` :
+                          lguSubmissionStatus === 'Approved' ? 'Your data has been approved by the LGU Approver' :
+                          lguSubmissionStatus === 'Pending LGU Approval' ? 'Awaiting LGU Approver review' :
+                          'Submit your data for LGU Approver review'
+                        }
+                      >
+                        {lguSubmissionStatus === 'Pending LGU Approval' ? 'Pending Approval' :
+                         lguSubmissionStatus === 'Approved' ? 'Approved ✓' :
+                         lguSubmissionStatus === 'Rejected' ? 'Resubmit' :
+                         'Submit for Approval'}
+                      </Button>
+                    )}
                   </>
                 )}
 
@@ -3321,6 +3429,53 @@ export default function AddReport() {
               autoFocus
             />
           </div>
+
+          {/* Inherit data checkbox — only shown when a previous SitRep exists */}
+          {situationalReports.length > 0 && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              gap: '0.75rem',
+              padding: '0.875rem 1rem',
+              borderRadius: '10px',
+              border: `1px solid ${shouldInheritData ? '#3b82f6' : '#e2e8f0'}`,
+              background: shouldInheritData ? 'rgba(59,130,246,0.05)' : '#f8fafc',
+              cursor: 'pointer',
+              transition: 'all 0.2s'
+            }}
+              onClick={() => setShouldInheritData(prev => !prev)}
+            >
+              <div style={{
+                width: '18px',
+                height: '18px',
+                borderRadius: '4px',
+                border: `2px solid ${shouldInheritData ? '#3b82f6' : '#cbd5e1'}`,
+                background: shouldInheritData ? '#3b82f6' : '#fff',
+                flexShrink: 0,
+                marginTop: '1px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.2s'
+              }}>
+                {shouldInheritData && (
+                  <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                    <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                )}
+              </div>
+              <div>
+                <div style={{ fontSize: '0.875rem', fontWeight: '600', color: shouldInheritData ? '#1e40af' : '#334155' }}>
+                  Auto-clone data from previous report
+                </div>
+                <div style={{ fontSize: '0.75rem', color: '#64748b', marginTop: '2px' }}>
+                  Automatically copies data from <strong style={{ color: '#475569' }}>
+                    {[...situationalReports].sort((a,b) => (b.report_number||0)-(a.report_number||0))[0]?.title || 'the latest report'}
+                  </strong> into this new report. Based on your role, only relevant data (e.g., your LGU or Province) will be cloned. You can edit what changed.
+                </div>
+              </div>
+            </div>
+          )}
 
           {(isSuperAdmin || isRegional) && (
             <div>

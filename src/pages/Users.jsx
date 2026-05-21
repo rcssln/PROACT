@@ -63,11 +63,11 @@ export default function Users() {
   // --- Allowed account types each admin tier can create (hierarchy) ---
   const allowedAccountTypes = (() => {
     if (isSuperAdmin || isRegionalAdmin)
-      return ['Regional Admin', 'Regional', 'Provincial Admin', 'Provincial Approver', 'Provincial', 'LGU Admin', 'LGU']
+      return ['Regional Admin', 'Regional', 'Provincial Admin', 'Provincial Approver', 'Provincial', 'LGU Admin', 'LGU Approver', 'LGU']
     if (isProvincialAdmin)
-      return ['Provincial Admin', 'Provincial Approver', 'Provincial', 'LGU Admin', 'LGU']
+      return ['Provincial Admin', 'Provincial Approver', 'Provincial', 'LGU Admin', 'LGU Approver', 'LGU']
     if (isLguAdmin)
-      return ['LGU Admin', 'LGU']
+      return ['LGU Admin', 'LGU Approver', 'LGU']
     return []
   })()
 

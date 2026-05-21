@@ -16,6 +16,7 @@ const reportsRoutes = require('./routes/reports');
 const signalsRoutes = require('./routes/signals');
 const deploymentsRoutes = require('./routes/deployments');
 const activityLogsRoutes = require('./routes/activityLogs');
+const lguSubmissionsRoutes = require('./routes/lguSubmissions');
 const { seedAdmin } = require('./seed');
 
 const app = express();
@@ -35,7 +36,13 @@ if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, uploadDir),
-  filename: (req, file, cb) => cb(null, Date.now() + '-' + file.originalname)
+  filename: (req, file, cb) => {
+    // Sanitize filename: replace spaces and unsafe chars with underscores
+    const sanitized = file.originalname
+      .replace(/\s+/g, '_')
+      .replace(/[^a-zA-Z0-9._\-]/g, '_');
+    cb(null, Date.now() + '-' + sanitized);
+  }
 });
 const upload = multer({ storage });
 
@@ -72,6 +79,7 @@ app.use('/situational-reports', sitRepsRoutes);
 app.use('/users', usersRoutes);
 app.use('/notifications', notificationsRoutes);
 app.use('/reports', reportsRoutes);
+app.use('/lgu-submissions', lguSubmissionsRoutes);
 app.use('/signals', signalsRoutes);
 app.use('/deployments', deploymentsRoutes);
 app.use('/activity-logs', activityLogsRoutes);

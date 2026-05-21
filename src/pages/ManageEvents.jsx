@@ -26,7 +26,7 @@ const WeatherIcon = () => <CloudWarning size={32} weight="duotone" />
 const OtherIcon = () => <WarningCircle size={32} weight="duotone" />
 
 const EVENT_CATEGORIES = [
-  { value: 'typhoon',    label: 'Typhoon',        Icon: TyphoonIcon },
+  { value: 'typhoon',    label: 'Tropical Cyclone',        Icon: TyphoonIcon },
   { value: 'flood',     label: 'Flood',           Icon: FloodIcon },
   { value: 'earthquake',label: 'Earthquake',      Icon: EarthquakeIcon },
   { value: 'tsunami',   label: 'Tsunami',         Icon: TsunamiIcon },
@@ -214,7 +214,10 @@ export default function ManageEvents() {
       showSuccess('Validation Error', 'Please enter an Event Name.')
       return null
     }
-    if (ALERT_LEVELS[form.eventType]?.length > 0 && !form.typhoonCategory) {
+    if (form.eventType === 'earthquake' && !form.magnitude) {
+      showSuccess('Validation Error', 'Please enter the Magnitude.')
+      return null
+    } else if (form.eventType !== 'earthquake' && ALERT_LEVELS[form.eventType]?.length > 0 && !form.typhoonCategory) {
       showSuccess('Validation Error', 'Please select a Specific Alert Level / Category.')
       return null
     }
@@ -235,7 +238,7 @@ export default function ManageEvents() {
         let finalSummary = form.summary
         if (!finalSummary) {
           if (form.eventType === 'typhoon') {
-            finalSummary = `**TYPHOON ${form.name.toUpperCase()}**\n\n* **Category**: ${form.typhoonCategory || 'Monitoring'}\n* **Status**: ${form.alertStatus.toUpperCase()}`
+            finalSummary = `**TROPICAL CYCLONE ${form.name.toUpperCase()}**\n\n* **Category**: ${form.typhoonCategory || 'Monitoring'}\n* **Status**: ${form.alertStatus.toUpperCase()}`
           } else if (form.eventType === 'earthquake') {
             finalSummary = `**EARTHQUAKE: ${form.name}**\n\n* **Magnitude**: ${form.magnitude || '—'}\n* **Intensity**: Intensity ${form.intensity || '—'}\n* **Status**: ${form.alertStatus.toUpperCase()}`
           } else if (form.eventType === 'tsunami') {
@@ -257,6 +260,9 @@ export default function ManageEvents() {
         // If typhoon, sync alertLevel with category to reflect on dashboard meta bar
         if (form.eventType === 'typhoon') {
           payload.alertLevel = form.typhoonCategory || 'Monitoring'
+        }
+        if (form.eventType === 'earthquake') {
+          payload.alertLevel = form.magnitude ? `Magnitude ${form.magnitude}` : 'Monitoring'
         }
 
         let resultId = null
@@ -627,9 +633,11 @@ export default function ManageEvents() {
                     </div>
                   </div>
                   <div>
-                    <label style={LABEL_STYLE}>Alert Level</label>
+                    <label style={LABEL_STYLE}>{form.eventType === 'earthquake' ? 'Magnitude' : 'Alert Level'}</label>
                     <span className={alertPillClass(form.alertStatus)} style={{ fontSize: '0.75rem', padding: '4px 12px', borderRadius: '20px' }}>
-                      {(form.typhoonCategory || form.alertLevel || 'Monitoring').toUpperCase()}
+                      {form.eventType === 'earthquake'
+                        ? (form.magnitude || 'Monitoring').toUpperCase()
+                        : (form.typhoonCategory || form.alertLevel || 'Monitoring').toUpperCase()}
                     </span>
                   </div>
                   <div>
@@ -715,7 +723,7 @@ export default function ManageEvents() {
                   <label style={LABEL_STYLE}>Event Name</label>
                   <input
                     type="text"
-                    placeholder="e.g. Typhoon EGAY (DOKSURI)"
+                    placeholder="e.g. Tropical Cyclone EGAY (DOKSURI)"
                     value={form.name}
                     onChange={e => {
                       const val = e.target.value;
@@ -727,27 +735,80 @@ export default function ManageEvents() {
                 </div>
 
                 <div style={{ gridColumn: 'span 2' }}>
-                  <label style={LABEL_STYLE}>Specific Alert Level / Category</label>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
-                    {ALERT_LEVELS[form.eventType]?.map(lvl => (
+                  <label style={LABEL_STYLE}>Alert Color Status</label>
+                  <div style={{ display: 'flex', gap: '12px', marginTop: '4px' }}>
+                    {[
+                      { value: 'red', label: 'Red (Critical)', color: '#ef4444', bg: 'rgba(239, 68, 68, 0.1)', border: '#fca5a5', text: '#b91c1c' },
+                      { value: 'blue', label: 'Blue (Standard)', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.1)', border: '#bfdbfe', text: '#1d4ed8' },
+                      { value: 'white', label: 'White (Normal)', color: '#94a3b8', bg: '#f8fafc', border: '#e2e8f0', text: '#475569' }
+                    ].map(item => (
                       <button
-                        key={lvl.value}
+                        key={item.value}
                         type="button"
-                        onClick={() => setForm({ ...form, typhoonCategory: lvl.value })}
+                        onClick={() => setForm({ ...form, alertStatus: item.value, color: item.color })}
                         disabled={editingId && user.account_type !== 'Regional Admin' && user.account_type !== 'Super Admin'}
-                        title={lvl.desc}
                         style={{
-                          padding: '10px 14px', borderRadius: '10px', border: '1.5px solid',
-                          borderColor: form.typhoonCategory === lvl.value ? '#6366f1' : '#f1f5f9',
-                          background: form.typhoonCategory === lvl.value ? 'rgba(99,102,241,0.05)' : '#f8fafc',
-                          color: form.typhoonCategory === lvl.value ? '#6366f1' : '#475569',
-                          fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', transition: 'all 0.15s'
+                          flex: 1,
+                          padding: '10px 14px',
+                          borderRadius: '10px',
+                          border: '1.5px solid',
+                          borderColor: form.alertStatus === item.value ? item.color : '#e2e8f0',
+                          background: form.alertStatus === item.value ? item.bg : 'white',
+                          color: form.alertStatus === item.value ? item.text : '#475569',
+                          fontSize: '0.8125rem',
+                          fontWeight: 800,
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '8px',
+                          transition: 'all 0.2s',
+                          opacity: (editingId && user.account_type !== 'Regional Admin' && user.account_type !== 'Super Admin') ? 0.7 : 1
                         }}
                       >
-                        {lvl.label}
+                        <span style={{ width: '12px', height: '12px', borderRadius: '50%', background: item.color, border: '1px solid rgba(0,0,0,0.1)' }} />
+                        {item.label}
                       </button>
-                    )) || <span style={{ fontSize: '0.8125rem', color: '#94a3b8', fontStyle: 'italic' }}>No levels defined for this category</span>}
+                    ))}
                   </div>
+                </div>
+
+                <div style={{ gridColumn: 'span 2' }}>
+                  <label style={LABEL_STYLE}>
+                    {form.eventType === 'earthquake' ? 'Magnitude' : 'Specific Alert Level / Category'}
+                  </label>
+                  {form.eventType === 'earthquake' ? (
+                    <input
+                      type="number"
+                      step="0.1"
+                      placeholder="e.g. 5.6"
+                      value={form.magnitude}
+                      onChange={e => setForm({ ...form, magnitude: e.target.value })}
+                      style={INPUT_STYLE}
+                      disabled={editingId && user.account_type !== 'Regional Admin' && user.account_type !== 'Super Admin'}
+                    />
+                  ) : (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '10px' }}>
+                      {ALERT_LEVELS[form.eventType]?.map(lvl => (
+                        <button
+                          key={lvl.value}
+                          type="button"
+                          onClick={() => setForm({ ...form, typhoonCategory: lvl.value })}
+                          disabled={editingId && user.account_type !== 'Regional Admin' && user.account_type !== 'Super Admin'}
+                          title={lvl.desc}
+                          style={{
+                            padding: '10px 14px', borderRadius: '10px', border: '1.5px solid',
+                            borderColor: form.typhoonCategory === lvl.value ? '#6366f1' : '#f1f5f9',
+                            background: form.typhoonCategory === lvl.value ? 'rgba(99,102,241,0.05)' : '#f8fafc',
+                            color: form.typhoonCategory === lvl.value ? '#6366f1' : '#475569',
+                            fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer', transition: 'all 0.15s'
+                          }}
+                        >
+                          {lvl.label}
+                        </button>
+                      )) || <span style={{ fontSize: '0.8125rem', color: '#94a3b8', fontStyle: 'italic' }}>No levels defined for this category</span>}
+                    </div>
+                  )}
                 </div>
 
                 <div style={{ gridColumn: 'span 2' }}>

@@ -769,6 +769,7 @@ export default function Dashboard() {
       infraDamage: [],
       populationByLgu: {},
       commLines: [],
+      damagedHouses: [], // Added to fix push error
       ageTally: { kids: 0, adults: 0, seniors: 0 },
       sitRepStatus: allSitreps || []
     }
@@ -1054,8 +1055,14 @@ export default function Dashboard() {
     await Promise.all([...tablePromises, reportsPromise, waterPromise]);
 
     // After all data is fetched and deduplicated, finalize infrastructure stats
+    const defaultProvinceCity = { persons: 0, families: 0, inside: 0, outside: 0, dmg: 0, served: 0, ecs: 0, powerInt: 0, powerRes: 0, roadsNotPassable: 0, roadsPassable: 0, brgys: new Set() };
+
     Object.values(latestInfra).forEach(row => {
       const { category, city, brgy, province } = row;
+
+      // Ensure province/city entries exist before incrementing counters
+      if (!details.byProvince[province]) details.byProvince[province] = { ...defaultProvinceCity, brgys: new Set() };
+      if (!details.byCity[city]) details.byCity[city] = { ...defaultProvinceCity, brgys: new Set() };
       
       if (category === 'power') {
         const statusRaw = String(row.status || '').toLowerCase().trim();
@@ -1788,12 +1795,24 @@ CHRONOLOGY OF EVENTS`;
 
         {/* Hero Section */}
         <section className="dash-hero">
-          <div className={`dash-hero-icon alert-status-${currentEvent?.alertStatus || 'white'}`} style={{
+          <div className={`dash-hero-icon alert-status-${currentEvent?.alertStatus || 'white'} ${
+            !userSignal ? (
+              currentEvent?.alertStatus === 'red' ? 'dash-hero-icon-alarm-red' :
+              currentEvent?.alertStatus === 'blue' ? 'dash-hero-icon-alarm-blue' :
+              currentEvent?.alertStatus === 'white' ? 'dash-hero-icon-alarm-white' : ''
+            ) : ''
+          }`} style={{
             background: userSignal === '1' ? '#fde047' : 
                         userSignal === '2' ? '#fdba74' : 
                         userSignal === '3' ? '#fca5a5' : 
                         userSignal === '4' ? '#f9a8d4' : 
-                        userSignal === '5' ? '#d8b4fe' : undefined
+                        userSignal === '5' ? '#d8b4fe' : 
+                        (currentEvent?.alertStatus === 'red' ? '#ef4444' :
+                         currentEvent?.alertStatus === 'blue' ? '#3b82f6' :
+                         currentEvent?.alertStatus === 'white' ? '#ffffff' :
+                         currentEvent?.color || '#ffffff'),
+            color: (!userSignal && (currentEvent?.alertStatus === 'red' || currentEvent?.alertStatus === 'blue')) ? '#ffffff' : '#1e293b',
+            border: (!userSignal && currentEvent?.alertStatus === 'white') ? '1px solid #e2e8f0' : undefined
           }}>
             {userSignal ? (
               <span style={{ fontSize: '2rem', fontWeight: 900, color: '#1e293b' }}>{userSignal}</span>
@@ -1817,16 +1836,25 @@ CHRONOLOGY OF EVENTS`;
               <div className="meta-icon"><Warning size={18} /></div>
               <div className="meta-content">
                 <span className="meta-label">Type</span>
-                <span className="meta-value" style={{ textTransform: 'capitalize' }}>{currentEvent?.eventType || 'Operational'}</span>
+                <span className="meta-value" style={{ textTransform: 'capitalize' }}>
+                  {currentEvent?.eventType === 'typhoon' ? 'Tropical Cyclone' : (currentEvent?.eventType || 'Operational')}
+                </span>
               </div>
             </div>
             
             <div className="meta-item">
               <div className="meta-icon"><Info size={18} /></div>
               <div className="meta-content">
-                <span className="meta-label">{userSignal ? 'My Signal' : 'Alert Level'}</span>
+                <span className="meta-label">
+                  {userSignal ? 'My Signal' : (currentEvent?.eventType === 'earthquake' ? 'Magnitude' : 'Alert Level')}
+                </span>
                 <span className="meta-value" style={{ whiteSpace: 'nowrap' }}>
-                  {userSignal ? `Public Warning Signal ${userSignal}` : (currentEvent?.alertLevel || 'No Alert')}
+                  {userSignal 
+                    ? `Public Warning Signal ${userSignal}` 
+                    : (currentEvent?.eventType === 'earthquake' && currentEvent?.alertLevel?.startsWith('Magnitude ')
+                        ? currentEvent.alertLevel.replace('Magnitude ', '') 
+                        : (currentEvent?.alertLevel || 'No Alert'))
+                  }
                 </span>
               </div>
             </div>
@@ -3162,7 +3190,7 @@ CHRONOLOGY OF EVENTS`;
             <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#475569', marginBottom: '8px' }}>Event Name</label>
             <input
               type="text"
-              placeholder="e.g. Typhoon Kristine"
+              placeholder="e.g. Tropical Cyclone Kristine"
               value={editForm.name}
               onChange={(e) => {
                 const val = e.target.value;
@@ -3181,26 +3209,53 @@ CHRONOLOGY OF EVENTS`;
                 style={{ width: '100%', padding: '10px', borderRadius: '8px', border: '1px solid #e2e8f0', background: 'white' }}
               >
                 <option value="calamity">Calamity</option>
-                <option value="typhoon">Typhoon</option>
+                <option value="typhoon">Tropical Cyclone</option>
                 <option value="flood">Flood</option>
                 <option value="earthquake">Earthquake</option>
                 <option value="fire">Fire Incident</option>
               </select>
             </div>
             <div className="form-group">
-              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#475569', marginBottom: '8px' }}>Theme Color</label>
-              <input
-                type="color"
-                value={editForm.color}
-                onChange={(e) => setEditForm((f) => ({ ...f, color: e.target.value }))}
-                style={{ width: '100%', height: '42px', padding: '2px', borderRadius: '8px', border: '1px solid #e2e8f0' }}
-              />
+              <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#475569', marginBottom: '8px' }}>Alert Color Status</label>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                {[
+                  { value: 'red', label: 'Red (Critical)', color: '#ef4444', bg: 'rgba(239, 68, 68, 0.1)', text: '#b91c1c' },
+                  { value: 'blue', label: 'Blue (Standard)', color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.1)', text: '#1d4ed8' },
+                  { value: 'white', label: 'White (Normal)', color: '#94a3b8', bg: '#f8fafc', text: '#475569' }
+                ].map(item => (
+                  <button
+                    key={item.value}
+                    type="button"
+                    onClick={() => setEditForm(f => ({ ...f, alertStatus: item.value, color: item.color }))}
+                    style={{
+                      flex: 1,
+                      padding: '10px',
+                      borderRadius: '8px',
+                      border: '1.5px solid',
+                      borderColor: editForm.alertStatus === item.value ? item.color : '#e2e8f0',
+                      background: editForm.alertStatus === item.value ? item.bg : 'white',
+                      color: editForm.alertStatus === item.value ? item.text : '#475569',
+                      fontSize: '0.8125rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: item.color, border: '1px solid rgba(0,0,0,0.1)' }} />
+                    {item.label.split(' ')[0]}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
 
           <div className="form-group" style={{ marginBottom: '16px' }}>
             <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, color: '#475569', marginBottom: '8px' }}>
-              {editForm.eventType === 'typhoon' ? 'Typhoon Category' : 'Alert Level / Warning Signal'}
+              {editForm.eventType === 'typhoon' ? 'Tropical Cyclone Category' : 'Alert Level / Warning Signal'}
             </label>
             <select
               value={editForm.alertLevel || ''}

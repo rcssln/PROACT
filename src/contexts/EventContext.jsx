@@ -109,6 +109,7 @@ export function EventProvider({ children, user }) {
   }, [])
 
   const handleConfirmAction = useCallback(async () => {
+    console.log('[EventContext] handleConfirmAction triggered', { hasOnConfirm: !!confirmModal.onConfirm });
     if (!confirmModal.onConfirm) {
       closeConfirm()
       return
@@ -116,10 +117,12 @@ export function EventProvider({ children, user }) {
     
     setConfirmModal(prev => ({ ...prev, isLoading: true }))
     try {
+      console.log('[EventContext] Executing onConfirm callback...');
       await confirmModal.onConfirm()
+      console.log('[EventContext] onConfirm callback finished successfully.');
       closeConfirm()
     } catch (err) {
-      console.error('Confirm action failed:', err)
+      console.error('[EventContext] Confirm action failed:', err)
       setConfirmModal(prev => ({ ...prev, isLoading: false }))
     }
   }, [confirmModal, closeConfirm])
@@ -244,7 +247,20 @@ export function EventProvider({ children, user }) {
 
   const fetchPendingApprovalsCount = useCallback(async () => {
     if (!user) return
+    const isLguApprover = user.account_type === 'LGU Approver'
     const isApprover = ['Provincial Approver', 'Super Admin', 'Regional Admin', 'Regional'].includes(user.account_type) || user.role === 'Super Admin'
+    
+    if (isLguApprover) {
+      // LGU Approvers get count from the new lgu-submissions endpoint
+      try {
+        const { data } = await api.get('/lgu-submissions/pending-count')
+        setPendingApprovalsCount(data?.count || 0)
+      } catch (err) {
+        console.error('Error fetching LGU pending approvals count:', err)
+      }
+      return
+    }
+    
     if (!isApprover) { setPendingApprovalsCount(0); return }
     try {
       const { data } = await api.get('/situational-reports', {
@@ -296,7 +312,7 @@ export function EventProvider({ children, user }) {
       })
       if (relevantNotifs.length === 0) return
       const ids = relevantNotifs.map(n => n.id)
-      await api.post('/api/notifications/mark-many-read', { ids })
+      await api.post('/notifications/mark-many-read', { ids })
       setNotifications(prev => prev.map(n => ids.includes(n.id) ? { ...n, is_read: true } : n))
       setUnreadCount(prev => Math.max(0, prev - ids.length))
     } catch (err) {
@@ -315,7 +331,7 @@ export function EventProvider({ children, user }) {
       })
       if (relevantNotifs.length === 0) return
       const ids = relevantNotifs.map(n => n.id)
-      await api.post('/api/notifications/mark-many-read', { ids })
+      await api.post('/notifications/mark-many-read', { ids })
       setNotifications(prev => prev.map(n => ids.includes(n.id) ? { ...n, is_read: true } : n))
       setUnreadCount(prev => Math.max(0, prev - ids.length))
     } catch (err) {
@@ -352,7 +368,11 @@ export function EventProvider({ children, user }) {
     if (!user) return
 
     const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000'
-    const socket = io(API_URL, { transports: ['websocket'] })
+    const socket = io(API_URL, {
+      transports: ['websocket', 'polling'],
+      reconnectionAttempts: 5,
+      reconnectionDelay: 2000
+    })
     socketRef.current = socket
 
     console.log('[Socket.io] Connecting for user:', user.id)
@@ -462,13 +482,20 @@ export function EventProvider({ children, user }) {
   const createSituationalReport = useCallback(async (eventId, title, options = {}) => {
     if (!eventId) return null
     try {
-      const { data } = await api.post('/situational-reports', { 
-        event_id: eventId, 
-        title, 
+      const payload = {
+        event_id: eventId,
+        title,
         target_lgus: options.targetLgus || [],
         pinged_report_types: options.pingedReportTypes || [],
-        province: options.province || null
-      })
+        province: options.province || null,
+      }
+      if (options.copyFromId) {
+        payload.copy_from_id = options.copyFromId
+      }
+      if (options.skip_auto_clone !== undefined) {
+        payload.skip_auto_clone = options.skip_auto_clone
+      }
+      const { data } = await api.post('/situational-reports', payload)
       
       setSituationalReports(prev => [data, ...prev])
       return data

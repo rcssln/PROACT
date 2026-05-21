@@ -85,6 +85,22 @@ CREATE TABLE IF NOT EXISTS public.situational_reports (
 );
 
 -- ============================================================
+-- TABLE: lgu_submissions
+-- ============================================================
+CREATE TABLE IF NOT EXISTS public.lgu_submissions (
+  id UUID NOT NULL DEFAULT gen_random_uuid(),
+  situational_report_id UUID NOT NULL REFERENCES public.situational_reports(id) ON DELETE CASCADE,
+  city TEXT NOT NULL,
+  status TEXT DEFAULT 'Draft',
+  rejection_remarks TEXT,
+  submitted_by UUID REFERENCES public.users(id),
+  approved_by UUID REFERENCES public.users(id),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT lgu_submissions_pkey PRIMARY KEY (id),
+  CONSTRAINT lgu_submissions_unique UNIQUE (situational_report_id, city)
+);
+
+-- ============================================================
 -- TABLE: activity_logs
 -- ============================================================
 CREATE TABLE IF NOT EXISTS public.activity_logs (
