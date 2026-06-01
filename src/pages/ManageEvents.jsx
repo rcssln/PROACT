@@ -381,11 +381,12 @@ export default function ManageEvents() {
   )
 
   const alertPillClass = (status) => {
-    if (status === 'red') return 'alert-pill alert-red'
-    if (status === 'orange') return 'alert-pill'
-    if (status === 'yellow') return 'alert-pill'
-    return 'alert-pill alert-white'
-  }
+  if (status === 'red') return 'alert-pill alert-red'
+  if (status === 'blue') return 'alert-pill alert-blue'
+  if (status === 'orange') return 'alert-pill alert-orange'
+  if (status === 'yellow') return 'alert-pill alert-yellow'
+  return 'alert-pill alert-white'
+}
 
   const LABEL_STYLE = { display: 'block', fontSize: '0.6875rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: '8px' }
   const INPUT_STYLE = { width: '100%', padding: '10px 12px', borderRadius: '8px', border: '1px solid #e2e8f0', fontSize: '0.875rem', color: '#1e293b', outline: 'none', boxSizing: 'border-box', background: 'white' }

@@ -734,24 +734,22 @@
 }
 
 .alert-red {
-  background: var(--status-danger-bg);
-  color: var(--status-danger-text);
-  border: 1px solid var(--status-danger-border);
+  background: #fee2e2 !important;
+  color: #b91c1c !important;
+  border: 1px solid #fca5a5 !important;
 }
 
 .alert-blue {
-  background: var(--status-info-bg);
-  color: var(--status-info-text);
-  border: 1px solid var(--status-info-border);
+  background: #dbeafe !important;
+  color: #1d4ed8 !important;
+  border: 1px solid #93c5fd !important;
 }
 
 .alert-white {
-  background: var(--status-neutral-bg);
-  color: var(--status-neutral-text);
-  border: 1px solid var(--status-neutral-border);
+  background: #ffffff !important;
+  color: #475569 !important;
+  border: 1px solid #cbd5e1 !important;
 }
-
-
 
 .consolidated-report-loading,
 .consolidated-report-empty {
@@ -1875,4 +1873,4 @@
   border-color: #64748b !important;
   color: #0f172a !important;
 }
-
+

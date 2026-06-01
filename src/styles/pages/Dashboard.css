@@ -2344,6 +2344,10 @@
 	border-color: rgba(255, 255, 255, 0.8);
 }
 
+.kpi-card-premium {
+  transition: box-shadow 0.15s, transform 0.15s;
+}
+
 .kpi-card-premium.red {
 	border-top-color: var(--reff-red);
 }
@@ -2722,6 +2726,11 @@
 		box-shadow: 0 0 0 0 rgba(59, 130, 246, 0), var(--shadow-premium);
 		transform: scale(1);
 	}
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.4); }
 }
 
 @keyframes alarm-pulse-white {

@@ -1808,9 +1808,8 @@ CHRONOLOGY OF EVENTS`;
                         userSignal === '4' ? '#f9a8d4' : 
                         userSignal === '5' ? '#d8b4fe' : 
                         (currentEvent?.alertStatus === 'red' ? '#ef4444' :
-                         currentEvent?.alertStatus === 'blue' ? '#3b82f6' :
-                         currentEvent?.alertStatus === 'white' ? '#ffffff' :
-                         currentEvent?.color || '#ffffff'),
+                        currentEvent?.alertStatus === 'blue' ? '#3b82f6' :
+                        '#ffffff'),
             color: (!userSignal && (currentEvent?.alertStatus === 'red' || currentEvent?.alertStatus === 'blue')) ? '#ffffff' : '#1e293b',
             border: (!userSignal && currentEvent?.alertStatus === 'white') ? '1px solid #e2e8f0' : undefined
           }}>
@@ -1820,6 +1819,7 @@ CHRONOLOGY OF EVENTS`;
               EVENT_TYPE_ICONS[currentEvent?.eventType] || <WarningCircle size={32} weight="duotone" />
             )}
           </div>
+
           <div className="dash-hero-title-wrap">
             <h2 className="dash-hero-amount">
               {currentEvent ? currentEvent.name : 'Clear Skies (No Active Event)'}
@@ -1832,6 +1832,32 @@ CHRONOLOGY OF EVENTS`;
           </div>
 
           <div className={`dash-hero-meta alert-status-${currentEvent?.alertStatus || 'white'}`}>
+            {currentEvent && currentEvent.id !== 'default-good-day' && currentEvent.alertStatus && (
+              <div className="meta-item">
+                <span style={{
+                  padding: '5px 14px',
+                  borderRadius: '20px',
+                  fontSize: '0.7rem',
+                  fontWeight: 900,
+                  letterSpacing: '1.5px',
+                  textTransform: 'uppercase',
+                  background: currentEvent.alertStatus === 'red' ? '#ef4444' : currentEvent.alertStatus === 'blue' ? '#3b82f6' : '#94a3b8',
+                  color: '#ffffff',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  whiteSpace: 'nowrap'
+                }}>
+                  <span style={{
+                    width: '6px', height: '6px', borderRadius: '50%',
+                    background: 'rgba(255,255,255,0.8)',
+                    flexShrink: 0
+                  }} />
+                  {currentEvent.alertStatus === 'red' ? 'Red' : currentEvent.alertStatus === 'blue' ? 'Blue' : 'White'}
+                </span>
+              </div>
+            )}
+
             <div className="meta-item">
               <div className="meta-icon"><Warning size={18} /></div>
               <div className="meta-content">
@@ -1841,12 +1867,12 @@ CHRONOLOGY OF EVENTS`;
                 </span>
               </div>
             </div>
-            
+
             <div className="meta-item">
               <div className="meta-icon"><Info size={18} /></div>
               <div className="meta-content">
                 <span className="meta-label">
-                  {userSignal ? 'My Signal' : (currentEvent?.eventType === 'earthquake' ? 'Magnitude' : 'Alert Level')}
+                  {userSignal ? 'My Signal' : (currentEvent?.eventType === 'earthquake' ? 'Magnitude' : 'Category')}
                 </span>
                 <span className="meta-value" style={{ whiteSpace: 'nowrap' }}>
                   {userSignal 
@@ -1868,13 +1894,12 @@ CHRONOLOGY OF EVENTS`;
                 </span>
               </div>
             </div>
+
           </div>
         </section>
 
-
         {/* Draggable Tab Navigation and Filters */}
         <div className="tabs-nav-wrapper" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          
           <div
             className="card-tabs-container"
             style={{ flex: 1 }}
@@ -2053,37 +2078,37 @@ CHRONOLOGY OF EVENTS`;
 
                   {/* Top Row: 6-column KPI Row */}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10, marginBottom: 18 }}>
-                    <div className="kpi-card-premium blue">
+                    <div className="kpi-card-premium blue" onClick={() => setActiveTab('Overview')} style={{ cursor: 'pointer' }}>
                       <div className="kpi-label-premium">Affected Persons</div>
                       <div className="kpi-value-premium">{(categoryCards.find(c => c.category === 'affectedPopulation')?.totalCount || 0).toLocaleString()}</div>
                       <div className="kpi-sub-premium">Total lives impacted</div>
                     </div>
 
-                    <div className="kpi-card-premium orange">
+                    <div className="kpi-card-premium orange" onClick={() => setActiveTab('Pre-Evacuation')} style={{ cursor: 'pointer' }}>
                       <div className="kpi-label-premium">Currently Evacuated</div>
                       <div className="kpi-value-premium">{((result?.details?.evacStatus?.inside || 0) + (result?.details?.evacStatus?.outside || 0)).toLocaleString()}</div>
                       <div className="kpi-sub-premium">In ECs & with relatives</div>
                     </div>
 
-                    <div className="kpi-card-premium amber">
+                    <div className="kpi-card-premium amber" onClick={() => setActiveTab('Pre-Evacuation')} style={{ cursor: 'pointer' }}>
                       <div className="kpi-label-premium">Damaged Houses</div>
                       <div className="kpi-value-premium">{(categoryCards.find(c => c.category === 'damagedHouses')?.totalCount || 0).toLocaleString()}</div>
                       <div className="kpi-sub-premium">Totally & partially impacted</div>
                     </div>
 
-                    <div className="kpi-card-premium blue" style={{ borderTopColor: T.indigo }}>
+                    <div className="kpi-card-premium blue" onClick={() => setActiveTab('Infrastructure')} style={{ cursor: 'pointer', borderTopColor: T.indigo }}>
                       <div className="kpi-label-premium">Power Still Out</div>
                       <div className="kpi-value-premium">{details.infrastructure.filter(i => i.type === 'power' && i.status === 'interrupted').length}</div>
                       <div className="kpi-sub-premium">Areas without restoration</div>
                     </div>
 
-                    <div className="kpi-card-premium slate">
+                    <div className="kpi-card-premium slate" onClick={() => setActiveTab('Infrastructure')} style={{ cursor: 'pointer' }}>
                       <div className="kpi-label-premium">Roads Not Passable</div>
                       <div className="kpi-value-premium">{details.infrastructure.filter(i => i.type === 'road' && i.status === 'notPassable').length}</div>
                       <div className="kpi-sub-premium">Obstructions reported</div>
                     </div>
 
-                    <div className="kpi-card-premium teal">
+                    <div className="kpi-card-premium teal" onClick={() => setActiveTab('Assistance')} style={{ cursor: 'pointer' }}>
                       <div className="kpi-label-premium">Assistance Value</div>
                       <div className="kpi-value-premium">₱ {(() => {
                         const val = Object.values(details.assistanceByLgu || {}).reduce((s, v) => s + v, 0);
