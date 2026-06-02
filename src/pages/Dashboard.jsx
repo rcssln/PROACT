@@ -251,6 +251,7 @@ export default function Dashboard() {
   const [selectedDashboardSitRepId, setSelectedDashboardSitRepId] = useState('')
   const [eventDropdownOpen, setEventDropdownOpen] = useState(false)
   const [sitRepDropdownOpen, setSitRepDropdownOpen] = useState(false)
+  const [showAffectedPersonsModal, setShowAffectedPersonsModal] = useState(false)
   const eventDropdownRef = useRef(null)
   const sitRepDropdownRef = useRef(null)
   const tabsRef = useRef(null)
@@ -2078,11 +2079,11 @@ CHRONOLOGY OF EVENTS`;
 
                   {/* Top Row: 6-column KPI Row */}
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, 1fr)', gap: 10, marginBottom: 18 }}>
-                    <div className="kpi-card-premium blue" onClick={() => setActiveTab('Overview')} style={{ cursor: 'pointer' }}>
-                      <div className="kpi-label-premium">Affected Persons</div>
-                      <div className="kpi-value-premium">{(categoryCards.find(c => c.category === 'affectedPopulation')?.totalCount || 0).toLocaleString()}</div>
-                      <div className="kpi-sub-premium">Total lives impacted</div>
-                    </div>
+                    <div className="kpi-card-premium blue" onClick={() => setShowAffectedPersonsModal(true)} style={{ cursor: 'pointer' }}>
+                    <div className="kpi-label-premium">Affected Persons</div>
+                    <div className="kpi-value-premium">{(categoryCards.find(c => c.category === 'affectedPopulation')?.totalCount || 0).toLocaleString()}</div>
+                    <div className="kpi-sub-premium">Total lives impacted</div>
+                  </div>
 
                     <div className="kpi-card-premium orange" onClick={() => setActiveTab('Pre-Evacuation')} style={{ cursor: 'pointer' }}>
                       <div className="kpi-label-premium">Currently Evacuated</div>
@@ -3654,7 +3655,140 @@ CHRONOLOGY OF EVENTS`;
           </div>
         </div>
       </HeaderFooterModal>
+      
+      <HeaderFooterModal
+        isOpen={showAffectedPersonsModal}
+        onClose={() => setShowAffectedPersonsModal(false)}
+        title={
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+            <div style={{ background: 'rgba(59,130,246,0.1)', color: '#3b82f6', padding: '10px', borderRadius: '10px' }}>
+              <Warning size={20} />
+            </div>
+            <div>
+              <div style={{ fontSize: '1.125rem', fontWeight: 800, color: '#1e293b' }}>Affected Persons</div>
+              <div style={{ fontSize: '0.8125rem', color: '#64748b', fontWeight: 400 }}>
+                Who and where — by barangay and city
+              </div>
+            </div>
+          </div>
+        }
+        maxWidth="620px"
+        footer={
+          <button className="btn-secondary" onClick={() => setShowAffectedPersonsModal(false)} style={{ height: '42px', padding: '0 20px' }}>
+            Close
+          </button>
+        }
+      >
+        {(() => {
+          const byCity = result?.details?.byCity || {}
+          const hasCityData = Object.keys(byCity).length > 0
 
+          const affectedCard = categoryCards.find(c => c.category === 'affectedPopulation')
+          const barangayRows = affectedCard?.barangayData || []
+          const hasBarangayData = barangayRows.length > 0
+
+          if (!hasCityData && !hasBarangayData) {
+            return (
+              <div style={{ padding: '2rem', textAlign: 'center', color: '#94a3b8' }}>
+                <Warning size={36} style={{ marginBottom: '0.75rem', opacity: 0.4 }} />
+                <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: '0.25rem' }}>No affected persons data</div>
+                <div style={{ fontSize: '0.8125rem' }}>Who: None — Where: None</div>
+              </div>
+            )
+          }
+
+          return (
+            <div>
+              {/* Summary row */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '10px', marginBottom: '20px' }}>
+                {[
+                  {
+                    label: 'Total Persons',
+                    value: Object.values(byCity).reduce((s, p) => s + p.persons, 0).toLocaleString(),
+                    color: '#3b82f6', bg: 'rgba(59,130,246,0.07)'
+                  },
+                  {
+                    label: 'Total Families',
+                    value: Object.values(byCity).reduce((s, p) => s + p.families, 0).toLocaleString(),
+                    color: '#6366f1', bg: 'rgba(99,102,241,0.07)'
+                  },
+                  {
+                    label: 'Cities / Munis',
+                    value: Object.keys(byCity).length,
+                    color: '#14b8a6', bg: 'rgba(20,184,166,0.07)'
+                  }
+                ].map((stat, i) => (
+                  <div key={i} style={{ background: stat.bg, borderRadius: '10px', padding: '14px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '22px', fontWeight: 800, color: stat.color }}>{stat.value}</div>
+                    <div style={{ fontSize: '10px', fontWeight: 700, color: '#64748b', marginTop: '2px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>{stat.label}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* City breakdown table */}
+              {hasCityData && (
+                <div style={{ marginBottom: '20px' }}>
+                  <div style={{ fontSize: '11px', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '10px' }}>
+                    By city / municipality
+                  </div>
+                  <div style={{ border: '1px solid #e2e8f0', borderRadius: '10px', overflow: 'hidden' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                      <thead>
+                        <tr style={{ background: '#f8fafc' }}>
+                          <th style={{ padding: '9px 14px', textAlign: 'left', fontWeight: 700, color: '#475569', borderBottom: '1px solid #e2e8f0' }}>Municipality</th>
+                          <th style={{ padding: '9px 14px', textAlign: 'left', fontWeight: 700, color: '#475569', borderBottom: '1px solid #e2e8f0' }}>Persons</th>
+                          <th style={{ padding: '9px 14px', textAlign: 'left', fontWeight: 700, color: '#475569', borderBottom: '1px solid #e2e8f0' }}>Families</th>
+                          <th style={{ padding: '9px 14px', textAlign: 'left', fontWeight: 700, color: '#475569', borderBottom: '1px solid #e2e8f0' }}>Barangays</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {Object.entries(byCity)
+                          .filter(([_, s]) => s.persons > 0 || s.families > 0)
+                          .sort((a, b) => b[1].persons - a[1].persons)
+                          .map(([city, stats], i) => (
+                            <tr key={city} style={{ background: i % 2 === 0 ? 'white' : '#fafafa', borderBottom: '1px solid #f1f5f9' }}>
+                              <td style={{ padding: '9px 14px', fontWeight: 700, color: '#1e293b' }}>{city}</td>
+                              <td style={{ padding: '9px 14px', fontFamily: 'monospace', color: '#3b82f6', fontWeight: 700 }}>{stats.persons.toLocaleString()}</td>
+                              <td style={{ padding: '9px 14px', fontFamily: 'monospace', color: '#6366f1' }}>{stats.families.toLocaleString()}</td>
+                              <td style={{ padding: '9px 14px', color: '#64748b' }}>{stats.brgys?.size || 0}</td>
+                            </tr>
+                          ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {/* Barangay breakdown */}
+              {hasBarangayData && (
+                <div>
+                  <div style={{ fontSize: '11px', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '10px' }}>
+                    By barangay
+                  </div>
+                  <div style={{ border: '1px solid #e2e8f0', borderRadius: '10px', overflow: 'hidden', maxHeight: '240px', overflowY: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
+                      <thead>
+                        <tr style={{ background: '#f8fafc' }}>
+                          <th style={{ padding: '9px 14px', textAlign: 'left', fontWeight: 700, color: '#475569', borderBottom: '1px solid #e2e8f0', position: 'sticky', top: 0, background: '#f8fafc' }}>Barangay</th>
+                          <th style={{ padding: '9px 14px', textAlign: 'left', fontWeight: 700, color: '#475569', borderBottom: '1px solid #e2e8f0', position: 'sticky', top: 0, background: '#f8fafc' }}>Count</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {barangayRows.map((row, i) => (
+                          <tr key={i} style={{ background: i % 2 === 0 ? 'white' : '#fafafa', borderBottom: '1px solid #f1f5f9' }}>
+                            <td style={{ padding: '9px 14px', color: '#1e293b' }}>{row.name}</td>
+                            <td style={{ padding: '9px 14px', fontFamily: 'monospace', fontWeight: 700, color: '#3b82f6' }}>{row.value.toLocaleString()}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )
+        })()}
+      </HeaderFooterModal>
       </div >
     </>
   );

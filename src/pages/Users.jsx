@@ -600,7 +600,7 @@ export default function Users() {
       >
         <form id="add-user-form" onSubmit={handleSubmit}>
           <div className="users-form-group">
-            <label htmlFor="user-email">Email *</label>
+            <label htmlFor="user- ">Email *</label>
             <input
               id="user-email"
               type="email"
