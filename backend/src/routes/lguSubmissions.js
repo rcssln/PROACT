@@ -44,41 +44,47 @@ router.post('/submit', authenticate, async (req, res) => {
   }
 
   try {
-    // Upsert submission status to 'Pending LGU Approval'
+    // Upsert submission status to 'Approved' (no approval gate)
     const { rows } = await pool.query(
-      `INSERT INTO lgu_submissions (situational_report_id, city, status, submitted_by, updated_at, rejection_remarks)
-       VALUES ($1, $2, 'Pending LGU Approval', $3, NOW(), NULL)
+      `INSERT INTO lgu_submissions (situational_report_id, city, status, submitted_by, updated_at, rejection_remarks, approved_by, approved_at)
+       VALUES ($1, $2, 'Approved', $3, NOW(), NULL, $3, NOW())
        ON CONFLICT (situational_report_id, city) 
-       DO UPDATE SET status = 'Pending LGU Approval', submitted_by = $3, updated_at = NOW(), rejection_remarks = NULL
+       DO UPDATE SET status = 'Approved', submitted_by = $3, updated_at = NOW(), rejection_remarks = NULL, approved_by = $3, approved_at = NOW()
        RETURNING *`,
       [situational_report_id, city, req.user.id]
     );
 
     const submission = rows[0];
 
-    // Find and notify LGU Approver(s) of the same city
-    const { rows: approvers } = await pool.query(
-      "SELECT id FROM users WHERE city = $1 AND account_type = 'LGU Approver' AND status = 'Active'",
+    // Notify LGU and LGU Admin users of the same city
+    const { rows: lguUsers } = await pool.query(
+      "SELECT id FROM users WHERE city = $1 AND account_type IN ('LGU', 'LGU Admin', 'LGU Approver') AND status = 'Active'",
       [city]
     );
 
     const io = req.app.locals.io;
-    for (const approver of approvers) {
+    for (const u of lguUsers) {
       const notifData = {
-        user_id: approver.id,
+        user_id: u.id,
         type: 'lgu_submission',
-        title: 'New LGU Submission for Review',
-        message: `LGU data for ${city} has been submitted for your approval.`,
+        title: 'LGU Data Submitted',
+        message: `LGU data for ${city} has been submitted successfully.`,
         data: JSON.stringify({ situational_report_id, city })
       };
 
       const { rows: insertedNotif } = await pool.query(
-        'INSERT INTO notifications (user_id, type, title, message, data) VALUES ($1, $2, $3, $4, $5) RETURNING *',
+        'INSERT INTO notifications (user_id, type, title, message, data) VALUES ($1,$2,$3,$4,$5) RETURNING *',
         [notifData.user_id, notifData.type, notifData.title, notifData.message, notifData.data]
       );
 
-      if (io) io.emit(`notification:${approver.id}`, insertedNotif[0]);
+      if (io) io.emit(`notification:${u.id}`, insertedNotif[0]);
     }
+
+    res.json(submission);
+  } catch (err) {
+    console.error('[LguSubmissions/submit]', err);
+    res.status(500).json({ error: 'Server error' });
+  }
 
     res.json(submission);
   } catch (err) {

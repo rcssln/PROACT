@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { useSearchParams, useLocation, useOutletContext } from 'react-router-dom'
-import { FilePlus, Plus, Trash, X, Eye, PencilSimple, Upload, PaperPlaneRight, CaretDown, CaretUp, ArrowLeft, Lightning, Drop, Warning, CloudRain, Info, ShieldWarning, Phone, HardHat, House, FileText, CalendarX, Handshake, Users, Pulse, FileArrowDown, ChartBar, ArrowsClockwise, Check, CheckCircle, Sparkle, Download, ArrowSquareOut } from '@phosphor-icons/react'
+import { FilePlus, Plus, Trash, X, Eye, PencilSimple, Upload, PaperPlaneRight, CaretDown, CaretUp, ArrowLeft, Lightning, Drop, Warning, CloudRain, Info, ShieldWarning, Phone, HardHat, House, FileText, CalendarX, Handshake, Users, Pulse, FileArrowDown, ChartBar, ArrowsClockwise, Check, CheckCircle, Sparkle, Download, ArrowSquareOut, FileXls } from '@phosphor-icons/react'
 import SearchInput from '../components/SearchInput'
 import SearchableSelect from '../components/SearchableSelect'
 import ModernDateTimePicker from '../components/ModernDateTimePicker'
@@ -496,6 +496,9 @@ export default function AddReport() {
   const [showTextEditorModal, setShowTextEditorModal] = useState(false)
   const [editingItemId, setEditingItemId] = useState(null)
   const [deletedRowIds, setDeletedRowIds] = useState([])
+  const [excelFile, setExcelFile] = useState(null)
+  const [importingExcel, setImportingExcel] = useState(false)
+  const [excelError, setExcelError] = useState(null)
 
   // New Sit Rep Modal State
   const [showNewSitRepModal, setShowNewSitRepModal] = useState(false)
@@ -539,7 +542,7 @@ export default function AddReport() {
   const APPROVAL_BUCKET = 'consolidated-report-approvals'
 
   // LGU Submission state
-  const [lguSubmissionStatus, setLguSubmissionStatus] = useState(null) // null | 'Draft' | 'Pending LGU Approval' | 'Approved' | 'Rejected'
+  const [lguSubmissionStatus, setLguSubmissionStatus] = useState(null) // null | 'Draft' | 'Submitted' | 'Approved' | 'Rejected'
   const [lguSubmissionRemarks, setLguSubmissionRemarks] = useState(null)
   const [submittingLgu, setSubmittingLgu] = useState(false)
   const isProvincial = user?.account_type === 'Provincial' || user?.account_type === 'Provincial Admin'
@@ -679,8 +682,8 @@ export default function AddReport() {
   const handleLguSubmit = async () => {
     if (!currentSituationalReport?.id || !user?.city) return
     showConfirm({
-      title: 'Submit for LGU Approval',
-      message: `Submit your data for "${currentSituationalReport.title}" to the LGU Approver of ${user.city}?`,
+      title: 'Confirm Data Submission',
+      message: `Submit your data for "${currentSituationalReport.title}"? This will make your data visible to Provincial and Regional users.`,
       onConfirm: async () => {
         setSubmittingLgu(true)
         try {
@@ -688,12 +691,12 @@ export default function AddReport() {
             situational_report_id: currentSituationalReport.id,
             city: user.city
           })
-          setLguSubmissionStatus('Pending LGU Approval')
+          setLguSubmissionStatus('Submitted')
           setLguSubmissionRemarks(null)
-          showSuccess('Submitted!', `Your data for "${currentSituationalReport.title}" has been submitted for LGU approval.`)
+          showSuccess('Success', `Your data for "${currentSituationalReport.title}" has been submitted successfully.`)
         } catch (err) {
           console.error('[LGU] Submit error:', err)
-          showSuccess('Error', err.response?.data?.error || err.message || 'Failed to submit for approval.')
+          showSuccess('Error', err.response?.data?.error || err.message || 'Failed to submit data.')
         } finally {
           setSubmittingLgu(false)
         }
@@ -1060,7 +1063,7 @@ useEffect(() => {
         const province = user?.province
         const { data: approvers } = await api.get('/users', {
           params: { 
-            account_type: ['Provincial Approver', 'Super Admin', 'Regional Admin', 'Regional'],
+            account_type: ['Super Admin', 'Regional Admin', 'Regional'],
             status: 'Active'
           }
         })
@@ -2600,31 +2603,29 @@ useEffect(() => {
                       Download Report
                     </Button>
 
-                    {/* LGU Submit for Approval button */}
+                    {/* LGU Submit button (direct submit, no approval gate) */}
                     {isLGU && currentSituationalReport && (
                       <Button
                         variant="solid"
-                        color={lguSubmissionStatus === 'Pending LGU Approval' ? 'warning' : lguSubmissionStatus === 'Approved' ? 'success' : 'primary'}
-                        onClick={lguSubmissionStatus === 'Pending LGU Approval' || lguSubmissionStatus === 'Approved' ? undefined : handleLguSubmit}
-                        disabled={submittingLgu || lguSubmissionStatus === 'Pending LGU Approval' || lguSubmissionStatus === 'Approved'}
+                        color={lguSubmissionStatus === 'Submitted' || lguSubmissionStatus === 'Approved' ? 'success' : 'primary'}
+                        onClick={lguSubmissionStatus === 'Submitted' || lguSubmissionStatus === 'Approved' ? undefined : handleLguSubmit}
+                        disabled={submittingLgu || lguSubmissionStatus === 'Submitted' || lguSubmissionStatus === 'Approved'}
                         isLoading={submittingLgu}
                         className="toolbar-action-btn"
                         leftIcon={
-                          lguSubmissionStatus === 'Pending LGU Approval' ? <ArrowsClockwise size={16} /> :
-                          lguSubmissionStatus === 'Approved' ? <CheckCircle size={16} /> :
+                          lguSubmissionStatus === 'Submitted' || lguSubmissionStatus === 'Approved' ? <CheckCircle size={16} /> :
                           <PaperPlaneRight size={16} />
                         }
                         title={
                           lguSubmissionStatus === 'Rejected' ? `Rejected: ${lguSubmissionRemarks || 'No remarks'}` :
-                          lguSubmissionStatus === 'Approved' ? 'Your data has been approved by the LGU Approver' :
-                          lguSubmissionStatus === 'Pending LGU Approval' ? 'Awaiting LGU Approver review' :
-                          'Submit your data for LGU Approver review'
+                          lguSubmissionStatus === 'Approved' ? 'Your data has been submitted and is visible to Provincial/Regional users' :
+                          lguSubmissionStatus === 'Submitted' ? 'Your data has been submitted successfully' :
+                          'Submit your data to Provincial and Regional users'
                         }
                       >
-                        {lguSubmissionStatus === 'Pending LGU Approval' ? 'Pending Approval' :
-                         lguSubmissionStatus === 'Approved' ? 'Approved ✓' :
+                        {lguSubmissionStatus === 'Submitted' || lguSubmissionStatus === 'Approved' ? 'Submitted ✓' :
                          lguSubmissionStatus === 'Rejected' ? 'Resubmit' :
-                         'Submit for Approval'}
+                         'Submit Data'}
                       </Button>
                     )}
                   </>
@@ -2852,30 +2853,22 @@ useEffect(() => {
                                 {(isLGU || user?.account_type === 'LGU Admin') ? 'View Details' : 'Manage Entries'}
                               </Button>
                               
-                              {(!sr.status || ['draft', 'sent'].includes(sr.status.toLowerCase())) && (
-                                <Button
-                                  variant="solid"
-                                  color="success"
-                                  size="sm"
-                                  onClick={() => handleUploadPdfClick(sr)}
-                                  title="Send"
-                                  icon={<PaperPlaneRight size={14} />}
-                                >
-                                  Send
-                                </Button>
-                              )}
-                              {sr.status?.toLowerCase() === 'pending approval' && (
-                                <Button
-                                  variant="solid"
-                                  color="info"
-                                  size="sm"
-                                  onClick={() => handleUploadPdfClick(sr)}
-                                  title="Re-upload Signed PDF"
-                                  icon={<Upload size={14} />}
-                                >
-                                  Re-upload
-                                </Button>
-                              )}
+                               {(!sr.status || ['draft', 'sent'].includes(sr.status.toLowerCase())) && (
+                                 <Button
+                                   variant="solid"
+                                   color="primary"
+                                   size="sm"
+                                   onClick={() => {
+                                     setCurrentSituationalReport(sr)
+                                     setView('entries')
+                                     setCurrentPage(1)
+                                   }}
+                                   title="Manage Entries"
+                                   icon={<FileText size={14} />}
+                                 >
+                                   Manage
+                                 </Button>
+                               )}
                             </div>
                           </td>
                       </tr>

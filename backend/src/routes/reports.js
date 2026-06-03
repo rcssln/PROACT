@@ -76,12 +76,10 @@ router.get('/all-types', authenticate, async (req, res) => {
       }
 
       if (isRegional && !isSuperAdmin) {
-        conditions.push(`(t.city IS NULL OR t.city = '' OR EXISTS (
-          SELECT 1 FROM lgu_submissions ls 
-          WHERE ls.situational_report_id = t.situational_report_id 
-            AND ls.city = t.city 
-            AND ls.status = 'Approved'
-        ))`);
+        query += ` AND (rr.city IS NULL OR rr.city = '' OR EXISTS (
+          SELECT 1 FROM users u 
+          WHERE u.city = rr.city AND u.status = 'Active'
+        ))`;
       }
 
       const { rows } = await pool.query(`${query} WHERE ${conditions.join(' AND ')}`, params);
