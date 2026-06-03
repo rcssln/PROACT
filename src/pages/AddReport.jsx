@@ -1737,7 +1737,7 @@ useEffect(() => {
                   return {
                     ...base,
                     type: row.type,
-                    count_soc: row.count_soc ? parseInt(row.countSoc) : null,
+                    count_soc: row.countSoc ? parseInt(row.countSoc) : null,
                     resolution_number: row.resolutionNo,
                     resolution_date: row.resolutionDate || null,
                     status: row.status || 'Declared'

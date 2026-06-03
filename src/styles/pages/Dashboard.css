@@ -606,18 +606,21 @@
 }
 
 .dash-hero-meta {
-	padding: 1.25rem 1.5rem;
-	gap: 1.5rem;
-	margin-left: auto;
-	display: flex;
-	flex-wrap: wrap;
-	justify-content: flex-end;
+  padding: 1.25rem 1.5rem;
+  gap: 1.5rem;
+  margin-left: auto;
+  display: flex;
+  flex-wrap: nowrap;
+  justify-content: flex-end;
+  align-items: center;
+  min-width: 600px;   /* ← locks to the typhoon/longest size */
+  width: 720px;      	 /* ← fixed width, won't shrink or grow */
 }
 
 .dash-hero-icon {
 	width: 56px;
 	height: 56px;
-	border-radius: 16px;
+	border-radius: 16px;	
 	flex-shrink: 0;
 }
 
@@ -721,9 +724,49 @@
 }
 
 .meta-item {
-	display: flex;
-	align-items: center;
-	gap: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-shrink: 0;        /* don't shrink */
+}
+
+/* Alert Status - based on "WHITE" being longest */
+.meta-item:nth-child(1) {
+  min-width: 100px;
+  width: 100px;
+}
+
+/* Type - based on "Tropical Cyclone" being longest */
+.meta-item:nth-child(2) {
+  min-width: 170px;
+  width: 170px;
+}
+
+/* Category - based on "Tropical Depression" being longest */
+.meta-item:nth-child(3) {
+  min-width: 190px;
+  width: 190px;
+}
+
+/* Date - fixed, dates are always same length */
+.meta-item:nth-child(4) {
+  min-width: 150px;
+  width: 150px;
+}
+
+.meta-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-main);
+  white-space: nowrap;    /* prevent wrapping */
+}
+
+.meta-label {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: capitalize;
+  white-space: nowrap;    /* prevent wrapping */
 }
 
 .meta-icon {
@@ -741,6 +784,7 @@
 	color: var(--text-main);
 	position: relative;
 	overflow: hidden;
+	flex-shrink: 0;
 }
 
 
@@ -748,21 +792,6 @@
 	display: flex;
 	flex-direction: column;
 }
-
-.meta-label {
-	font-size: 0.8125rem;
-	font-weight: 500;
-	color: var(--text-muted);
-	text-transform: capitalize;
-}
-
-.meta-value {
-	font-size: 1.1rem;
-	font-weight: 700;
-	color: var(--text-main);
-	white-space: nowrap;
-}
-
 /* Summary Bar */
 .dash-summary-bar {
 	background: var(--bg-card);

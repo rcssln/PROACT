@@ -275,7 +275,7 @@ export default function SettingsModal({ isOpen, onClose, user, onLogout, onUserU
                             <h3 className="settings-section-title">UI Theme</h3>
                             <p className="settings-section-desc">Choose between the classic interface or the modern style guide palette.</p>
                             
-                            <div className="theme-selector-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1.5rem' }}>
+                            <div className="theme-selector-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '1rem', marginTop: '1.5rem' }}>
                                 <div 
                                     className={`theme-option-card ${theme === 'classic' ? 'active' : ''}`}
                                     onClick={() => handleThemeChange('classic')}
@@ -309,10 +309,27 @@ export default function SettingsModal({ isOpen, onClose, user, onLogout, onUserU
                                     <div style={{ fontWeight: 700, marginBottom: '0.25rem' }}>Modern</div>
                                     <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Vibrant blue & style guide palette</div>
                                 </div>
+
+                                {/* NEW: Dark Mode
+                                <div 
+                                    className={`theme-option-card ${theme === 'dark' ? 'active' : ''}`}
+                                    onClick={() => handleThemeChange('dark')}
+                                    style={{
+                                        padding: '1rem',
+                                        borderRadius: 'var(--radius-md)',
+                                        border: '2px solid',
+                                        borderColor: theme === 'dark' ? '#6366f1' : 'var(--border-color)',
+                                        cursor: 'pointer',
+                                        background: theme === 'dark' ? '#1e1b4b' : '#0f172a',
+                                        transition: 'all 0.2s ease'
+                                    }}
+                                >
+                                    <div style={{ fontWeight: 700, marginBottom: '0.25rem', color: '#e2e8f0' }}>Dark</div>
+                                    <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Dark background, light text</div>
+                                </div> */}
                             </div>
                         </div>
                     )}
-
                     {activeTab === 'maintenance' && isSuperAdmin && (
                         <div className="settings-tab-pane">
                             <h3 className="settings-section-title">Maintenance</h3>
