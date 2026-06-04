@@ -78,7 +78,7 @@ export default function Sidebar({ user, onLogout, onUserUpdate, isCollapsed, onT
     <aside className={`sidebar ${isCollapsed ? 'collapsed' : ''}`}>
       <div className="sidebar-header">
         <div className="sidebar-branding" onClick={() => navigate('/dashboard')} style={{ cursor: 'pointer' }}>
-          <img src="/proactLogo.png" alt="PROACT Logo" className="sidebar-logo-image" />
+          <img src={isCollapsed ? '/P.png' : '/proactLogo.png'} alt="PROACT Logo" className="sidebar-logo-image" />
         </div>
         <button 
           className="sidebar-toggle-btn" 
@@ -165,7 +165,8 @@ export default function Sidebar({ user, onLogout, onUserUpdate, isCollapsed, onT
             )}
           </NavLink>
         )}
-{isAdmin && (
+
+        {isAdmin && (
           <NavLink
             to="/users"
             className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
@@ -182,7 +183,6 @@ export default function Sidebar({ user, onLogout, onUserUpdate, isCollapsed, onT
         )}
 
         {/* ── Solido DRRM Knowledge Hub — opens in new tab ── */}
-        {/*copy paste this block for the solido link and if u want to move it around, just change the href and img src as needed*/}
         <a
         href="https://solido.dost1.ph/home"
         target="_blank"
