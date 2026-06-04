@@ -472,8 +472,10 @@
 	text-transform: uppercase;
 	letter-spacing: 0.02em;
 }
-/* ── Solido DRRM Knowledge Hub nav item ── */
-.sidebar-solido-icon {
+/* ── Solido DRRM Knowledge, DOST PAGASA, and DOST PHIVOLCS nav item ── */
+.sidebar-solido-icon,
+.sidebar-DOSTPAGASA-icon,
+.sidebar-DOSTPHIVOLCS-icon {
   width: 33px !important;
   height: 33px !important;
   min-width: 33px !important;
@@ -485,7 +487,9 @@
   display: inline-block;
   vertical-align: middle;
 }
-.sidebar-solido-text {
+.sidebar-solido-text,
+.sidebar-DOSTPAGASA-text,
+.sidebar-DOSTPHIVOLCS-text {
   display: flex;
   flex-direction: column;
   line-height: 1.15;
@@ -494,7 +498,9 @@
   justify-content: center;
 }
 
-.sidebar-solido-name {
+.sidebar-solido-name,
+.sidebar-DOSTPAGASA-name,
+.sidebar-DOSTPHIVOLCS-name {
   font-size: 1.00rem;
   font-weight: 800;
   color: #1a1a1a;
@@ -504,7 +510,9 @@
   letter-spacing: -0.01em;
 }
 
-.sidebar-solido-sub {
+.sidebar-solido-sub,
+.sidebar-DOSTPAGASA-sub,
+.sidebar-DOSTPHIVOLCS-sub {
   font-size: 0.75rem;
   font-weight: 500;
   color: var(--text-muted);
@@ -512,15 +520,3 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/*comment me out if u wat to place me on top*/
-/* .sidebar-link--solido-bottom {
-  margin-top: auto;
-  border-top: 1px solid var(--border-color);
-  padding-top: 0.75rem;
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  gap: 0.625rem;
-  padding-left: 0.5rem;  /* reduce from 0.875rem to pull left */
-} */
-	

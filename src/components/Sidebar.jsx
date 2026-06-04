@@ -189,7 +189,7 @@ export default function Sidebar({ user, onLogout, onUserUpdate, isCollapsed, onT
         rel="noopener noreferrer"
         className="sidebar-link sidebar-link--solido-bottom"
         title={isCollapsed ? 'Solido DRRM · Knowledge Hub' : ''}
-      >
+        >
         <img
           src="https://solido.dost1.ph/assets/SOLIDO-Icon-DV7YFduV.png"
           alt="Solido Logo"
@@ -202,6 +202,47 @@ export default function Sidebar({ user, onLogout, onUserUpdate, isCollapsed, onT
           </div>
         )}
       </a>
+
+      <a
+        href="https://www.facebook.com/PAGASA.DOST.GOV.PH"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="sidebar-link sidebar-link--DOSTPAGASA-bottom"
+        title={isCollapsed ? 'DOST PAGASA' : ''}
+        >
+        <img
+          src="/dostPagasa.png"
+          alt="DOST PAGASA LOGO"
+          className="sidebar-DOSTPAGASA-icon"
+        />
+        {!isCollapsed && (
+          <div className="sidebar-DOSTPAGASA-text">
+            <span className="sidebar-DOSTPAGASA-name">DOST PAGASA</span>
+            <span className="sidebar-DOSTPAGASA-sub">Facebook Page</span>
+          </div>
+        )}
+      </a>
+
+      <a
+        href="https://www.facebook.com/PHIVOLCS"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="sidebar-link sidebar-link--DOSTPHIVOLCS-bottom"
+        title={isCollapsed ? 'DOST PHIVOLCS' : ''}
+        >
+        <img
+          src="/dostPhivolcs.png"
+          alt="DOST PHIVOLCS LOGO"
+          className="sidebar-DOSTPHIVOLCS-icon"
+        />
+        {!isCollapsed && (
+          <div className="sidebar-DOSTPHIVOLCS-text">
+            <span className="sidebar-DOSTPHIVOLCS-name">DOST PHIVOLCS</span>
+            <span className="sidebar-DOSTPHIVOLCS-sub">Facebook Page</span>
+          </div>
+        )}
+      </a>
+      
 
       </nav>
       <div className="sidebar-footer">
