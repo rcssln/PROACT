@@ -910,6 +910,7 @@ setEventSignals(Object.values(deduplicated))
         type="success"
         confirmText="Close"
         onConfirm={closeSuccess}
+        showCancel={false}
       />
 
       <ConfirmationModal

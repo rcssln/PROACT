@@ -17,7 +17,8 @@ export default function ConfirmationModal({
   type = 'primary', // 'primary', 'danger', 'success', 'warning'
   icon: Icon,
   isLoading = false,
-  maxWidth = '400px'
+  maxWidth = '400px',
+  showCancel = true
 }) {
   const getIcon = () => {
     if (Icon) return <Icon size={32} />
@@ -44,20 +45,22 @@ export default function ConfirmationModal({
         <h2 className="modal-confirm-title">{title}</h2>
         <div className="modal-confirm-text">{message}</div>
         <div className="modal-confirm-footer">
-          <Button 
-            variant="subtle"
-            onClick={onClose} 
-            disabled={isLoading}
-            style={{ minWidth: '120px' }}
-          >
-            {cancelText}
-          </Button>
+          {showCancel && (
+            <Button 
+              variant="subtle"
+              onClick={onClose} 
+              disabled={isLoading}
+              style={{ minWidth: '120px' }}
+            >
+              {cancelText}
+            </Button>
+          )}
           <Button
             variant="solid"
             color={type === 'primary' ? 'primary' : type}
             onClick={onConfirm}
             isLoading={isLoading}
-            style={{ minWidth: '120px' }}
+            style={{ minWidth: '120px', marginLeft: showCancel ? '0.5rem' : '0' }}
           >
             {confirmText}
           </Button>

@@ -26,147 +26,122 @@ const ALLOWED_TABLES = new Set([
   'affected_population_reports'
 ]);
 
+// Helper for robust city comparison in SQL
+const cityCondition = (tableAlias, paramIndex) => {
+  return `REGEXP_REPLACE(${tableAlias}.city, '\\s*\\(.*\\)\\s*$', '') = $${paramIndex}`;
+};
+
 // GET /api/reports/all-types?situational_report_id=
-// Fetches every row from every sub-table for a specific SitRep
 router.get('/all-types', authenticate, async (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
   const { situational_report_id } = req.query;
+  const user = req.user;
+  
+  console.log('---------------------------------------------------------');
+  console.log(`[TRACE] /all-types | User: ${user.email} | Role: ${user.account_type}`);
+  console.log(`[TRACE] SitRep ID: ${situational_report_id}`);
+
   if (!situational_report_id) return res.status(400).json({ error: 'situational_report_id is required' });
 
-  const user = req.user;
   const isRegional = ['Regional Admin', 'Regional', 'Super Admin', 'Regional Approver'].includes(user.account_type) || user.role === 'Super Admin';
-  const isSuperAdmin = user.account_type === 'Super Admin' || user.role === 'Super Admin';
+  const isLgu = ['LGU', 'LGU Admin', 'LGU Approver'].includes(user.account_type);
+  const isProvincial = ['Provincial', 'Provincial Admin', 'Provincial Approver'].includes(user.account_type);
 
   try {
     const tables = [
-      { name: 'related_incidents', label: 'Related Incidents', id: 'incidents' },
-      { name: 'agriculture_damage_reports', label: 'Agriculture Damage', id: 'agriculture' },
-      { name: 'assistance_lgus_agencies_reports', label: 'Assistance (LGUs/Agencies)', id: 'assistance_lgus' },
-      { name: 'assistance_provided_reports', label: 'Assistance Provided', id: 'assistance' },
-      { name: 'class_suspension_reports', label: 'Class Suspension', id: 'class' },
-      { name: 'communication_lines_reports', label: 'Communication Lines', id: 'communication' },
-      { name: 'damaged_houses_reports', label: 'Damaged Houses', id: 'houses' },
-      { name: 'declaration_state_of_calamity_reports', label: 'State of Calamity', id: 'calamity' },
-      { name: 'infrastructure_damage_reports', label: 'Infrastructure Damage', id: 'infrastructure' },
-      { name: 'power_reports', label: 'Power Status', id: 'power' },
-      { name: 'pre_emptive_evacuation_reports', label: 'Pre-emptive Evac', id: 'preemptive' },
-      { name: 'roads_and_bridges', label: 'Roads & Bridges', id: 'roads' },
-      { name: 'water_supply_reports', label: 'Water Status', id: 'water' },
-      { name: 'work_suspension_reports', label: 'Work Suspension', id: 'work' }
+      { name: 'related_incidents', id: 'incidents' },
+      { name: 'agriculture_damage_reports', id: 'agriculture' },
+      { name: 'assistance_lgus_agencies_reports', id: 'assistance_lgus' },
+      { name: 'assistance_provided_reports', id: 'assistance' },
+      { name: 'class_suspension_reports', id: 'class' },
+      { name: 'communication_lines_reports', id: 'communication' },
+      { name: 'damaged_houses_reports', id: 'houses' },
+      { name: 'declaration_state_of_calamity_reports', id: 'calamity' },
+      { name: 'infrastructure_damage_reports', id: 'infrastructure' },
+      { name: 'power_reports', id: 'power' },
+      { name: 'pre_emptive_evacuation_reports', id: 'preemptive' },
+      { name: 'roads_and_bridges', id: 'roads' },
+      { name: 'water_supply_reports', id: 'water' },
+      { name: 'work_suspension_reports', id: 'work' }
     ];
 
     const results = [];
 
-    // 1. Handle regular sub-tables
     await Promise.all(tables.map(async (table) => {
       let query = `SELECT t.* FROM ${table.name} t`;
       const conditions = [`t.situational_report_id = $1`];
       const params = [situational_report_id];
 
-      const isLgu = ['LGU', 'LGU Admin', 'LGU Approver'].includes(user.account_type);
-
       if (!isRegional) {
         if (isLgu && user.city) {
-          params.push(user.city);
-          conditions.push(`t.city = $${params.length}`);
-        } else if (user.province) {
+          const cleanCity = user.city.replace(/\s*\(.*\)\s*$/, '').trim();
+          params.push(cleanCity);
+          conditions.push(cityCondition('t', params.length));
+        } else if (isProvincial && user.province) {
           query += ` INNER JOIN situational_reports sr ON t.situational_report_id = sr.id`;
           params.push(user.province);
           conditions.push(`(sr.province = $${params.length} OR sr.province IS NULL)`);
         }
       }
 
-      if (isRegional && !isSuperAdmin) {
-        query += ` AND (rr.city IS NULL OR rr.city = '' OR EXISTS (
-          SELECT 1 FROM users u 
-          WHERE u.city = rr.city AND u.status = 'Active'
-        ))`;
-      }
-
       const { rows } = await pool.query(`${query} WHERE ${conditions.join(' AND ')}`, params);
+      if (rows.length > 0) console.log(`[TRACE] Table ${table.name}: Found ${rows.length} rows`);
+      
       rows.forEach(r => {
-        let subject = r.barangay || r.city || r.road_bridge_name || r.telecompany || r.infrastructure_name || 'Report Entry';
-        let summary = r.type || r.classification || r.status || '';
-
-        if (table.id === 'power' || table.id === 'water') {
-          summary = `${r.status || 'Ongoing'} | ${r.service_provider || ''}`;
-        } else if (table.id === 'roads') {
-          summary = `${r.status || 'Passable'} | ${r.classification || ''}`;
-        } else if (table.id === 'houses') {
-          summary = `Totally: ${r.totally_damaged || 0} | Partially: ${r.partially_damaged || 0}`;
-        }
-
         results.push({
           ...r,
           category: table.id,
           tableName: table.name,
-          categoryTitle: table.label,
-          subject: subject,
-          summary: summary,
-          timestamp: r.created_at
+          timestamp: r.created_at || new Date()
         });
       });
     }));
 
-    // 2. Handle Affected Population (reports -> report_rows)
-    let reportsQuery = 'SELECT t.id, t.created_at FROM reports t';
-    const reportsConditions = [`t.situational_report_id = $1`];
-    const reportsParams = [situational_report_id];
-
-    if (!isRegional && user.province) {
-      reportsQuery += ` INNER JOIN situational_reports sr ON t.situational_report_id = sr.id`;
-      reportsParams.push(user.province);
-      reportsConditions.push(`(sr.province = $${reportsParams.length} OR sr.province IS NULL)`);
-    }
-
-    const { rows: reports } = await pool.query(`${reportsQuery} WHERE ${reportsConditions.join(' AND ')}`, reportsParams);
+    // Affected Population (reports -> report_rows)
+    console.log(`[TRACE] Checking 'reports' table for SitRep ${situational_report_id}...`);
+    const { rows: reports } = await pool.query('SELECT id, created_at FROM reports WHERE situational_report_id = $1', [situational_report_id]);
+    console.log(`[TRACE] Found ${reports.length} parent reports`);
 
     if (reports.length > 0) {
       const reportIds = reports.map(r => r.id);
-      let rowsQuery = `
-        SELECT t.*, r.situational_report_id 
-        FROM report_rows t 
-        INNER JOIN reports r ON t.report_id = r.id
-      `;
+      let rowsQuery = `SELECT t.*, r.situational_report_id, r.created_at as parent_created_at FROM report_rows t INNER JOIN reports r ON t.report_id = r.id`;
       const rowsConditions = [`t.report_id = ANY($1::uuid[])`];
       const rowsParams = [reportIds];
 
-      const isLgu = ['LGU', 'LGU Admin', 'LGU Approver'].includes(user.account_type);
-
-      if (isLgu && user.city) {
-        rowsParams.push(user.city);
-        rowsConditions.push(`t.city = $${rowsParams.length}`);
-      } else if (isRegional && !isSuperAdmin) {
-        rowsConditions.push(`(t.city IS NULL OR t.city = '' OR EXISTS (
-          SELECT 1 FROM lgu_submissions ls 
-          WHERE ls.situational_report_id = r.situational_report_id 
-            AND ls.city = t.city 
-            AND ls.status = 'Approved'
-        ))`);
+      if (!isRegional) {
+        if (isLgu && user.city) {
+          const cleanCity = user.city.replace(/\s*\(.*\)\s*$/, '').trim();
+          rowsParams.push(cleanCity);
+          rowsConditions.push(cityCondition('t', rowsParams.length));
+        }
       }
 
       const { rows: reportRows } = await pool.query(`${rowsQuery} WHERE ${rowsConditions.join(' AND ')}`, rowsParams);
+      console.log(`[TRACE] Found ${reportRows.length} report_rows`);
+      
       reportRows.forEach(r => {
         results.push({
           ...r,
           category: 'evacuation',
           tableName: 'reports',
-          categoryTitle: 'Affected Population',
-          subject: r.barangay,
-          timestamp: r.created_at
+          report_id: r.report_id,
+          timestamp: r.created_at || r.parent_created_at || new Date()
         });
       });
     }
 
+    console.log(`[TRACE] /all-types | Returning total ${results.length} items`);
+    console.log('---------------------------------------------------------');
     res.json(results);
   } catch (err) {
-    console.error('[Reports/AllTypes] CRITICAL ERROR:', err.message);
-    console.error(err.stack);
-    res.status(500).json({ error: 'Server error', details: err.message });
+    console.error('[TRACE] /all-types ERROR:', err.message);
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
 // GET /api/reports/consolidated
 router.get('/consolidated', authenticate, async (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
   const { event_id, situational_report_ids } = req.query;
   if (!event_id) return res.status(400).json({ error: 'event_id is required' });
 
@@ -184,43 +159,39 @@ router.get('/consolidated', authenticate, async (req, res) => {
       ? situational_report_ids.split(',').map(id => id.trim()).filter(id => id !== '')
       : [];
 
-    // If situational_report_ids was explicitly passed as an empty string, return empty results
     if (typeof situational_report_ids === 'string' && sitRepIds.length === 0) {
       return res.json({ categoryTotals: {}, byCityCategory: {}, details: {}, data: [] });
     }
 
     const user = req.user;
     const isRegional = ['Regional Admin', 'Regional', 'Super Admin', 'Regional Approver'].includes(user.account_type) || user.role === 'Super Admin';
+    const isLgu = ['LGU', 'LGU Admin', 'LGU Approver'].includes(user.account_type);
+    const isProvincial = ['Provincial', 'Provincial Admin', 'Provincial Approver'].includes(user.account_type);
 
     await Promise.all(tables.map(async (table) => {
-      let baseQuery = '';
-      if (table === 'reports') {
-        baseQuery = `SELECT t.*, sr.province FROM ${table} t INNER JOIN situational_reports sr ON t.situational_report_id = sr.id`;
-      } else {
-        baseQuery = `SELECT t.*, sr.province FROM ${table} t INNER JOIN situational_reports sr ON t.situational_report_id = sr.id`;
-      }
-
+      let baseQuery = `SELECT t.*, sr.province FROM ${table} t INNER JOIN situational_reports sr ON t.situational_report_id = sr.id`;
       const conditions = [`t.event_id = $1`];
       const params = [event_id];
 
-      const isLgu = ['LGU', 'LGU Admin', 'LGU Approver'].includes(user.account_type);
       if (!isRegional) {
         if (isLgu && user.city) {
-          params.push(user.city);
-          conditions.push(`t.city = $${params.length}`);
+          if (table !== 'reports') {
+            params.push(user.city.replace(/\s*\(.*\)\s*$/, '').trim());
+            conditions.push(cityCondition('t', params.length));
+          }
         } else if (user.province) {
           params.push(user.province);
           conditions.push(`(sr.province = $${params.length} OR sr.province IS NULL)`);
         }
-      }
 
-      if (!isLgu && table !== 'reports') {
-        conditions.push(`(t.city IS NULL OR t.city = '' OR EXISTS (
-          SELECT 1 FROM lgu_submissions ls 
-          WHERE ls.situational_report_id = t.situational_report_id 
-            AND ls.city = t.city 
-            AND ls.status = 'Approved'
-        ))`);
+        if (!isLgu && !isProvincial && table !== 'reports') {
+          conditions.push(`(t.city IS NULL OR t.city = '' OR EXISTS (
+            SELECT 1 FROM lgu_submissions ls 
+            WHERE ls.situational_report_id = t.situational_report_id 
+              AND REGEXP_REPLACE(ls.city, '\\s*\\(.*\\)\\s*$/, '') = REGEXP_REPLACE(t.city, '\\s*\\(.*\\)\\s*$', '')
+              AND ls.status = 'Approved'
+          ))`);
+        }
       }
 
       if (sitRepIds.length > 0) {
@@ -228,510 +199,177 @@ router.get('/consolidated', authenticate, async (req, res) => {
         conditions.push(`t.situational_report_id = ANY($${params.length}::uuid[])`);
       }
 
-      const query = `${baseQuery} WHERE ${conditions.join(' AND ')}`;
-      const { rows } = await pool.query(query, params);
+      const { rows } = await pool.query(`${baseQuery} WHERE ${conditions.join(' AND ')}`, params);
 
       if (table === 'reports' && rows.length > 0) {
         const reportIds = rows.map(r => r.id);
-        let query = `
-          SELECT rr.*, r.situational_report_id 
-          FROM report_rows rr 
-          INNER JOIN reports r ON rr.report_id = r.id 
-          WHERE rr.report_id = ANY($1::uuid[])
-        `;
-        const params = [reportIds];
-        if (!isLgu) {
-          query += ` AND (rr.city IS NULL OR rr.city = '' OR EXISTS (
-            SELECT 1 FROM lgu_submissions ls 
-            WHERE ls.situational_report_id = r.situational_report_id 
-              AND ls.city = rr.city 
-              AND ls.status = 'Approved'
-          ))`;
+        let rrQuery = `SELECT rr.*, r.situational_report_id FROM report_rows rr INNER JOIN reports r ON rr.report_id = r.id WHERE rr.report_id = ANY($1::uuid[])`;
+        const rrParams = [reportIds];
+        
+        if (!isRegional) {
+          if (isLgu && user.city) {
+            rrParams.push(user.city.replace(/\s*\(.*\)\s*$/, '').trim());
+            rrQuery += ` AND ${cityCondition('rr', rrParams.length)}`;
+          } else if (!isLgu && !isProvincial) {
+            rrQuery += ` AND (rr.city IS NULL OR rr.city = '' OR EXISTS (
+              SELECT 1 FROM lgu_submissions ls 
+              WHERE ls.situational_report_id = r.situational_report_id 
+                AND REGEXP_REPLACE(ls.city, '\\s*\\(.*\\)\\s*$', '') = REGEXP_REPLACE(rr.city, '\\s*\\(.*\\)\\s*$', '')
+                AND ls.status = 'Approved'
+            ))`;
+          }
         }
-        const { rows: reportRows } = await pool.query(query, params);
+        const { rows: reportRows } = await pool.query(rrQuery, rrParams);
         rawData['affected_population'] = reportRows;
       } else {
         rawData[table] = rows;
       }
     }));
 
-    // --- Aggregation logic for PDF ---
-    const citiesSet = new Set();
-    const categoryTotals = {
-      relatedIncidents: { total: 0, flooded: 0, subsided: 0, receding: 0, fallenDebris: 0, stormSurge: 0, other: 0 },
-      affectedPopulation: { families: 0, persons: 0, ecs_now: 0, in_fam_now: 0, in_per_now: 0, out_fam_now: 0, out_per_now: 0, brgy_count: 0 },
-      roadsAndBridges: { total: 0, roads: 0, bridges: 0, passable: 0, notPassable: 0 },
-      power: { total: 0, interrupted: 0, restored: 0 },
-      waterSupply: { total: 0, interrupted: 0, restored: 0 },
-      communicationLines: { total: 0, interrupted: 0, restored: 0 },
-      damagedHouses: { total: 0, totally: 0, partially: 0, amount: 0 },
-      classSuspension: 0,
-      workSuspension: 0,
-      stateOfCalamity: 0,
-      preEmptiveEvacuation: { families: 0, persons: 0 }
-    };
-    const byCityCategory = {};
-
-    const getCityData = (city) => {
-      if (!city) return null;
-      citiesSet.add(city);
-      if (!byCityCategory[city]) {
-        byCityCategory[city] = {
-          relatedIncidents: { total: 0, flooded: 0, subsided: 0, receding: 0, fallenDebris: 0, stormSurge: 0, other: 0 },
-          affectedPopulation: { families: 0, persons: 0, ecs_now: 0, in_fam_now: 0, in_per_now: 0, out_fam_now: 0, out_per_now: 0, brgy_count: 0 },
-          roadsAndBridges: { total: 0, roads: 0, bridges: 0, passable: 0, notPassable: 0 },
-          power: { total: 0, interrupted: 0, restored: 0 },
-          waterSupply: { total: 0, interrupted: 0, restored: 0 },
-          communicationLines: { total: 0, interrupted: 0, restored: 0 },
-          damagedHouses: { total: 0, totally: 0, partially: 0, amount: 0 },
-          classSuspension: 0,
-          workSuspension: 0,
-          stateOfCalamity: 0,
-          preEmptiveEvacuation: { families: 0, persons: 0 }
-        };
-      }
-      return byCityCategory[city];
-    };
-
-    // 1. Related Incidents
-    (rawData.related_incidents || []).forEach(r => {
-      const city = r.city;
-      const cityData = getCityData(city);
-      const status = (r.status || '').toLowerCase();
-      const type = (r.type_of_incident || r.type || '').toLowerCase();
-
-      const update = (obj) => {
-        obj.total++;
-        if (type.includes('flood')) {
-          if (status.includes('subs')) obj.subsided++;
-          else if (status.includes('rece')) obj.receding++;
-          else obj.flooded++;
-        } else if (type.includes('debris') || type.includes('tree')) obj.fallenDebris++;
-        else if (type.includes('surge')) obj.stormSurge++;
-        else obj.other++;
-      };
-      update(categoryTotals.relatedIncidents);
-      if (cityData) update(cityData.relatedIncidents);
-    });
-
-    // 2. Affected Population
-    (rawData.affected_population || []).forEach(r => {
-      const city = r.city || 'Unknown';
-      const cityData = getCityData(city);
-      const update = (obj) => {
-        obj.families += (r.affected_families || 0);
-        obj.persons += (r.affected_persons || 0);
-        obj.ecs_now += (r.ecs_now || 0);
-        obj.in_fam_now += (r.inside_families_now || 0);
-        obj.in_per_now += (r.inside_persons_now || 0);
-        obj.out_fam_now += (r.outside_families_now || 0);
-        obj.out_per_now += (r.outside_persons_now || 0);
-        obj.brgy_count++;
-      };
-      update(categoryTotals.affectedPopulation);
-      if (cityData) update(cityData.affectedPopulation);
-    });
-
-    // 3. Roads and Bridges
-    (rawData.roads_and_bridges || []).forEach(r => {
-      const city = r.city;
-      const cityData = getCityData(city);
-      const isRoad = (r.type || '').toLowerCase().includes('road');
-      const isPassable = (r.status || '').toLowerCase().includes('passable') && !(r.status || '').toLowerCase().includes('not');
-
-      const update = (obj) => {
-        obj.total++;
-        if (isRoad) obj.roads++; else obj.bridges++;
-        if (isPassable) obj.passable++; else obj.notPassable++;
-      };
-      update(categoryTotals.roadsAndBridges);
-      if (cityData) update(cityData.roadsAndBridges);
-    });
-
-    // 4. Power
-    (rawData.power_reports || []).forEach(r => {
-      const city = r.city;
-      const cityData = getCityData(city);
-      const isRestored = (r.status || '').toLowerCase().includes('restored');
-
-      const update = (obj) => {
-        obj.total++;
-        if (isRestored) obj.restored++; else obj.interrupted++;
-      };
-      update(categoryTotals.power);
-      if (cityData) update(cityData.power);
-    });
-
-    // 5. Water
-    (rawData.water_supply_reports || []).forEach(r => {
-      const city = r.city;
-      const cityData = getCityData(city);
-      const isRestored = (r.status || '').toLowerCase().includes('restored');
-      const update = (obj) => {
-        obj.total++;
-        if (isRestored) obj.restored++; else obj.interrupted++;
-      };
-      update(categoryTotals.waterSupply);
-      if (cityData) update(cityData.waterSupply);
-    });
-
-    // 6. Communication
-    (rawData.communication_lines_reports || []).forEach(r => {
-      const city = r.city;
-      const cityData = getCityData(city);
-      const isRestored = (r.status_of_communication || '').toLowerCase().includes('restored');
-      const update = (obj) => {
-        obj.total++;
-        if (isRestored) obj.restored++; else obj.interrupted++;
-      };
-      update(categoryTotals.communicationLines);
-      if (cityData) update(cityData.communicationLines);
-    });
-
-    // 7. Damaged Houses
-    (rawData.damaged_houses_reports || []).forEach(r => {
-      const city = r.city;
-      const cityData = getCityData(city);
-      const update = (obj) => {
-        obj.total += ((r.totally_damaged || 0) + (r.partially_damaged || 0));
-        obj.totally += (r.totally_damaged || 0);
-        obj.partially += (r.partially_damaged || 0);
-        obj.amount += Number(r.amount_php || 0);
-      };
-      update(categoryTotals.damagedHouses);
-      if (cityData) update(cityData.damagedHouses);
-    });
-
-    // 8. Suspensions / SoC
-    (rawData.class_suspension_reports || []).forEach(r => {
-      categoryTotals.classSuspension++;
-      const cd = getCityData(r.city); if (cd) cd.classSuspension++;
-    });
-    (rawData.work_suspension_reports || []).forEach(r => {
-      categoryTotals.workSuspension++;
-      const cd = getCityData(r.city); if (cd) cd.workSuspension++;
-    });
-    (rawData.declaration_state_of_calamity_reports || []).forEach(r => {
-      categoryTotals.stateOfCalamity++;
-      const cd = getCityData(r.city); if (cd) cd.stateOfCalamity++;
-    });
-
-    // 9. Pre-emptive
-    (rawData.pre_emptive_evacuation_reports || []).forEach(r => {
-      const city = r.city;
-      const cityData = getCityData(city);
-      const update = (obj) => {
-        obj.families += (r.families || 0);
-        obj.persons += (r.persons || (r.families || 0) * 5);
-      };
-      update(categoryTotals.preEmptiveEvacuation);
-      if (cityData) update(cityData.preEmptiveEvacuation);
-    });
-
-    const response = {
-      cities: Array.from(citiesSet).sort(),
-      categoryTotals,
-      byCityCategory,
-      details: {
-        relatedIncidents: rawData.related_incidents || [],
-        affectedPopulation: rawData.affected_population || [],
-        roadsAndBridges: rawData.roads_and_bridges || [],
-        power: rawData.power_reports || [],
-        waterSupply: rawData.water_supply_reports || [],
-        communicationLines: rawData.communication_lines_reports || [],
-        damagedHouses: rawData.damaged_houses_reports || [],
-        classSuspension: rawData.class_suspension_reports || [],
-        workSuspension: rawData.work_suspension_reports || [],
-        stateOfCalamity: rawData.declaration_state_of_calamity_reports || [],
-        preEmptiveEvacuation: rawData.pre_emptive_evacuation_reports || [],
-        assistanceProvided: rawData.assistance_provided_reports || [],
-        assistanceLgusAgencies: rawData.assistance_lgus_agencies_reports || [],
-        agricultureDamage: rawData.agriculture_damage_reports || [],
-        infrastructureDamage: rawData.infrastructure_damage_reports || [],
-      },
-      summaryData: {
-        // Fallback or placeholders if needed by AI summarizer
-      }
-    };
-
-    res.json(response);
+    res.json({ details: rawData });
   } catch (err) {
-    console.error('[Reports/Consolidated] CRITICAL ERROR:', err.message);
-    console.error(err.stack);
-    res.status(500).json({ error: 'Server error', details: err.message });
+    console.error('[Reports/Consolidated] ERROR:', err.message);
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
-
-// GET /api/reports/:table?event_id=&situational_report_id=
+// GET /api/reports/:table
 router.get('/:table', authenticate, async (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
   const { table } = req.params;
-  if (!ALLOWED_TABLES.has(table)) {
-    return res.status(400).json({ error: 'Unknown table' });
-  }
+  if (!ALLOWED_TABLES.has(table)) return res.status(400).json({ error: 'Unknown table' });
 
-  const { event_id, situational_report_id, report_id } = req.query;
+  const { event_id, situational_report_id } = req.query;
   const user = req.user;
   const isRegional = ['Regional Admin', 'Regional', 'Super Admin', 'Regional Approver'].includes(user.account_type) || user.role === 'Super Admin';
 
-  let baseQuery = '';
-  if (table === 'report_rows') {
-    baseQuery = `SELECT t.*, sr.province FROM ${table} t INNER JOIN reports r ON t.report_id = r.id INNER JOIN situational_reports sr ON r.situational_report_id = sr.id`;
-  } else {
-    baseQuery = `SELECT t.*, sr.province FROM ${table} t INNER JOIN situational_reports sr ON t.situational_report_id = sr.id`;
-  }
+  let baseQuery = `SELECT t.*, sr.province FROM ${table} t `;
+  if (table === 'report_rows') baseQuery += `INNER JOIN reports r ON t.report_id = r.id INNER JOIN situational_reports sr ON r.situational_report_id = sr.id`;
+  else if (table === 'roads_and_bridges_sections') baseQuery += `INNER JOIN roads_and_bridges rb ON t.report_id = rb.id INNER JOIN situational_reports sr ON rb.situational_report_id = sr.id`;
+  else baseQuery += `INNER JOIN situational_reports sr ON t.situational_report_id = sr.id`;
 
   const conditions = [];
   const params = [];
 
-  // Hierarchical Scoping Logic
-  const isLgu = ['LGU', 'LGU Admin', 'LGU Approver'].includes(user.account_type);
   if (!isRegional) {
+    const isLgu = ['LGU', 'LGU Admin', 'LGU Approver'].includes(user.account_type);
+    const isProvincial = ['Provincial', 'Provincial Admin', 'Provincial Approver'].includes(user.account_type);
+
     if (isLgu && user.city) {
-      params.push(user.city);
-      conditions.push(`t.city = $${params.length}`);
+      if (!['reports', 'roads_and_bridges_sections'].includes(table)) {
+        params.push(user.city.replace(/\s*\(.*\)\s*$/, '').trim());
+        conditions.push(cityCondition('t', params.length));
+      }
     } else if (user.province) {
       params.push(user.province);
       conditions.push(`(sr.province = $${params.length} OR sr.province IS NULL)`);
     }
-  }
 
-  if (!isLgu) {
-    if (table === 'report_rows') {
-      conditions.push(`(t.city IS NULL OR t.city = '' OR EXISTS (
-        SELECT 1 FROM lgu_submissions ls 
-        WHERE ls.situational_report_id = r.situational_report_id 
-          AND ls.city = t.city 
-          AND ls.status = 'Approved'
-      ))`);
-    } else if (table !== 'reports') {
-      conditions.push(`(t.city IS NULL OR t.city = '' OR EXISTS (
+    if (!isLgu && !isProvincial && !['reports', 'report_rows', 'roads_and_bridges_sections'].includes(table)) {
+       conditions.push(`(t.city IS NULL OR t.city = '' OR EXISTS (
         SELECT 1 FROM lgu_submissions ls 
         WHERE ls.situational_report_id = t.situational_report_id 
-          AND ls.city = t.city 
+          AND REGEXP_REPLACE(ls.city, '\\s*\\(.*\\)\\s*$', '') = REGEXP_REPLACE(t.city, '\\s*\\(.*\\)\\s*$', '')
           AND ls.status = 'Approved'
       ))`);
     }
   }
 
-  if (event_id) {
-    params.push(event_id);
-    conditions.push(`t.event_id = $${params.length}`);
-  }
-  if (typeof situational_report_id === 'string') {
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    const ids = situational_report_id.split(',')
-      .map(id => id.trim())
-      .filter(id => id !== '' && uuidRegex.test(id));
-
-    if (ids.length > 0) {
-      params.push(ids);
-      conditions.push(`t.situational_report_id = ANY($${params.length}::uuid[])`);
-    } else {
-      // If situational_report_id is explicitly passed but has no valid IDs, it must match nothing.
-      conditions.push('1=0');
-    }
-  }
-  if (typeof report_id === 'string') {
-    const ids = report_id.split(',').map(id => id.trim()).filter(id => id !== '');
-    if (ids.length > 0) {
-      params.push(ids);
-      conditions.push(`t.report_id = ANY($${params.length}::uuid[])`);
-    } else {
-      // If report_id is explicitly passed but empty, it should match nothing
-      conditions.push('1=0');
-    }
+  if (event_id) { params.push(event_id); conditions.push(table === 'report_rows' ? `r.event_id = $${params.length}` : `t.event_id = $${params.length}`); }
+  if (situational_report_id) { 
+    const ids = situational_report_id.split(',').filter(id => id.trim());
+    if (ids.length > 0) { params.push(ids); conditions.push(table === 'report_rows' ? `r.situational_report_id = ANY($${params.length}::uuid[])` : `t.situational_report_id = ANY($${params.length}::uuid[])`); }
   }
 
   const where = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
   try {
-    const query = `${baseQuery} ${where} ORDER BY t.created_at DESC`;
-    const { rows } = await pool.query(query, params);
+    const { rows } = await pool.query(`${baseQuery} ${where} ORDER BY t.created_at DESC`, params);
     res.json(rows);
   } catch (err) {
-    console.error(`[Reports/GET/${table}] CRITICAL ERROR:`, err.message);
-    console.error(err.stack);
-    res.status(500).json({ error: 'Server error', details: err.message });
+    console.error(`[Reports/GET/${table}]`, err);
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
-// POST /api/reports/:table  – insert a row
+// POST /api/reports/:table
 router.post('/:table', authenticate, async (req, res) => {
   const { table } = req.params;
-  if (!ALLOWED_TABLES.has(table)) {
-    return res.status(400).json({ error: 'Unknown table' });
-  }
-
+  if (!ALLOWED_TABLES.has(table)) return res.status(400).json({ error: 'Unknown table' });
   const body = req.body;
   const columns = Object.keys(body);
-  if (columns.length === 0) return res.status(400).json({ error: 'No fields provided' });
-
   const placeholders = columns.map((_, i) => `$${i + 1}`).join(', ');
-  const values = columns.map(col => {
-    const v = body[col];
-    return typeof v === 'object' && v !== null ? JSON.stringify(v) : v;
-  });
+  const values = columns.map(col => typeof body[col] === 'object' && body[col] !== null ? JSON.stringify(body[col]) : body[col]);
 
   try {
-    console.log(`[DB/Post] Inserting into ${table}:`, body);
-    const { rows } = await pool.query(
-      `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${placeholders}) RETURNING *`,
-      values
-    );
-    const io = req.app.locals.io;
-    if (io) io.emit(`${table}:created`, rows[0]);
+    const { rows } = await pool.query(`INSERT INTO ${table} (${columns.join(', ')}) VALUES (${placeholders}) RETURNING *`, values);
+    if (req.app.locals.io) req.app.locals.io.emit(`${table}:created`, rows[0]);
     res.status(201).json(rows[0]);
   } catch (err) {
-    console.error(`[Reports/POST/${table}] ERROR:`, err.message);
-    res.status(500).json({ error: 'Server error', details: err.message });
+    console.error(`[Reports/POST/${table}]`, err);
+    res.status(500).json({ error: 'Server error' });
   }
 });
 
-// POST /api/reports/:table/bulk – insert multiple rows
+// POST /api/reports/:table/bulk
 router.post('/:table/bulk', authenticate, async (req, res) => {
   const { table } = req.params;
-  if (!ALLOWED_TABLES.has(table)) {
-    return res.status(400).json({ error: 'Unknown table' });
-  }
-
-  const data = req.body; // Expect array of objects
-  if (!Array.isArray(data) || data.length === 0) {
-    return res.status(400).json({ error: 'Array of rows required' });
-  }
+  if (!ALLOWED_TABLES.has(table)) return res.status(400).json({ error: 'Unknown table' });
+  const data = req.body;
+  if (!Array.isArray(data) || data.length === 0) return res.status(400).json({ error: 'Array required' });
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const results = [];
-
     for (const row of data) {
-      const columns = Object.keys(row);
-      const placeholders = columns.map((_, i) => `$${i + 1}`).join(', ');
-      const values = columns.map(col => {
-        const v = row[col];
-        return typeof v === 'object' && v !== null ? JSON.stringify(v) : v;
-      });
-
-      console.log(`[DB/Bulk] Inserting into ${table}:`, row);
-
-      const { rows } = await client.query(
-        `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${placeholders}) RETURNING *`,
-        values
-      );
+      const cols = Object.keys(row);
+      const vals = cols.map(c => typeof row[c] === 'object' && row[c] !== null ? JSON.stringify(row[c]) : row[c]);
+      const { rows } = await client.query(`INSERT INTO ${table} (${cols.join(', ')}) VALUES (${cols.map((_, i) => `$${i+1}`).join(',')}) RETURNING *`, vals);
       results.push(rows[0]);
     }
-
     await client.query('COMMIT');
-    const io = req.app.locals.io;
-    if (io) io.emit(`${table}:bulk_created`, { count: results.length });
+    if (req.app.locals.io) req.app.locals.io.emit(`${table}:bulk_created`, { count: results.length });
     res.status(201).json(results);
   } catch (err) {
     await client.query('ROLLBACK');
-    console.error(`[Reports/POST/${table}/bulk] ERROR:`, err.message);
-    console.error(`[Reports/POST/${table}/bulk] STACK:`, err.stack);
-    res.status(500).json({ error: 'Server error', details: err.message });
-  } finally {
-    client.release();
-  }
+    res.status(500).json({ error: 'Server error' });
+  } finally { client.release(); }
 });
 
-// PATCH /api/reports/:table/bulk – update multiple rows
+// PATCH /api/reports/:table/bulk
 router.patch('/:table/bulk', authenticate, async (req, res) => {
   const { table } = req.params;
-  if (!ALLOWED_TABLES.has(table)) {
-    return res.status(400).json({ error: 'Unknown table' });
-  }
-
-  const data = req.body; // Expect array of objects with 'id'
-  if (!Array.isArray(data) || data.length === 0) {
-    return res.status(400).json({ error: 'Array of rows required' });
-  }
-
+  if (!ALLOWED_TABLES.has(table)) return res.status(400).json({ error: 'Unknown table' });
+  const data = req.body;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
     const results = [];
-
     for (const row of data) {
       const { id, ...body } = row;
-      if (!id) continue;
-
-      const columns = Object.keys(body);
-      if (columns.length === 0) continue;
-
-      const setClauses = columns.map((col, i) => `${col} = $${i + 1}`).join(', ');
-      const values = columns.map(col => {
-        const v = body[col];
-        return typeof v === 'object' && v !== null ? JSON.stringify(v) : v;
-      });
-      values.push(id);
-
-      const { rows } = await client.query(
-        `UPDATE ${table} SET ${setClauses} WHERE id = $${values.length} RETURNING *`,
-        values
-      );
+      const cols = Object.keys(body);
+      const vals = cols.map(c => typeof body[c] === 'object' && body[c] !== null ? JSON.stringify(body[c]) : body[c]);
+      vals.push(id);
+      const { rows } = await client.query(`UPDATE ${table} SET ${cols.map((c, i) => `${c}=$${i+1}`).join(',')} WHERE id=$${vals.length} RETURNING *`, vals);
       if (rows.length > 0) results.push(rows[0]);
     }
-
     await client.query('COMMIT');
-    const io = req.app.locals.io;
-    if (io) io.emit(`${table}:bulk_updated`, { count: results.length });
     res.json(results);
-  } catch (err) {
-    await client.query('ROLLBACK');
-    console.error(`[Reports/PATCH/${table}/bulk]`, err);
-    res.status(500).json({ error: 'Server error' });
-  } finally {
-    client.release();
-  }
+  } catch (err) { await client.query('ROLLBACK'); res.status(500).json({ error: 'Server error' }); }
+  finally { client.release(); }
 });
 
-// PUT /api/reports/:table/:id  – full update
-router.put('/:table/:id', authenticate, async (req, res) => {
-  const { table, id } = req.params;
-  if (!ALLOWED_TABLES.has(table)) {
-    return res.status(400).json({ error: 'Unknown table' });
-  }
-
-  const body = req.body;
-  const columns = Object.keys(body);
-  if (columns.length === 0) return res.status(400).json({ error: 'No fields provided' });
-
-  const setClauses = columns.map((col, i) => `${col} = $${i + 1}`).join(', ');
-  const values = columns.map(col => {
-    const v = body[col];
-    return typeof v === 'object' && v !== null ? JSON.stringify(v) : v;
-  });
-  values.push(id);
-
-  try {
-    const { rows } = await pool.query(
-      `UPDATE ${table} SET ${setClauses} WHERE id = $${values.length} RETURNING *`,
-      values
-    );
-    if (!rows.length) return res.status(404).json({ error: 'Row not found' });
-    res.json(rows[0]);
-  } catch (err) {
-    console.error(`[Reports/PUT/${table}/${id}]`, err);
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
-// DELETE /api/reports/:table/:id
 router.delete('/:table/:id', authenticate, async (req, res) => {
   const { table, id } = req.params;
-  if (!ALLOWED_TABLES.has(table)) {
-    return res.status(400).json({ error: 'Unknown table' });
-  }
-  try {
-    await pool.query(`DELETE FROM ${table} WHERE id = $1`, [id]);
-    res.json({ success: true });
-  } catch (err) {
-    console.error(`[Reports/DELETE/${table}/${id}]`, err);
-    res.status(500).json({ error: 'Server error' });
-  }
+  try { await pool.query(`DELETE FROM ${table} WHERE id = $1`, [id]); res.json({ success: true }); }
+  catch (err) { res.status(500).json({ error: 'Server error' }); }
 });
 
-
+router.delete('/:table/bulk', authenticate, async (req, res) => {
+  const { table } = req.params;
+  const { ids } = req.body;
+  try { const { rowCount } = await pool.query(`DELETE FROM ${table} WHERE id = ANY($1::uuid[])`, [ids]); res.json({ success: true, deleted: rowCount }); }
+  catch (err) { res.status(500).json({ error: 'Server error' }); }
+});
 
 module.exports = router;

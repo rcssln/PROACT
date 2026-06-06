@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { createPortal } from 'react-dom'
 import { useOutletContext } from 'react-router-dom'
-import { ArrowsClockwise, DotsThree, ArrowRight, TrendUp, TrendDown, CaretLeft, CaretRight, Pencil, Warning, CloudRain, Pulse, Flame, Info, Check, Calendar, Bell, X, ChartBar as BarChartIcon, ChartPie as PieChartIcon, ChartLineUp as LineChartIcon, ShieldCheck, PaperPlaneRight, MagnifyingGlass, Hurricane, Drop, Waveform, Waves, CloudWarning, WarningCircle, CheckCircle } from '@phosphor-icons/react'
+import { ArrowsClockwise, DotsThree, ArrowRight, TrendUp, TrendDown, CaretLeft, CaretRight, Pencil, Warning, CloudRain, Pulse, Flame, Info, Check, Calendar, Bell, X, ChartBar as BarChartIcon, ChartPie as PieChartIcon, ChartLineUp as LineChartIcon, ShieldCheck, PaperPlaneRight, MagnifyingGlass, Hurricane, Drop, Waveform, Waves, CloudWarning, WarningCircle, CheckCircle, Thermometer, CloudSun, Sun, Cloud, CloudSnow, CloudLightning } from '@phosphor-icons/react'
 import {
   ResponsiveContainer,
   BarChart,
@@ -248,6 +248,52 @@ export default function Dashboard() {
   const [isEditingExistingEvent, setIsEditingExistingEvent] = useState(false)
   const [editForm, setEditForm] = useState({ name: '', color: '#6366f1', startDate: '', endDate: '', eventType: 'calamity', alertStatus: 'white', pingedReportTypes: [] })
   const [activeTab, setActiveTab] = useState('All Reports')
+
+  // --- Weather Logic ---
+  const [weather, setWeather] = useState(null)
+  const [weatherLoading, setWeatherLoading] = useState(false)
+
+  const fetchWeather = useCallback(async () => {
+    const location = user?.city || user?.province || 'Region 1, Philippines'
+    try {
+      setWeatherLoading(true)
+      // wttr.in is free and doesn't require an API key
+      const response = await fetch(`https://wttr.in/${encodeURIComponent(location)}?format=j1`)
+      const data = await response.json()
+      if (data && data.current_condition && data.current_condition[0]) {
+        setWeather({
+          temp: data.current_condition[0].temp_C,
+          desc: data.current_condition[0].weatherDesc[0].value,
+          code: data.current_condition[0].weatherCode,
+          humidity: data.current_condition[0].humidity,
+          wind: data.current_condition[0].windspeedKmph
+        })
+      }
+    } catch (err) {
+      console.error('Weather fetch error:', err)
+    } finally {
+      setWeatherLoading(false)
+    }
+  }, [user])
+
+  useEffect(() => {
+    fetchWeather()
+    const interval = setInterval(fetchWeather, 1800000) // Update every 30 mins
+    return () => clearInterval(interval)
+  }, [fetchWeather])
+
+  const getWeatherIcon = (code, desc) => {
+    const d = (desc || '').toLowerCase()
+    if (d.includes('rain') || d.includes('drizzle')) return <CloudRain size={18} weight="duotone" color={T.blue} />
+    if (d.includes('thunder') || d.includes('lightning')) return <CloudLightning size={18} weight="duotone" color={T.purple} />
+    if (d.includes('snow')) return <CloudSnow size={18} weight="duotone" color="#94a3b8" />
+    if (d.includes('cloud')) {
+      if (d.includes('partly') || d.includes('sun')) return <CloudSun size={18} weight="duotone" color={T.amber} />
+      return <Cloud size={18} weight="duotone" color="#94a3b8" />
+    }
+    if (d.includes('clear') || d.includes('sun')) return <Sun size={18} weight="duotone" color={T.amber} />
+    return <Thermometer size={18} weight="duotone" color={T.orange} />
+  }
   const [selectedDashboardSitRepId, setSelectedDashboardSitRepId] = useState('')
   const [eventDropdownOpen, setEventDropdownOpen] = useState(false)
   const [sitRepDropdownOpen, setSitRepDropdownOpen] = useState(false)
@@ -1835,7 +1881,7 @@ CHRONOLOGY OF EVENTS`;
               </p>
             ) : currentEvent && currentEvent.id !== 'default-good-day' && currentEvent.alertLevel && (
               <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: '4px 0 0', fontWeight: 600 }}>
-                Currently monitoring <strong style={{ color: 'var(--text-main)' }}>{currentEvent.alertLevel}</strong> event in your area
+                Currently monitoring a <strong style={{ color: 'var(--text-main)' }}>{currentEvent.alertLevel}</strong> event in your area
               </p>
             )}
           </div>
@@ -1850,6 +1896,7 @@ CHRONOLOGY OF EVENTS`;
                       display: 'inline-block',
                       padding: '8px 25px',
                       borderRadius: '10px',
+                      border: '1px solid #000',
                       fontSize: '1.00rem',
                       fontWeight: 50,
                       letterSpacing: '1.5px',
@@ -1945,7 +1992,7 @@ CHRONOLOGY OF EVENTS`;
             <div className="dash-custom-dropdown" ref={eventDropdownRef} style={{ position: 'relative' }}>
               <button
                 className={`dash-dropdown-trigger ${eventDropdownOpen ? 'open' : ''}`}
-                onClick={() => { setEventDropdownOpen(v => !v); setSitRepDropdownOpen(false); }}
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setEventDropdownOpen(v => !v); setSitRepDropdownOpen(false); }}
               >
                 <span className="dash-dropdown-label">
                   <span className="dash-dropdown-prefix">Event</span>

@@ -257,25 +257,25 @@ export default function Users() {
           await fetchUsers()
           if (fetchPendingUsersCount) fetchPendingUsersCount()
 
-          // Notify relevant admins about the new user
-          try {
-            const { data: admins } = await api.get('/api/users')
-            const adminsToNotify = admins.filter(u => 
-              u.id !== currentUser.id && 
-              (u.role === 'Super Admin' || u.account_type?.includes('Admin'))
-            )
-            
-            if (adminsToNotify.length > 0) {
-              const notifications = adminsToNotify.map(adm => ({
-                user_id: adm.id,
-                type: 'user_created',
-                title: 'New User Registered',
-                message: `${form.firstName} ${form.lastName} has been added as ${form.accountType}.`,
-                data: { target_user_id: data.id, email: form.email }
-              }))
-              await api.post('/api/notifications/bulk', notifications)
-            }
-          } catch (notifErr) {
+// Notify relevant admins about the new user
+           try {
+             const { data: admins } = await api.get('/api/users')
+             const adminsToNotify = admins.filter(u => 
+               u.id !== currentUser.id && 
+               (u.role === 'Super Admin' || u.account_type?.includes('Admin'))
+             )
+             
+             if (adminsToNotify.length > 0) {
+               const notifications = adminsToNotify.map(adm => ({
+                 user_id: adm.id,
+                 type: 'user_created',
+                 title: 'New User Registered',
+                 message: `${form.firstName} ${form.lastName} has been added as ${form.accountType}.`,
+                 data: { target_user_id: data.id, email: form.email }
+               }))
+               await api.post('/api/notifications/bulk', notifications)
+             }
+           } catch (notifErr) {
             console.error('Failed to send user creation notifications:', notifErr)
           }
           

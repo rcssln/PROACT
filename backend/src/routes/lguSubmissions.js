@@ -12,6 +12,11 @@ function emitNotification(req, userId, notification) {
   }
 }
 
+// Helper for robust city comparison in SQL
+const cityCondition = (tableAlias, paramIndex) => {
+  return `REGEXP_REPLACE(${tableAlias}.city, '\\s*\\(.*\\)\\s*$', '') = $${paramIndex}`;
+};
+
 // GET /status  – get status of an LGU submission for a SitRep
 router.get('/status', authenticate, async (req, res) => {
   const { situational_report_id, city } = req.query;
@@ -20,9 +25,10 @@ router.get('/status', authenticate, async (req, res) => {
   }
 
   try {
+    const cleanCity = city.replace(/\s*\(.*\)\s*$/, '').trim();
     const { rows } = await pool.query(
-      'SELECT * FROM lgu_submissions WHERE situational_report_id = $1 AND city = $2',
-      [situational_report_id, city]
+      `SELECT * FROM lgu_submissions WHERE situational_report_id = $1 AND (${cityCondition('lgu_submissions', 2)} OR city = $3)`,
+      [situational_report_id, cleanCity, city]
     );
 
     if (rows.length === 0) {
@@ -44,47 +50,43 @@ router.post('/submit', authenticate, async (req, res) => {
   }
 
   try {
-    // Upsert submission status to 'Approved' (no approval gate)
+    // Upsert submission status to 'Pending LGU Approval'
+    // We use the city provided in the request (which might have the suffix)
     const { rows } = await pool.query(
-      `INSERT INTO lgu_submissions (situational_report_id, city, status, submitted_by, updated_at, rejection_remarks, approved_by, approved_at)
-       VALUES ($1, $2, 'Approved', $3, NOW(), NULL, $3, NOW())
+      `INSERT INTO lgu_submissions (situational_report_id, city, status, submitted_by, updated_at, rejection_remarks)
+       VALUES ($1, $2, 'Pending LGU Approval', $3, NOW(), NULL)
        ON CONFLICT (situational_report_id, city) 
-       DO UPDATE SET status = 'Approved', submitted_by = $3, updated_at = NOW(), rejection_remarks = NULL, approved_by = $3, approved_at = NOW()
+       DO UPDATE SET status = 'Pending LGU Approval', submitted_by = $3, updated_at = NOW(), rejection_remarks = NULL
        RETURNING *`,
       [situational_report_id, city, req.user.id]
     );
 
     const submission = rows[0];
 
-    // Notify LGU and LGU Admin users of the same city
-    const { rows: lguUsers } = await pool.query(
-      "SELECT id FROM users WHERE city = $1 AND account_type IN ('LGU', 'LGU Admin', 'LGU Approver') AND status = 'Active'",
-      [city]
+    // Find and notify LGU Approver(s) of the same city
+    const cleanCity = city.replace(/\s*\(.*\)\s*$/, '').trim();
+    const { rows: approvers } = await pool.query(
+      `SELECT id FROM users WHERE (${cityCondition('users', 1)} OR city = $2) AND account_type = 'LGU Approver' AND status = 'Active'`,
+      [cleanCity, city]
     );
 
     const io = req.app.locals.io;
-    for (const u of lguUsers) {
+    for (const approver of approvers) {
       const notifData = {
-        user_id: u.id,
+        user_id: approver.id,
         type: 'lgu_submission',
-        title: 'LGU Data Submitted',
-        message: `LGU data for ${city} has been submitted successfully.`,
+        title: 'New LGU Submission for Review',
+        message: `LGU data for ${city} has been submitted for your approval.`,
         data: JSON.stringify({ situational_report_id, city })
       };
 
       const { rows: insertedNotif } = await pool.query(
-        'INSERT INTO notifications (user_id, type, title, message, data) VALUES ($1,$2,$3,$4,$5) RETURNING *',
+        'INSERT INTO notifications (user_id, type, title, message, data) VALUES ($1, $2, $3, $4, $5) RETURNING *',
         [notifData.user_id, notifData.type, notifData.title, notifData.message, notifData.data]
       );
 
-      if (io) io.emit(`notification:${u.id}`, insertedNotif[0]);
+      if (io) io.emit(`notification:${approver.id}`, insertedNotif[0]);
     }
-
-    res.json(submission);
-  } catch (err) {
-    console.error('[LguSubmissions/submit]', err);
-    res.status(500).json({ error: 'Server error' });
-  }
 
     res.json(submission);
   } catch (err) {
@@ -105,7 +107,11 @@ router.post('/approve', authenticate, async (req, res) => {
   if (req.user.account_type !== 'LGU Approver' && !isSuperAdmin) {
     return res.status(403).json({ error: 'Only LGU Approvers can approve submissions' });
   }
-  if (!isSuperAdmin && req.user.city !== city) {
+
+  const cleanUserCity = (req.user.city || '').replace(/\s*\(.*\)\s*$/, '').trim();
+  const cleanTargetCity = city.replace(/\s*\(.*\)\s*$/, '').trim();
+
+  if (!isSuperAdmin && cleanUserCity !== cleanTargetCity) {
     return res.status(403).json({ error: 'You can only approve submissions for your own city' });
   }
 
@@ -122,9 +128,10 @@ router.post('/approve', authenticate, async (req, res) => {
     const submission = rows[0];
 
     // Notify LGU and LGU Admin users of the same city
+    const cleanCity = city.replace(/\s*\(.*\)\s*$/, '').trim();
     const { rows: lguUsers } = await pool.query(
-      "SELECT id FROM users WHERE city = $1 AND account_type IN ('LGU', 'LGU Admin') AND status = 'Active'",
-      [city]
+      `SELECT id FROM users WHERE (${cityCondition('users', 1)} OR city = $2) AND account_type IN ('LGU', 'LGU Admin') AND status = 'Active'`,
+      [cleanCity, city]
     );
 
     const io = req.app.locals.io;
@@ -146,7 +153,6 @@ router.post('/approve', authenticate, async (req, res) => {
     }
 
     // Also notify Provincial users of the same province so they can consolidate it
-    // Get the province for the situational report
     const { rows: reportRows } = await pool.query(
       'SELECT province FROM situational_reports WHERE id = $1',
       [situational_report_id]
@@ -194,7 +200,11 @@ router.post('/reject', authenticate, async (req, res) => {
   if (req.user.account_type !== 'LGU Approver' && !isSuperAdmin) {
     return res.status(403).json({ error: 'Only LGU Approvers can reject submissions' });
   }
-  if (!isSuperAdmin && req.user.city !== city) {
+  
+  const cleanUserCity = (req.user.city || '').replace(/\s*\(.*\)\s*$/, '').trim();
+  const cleanTargetCity = city.replace(/\s*\(.*\)\s*$/, '').trim();
+
+  if (!isSuperAdmin && cleanUserCity !== cleanTargetCity) {
     return res.status(403).json({ error: 'You can only reject submissions for your own city' });
   }
 
@@ -211,9 +221,10 @@ router.post('/reject', authenticate, async (req, res) => {
     const submission = rows[0];
 
     // Notify LGU and LGU Admin users of the same city
+    const cleanCity = city.replace(/\s*\(.*\)\s*$/, '').trim();
     const { rows: lguUsers } = await pool.query(
-      "SELECT id FROM users WHERE city = $1 AND account_type IN ('LGU', 'LGU Admin') AND status = 'Active'",
-      [city]
+      `SELECT id FROM users WHERE (${cityCondition('users', 1)} OR city = $2) AND account_type IN ('LGU', 'LGU Admin') AND status = 'Active'`,
+      [cleanCity, city]
     );
 
     const io = req.app.locals.io;
@@ -260,8 +271,9 @@ router.get('/pending', authenticate, async (req, res) => {
     `;
     const params = [];
     if (!isSuperAdmin) {
-      query += ' AND ls.city = $1';
-      params.push(city);
+      const cleanCity = city.replace(/\s*\(.*\)\s*$/, '').trim();
+      params.push(cleanCity);
+      query += ` AND (${cityCondition('ls', params.length)} OR ls.city = '${city}')`;
     }
 
     query += ' ORDER BY ls.updated_at DESC';
@@ -288,8 +300,9 @@ router.get('/pending-count', authenticate, async (req, res) => {
     const params = [];
     
     if (!isSuperAdmin) {
-      query += ' AND city = $1';
-      params.push(city);
+      const cleanCity = city.replace(/\s*\(.*\)\s*$/, '').trim();
+      params.push(cleanCity);
+      query += ` AND (${cityCondition('lgu_submissions', params.length)} OR city = '${city}')`;
     }
 
     const { rows } = await pool.query(query, params);

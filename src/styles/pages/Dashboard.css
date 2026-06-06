@@ -671,7 +671,7 @@
 .dash-hero-meta.alert-status-white,
 .dash-hero-icon.alert-status-white {
 	background: var(--glass-bg);
-	border-color: var(--glass-border);
+	border-color: #000;
 	color: var(--text-muted);
 }
 
@@ -786,7 +786,6 @@
 	overflow: hidden;
 	flex-shrink: 0;
 }
-
 
 .meta-content {
 	display: flex;

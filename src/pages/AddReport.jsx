@@ -563,6 +563,10 @@ export default function AddReport() {
   const [selectedProvinces, setSelectedProvinces] = useState([])
   const [lguSearch, setLguSearch] = useState('')
 
+  // --- RENDERING HELPERS ---
+
+  const normalizeCity = (s) => (s || '').replace(/\s*\(.*\)\s*$/, '').replace(/^city\s+of\s+/i, '').trim().toLowerCase()
+
   const fetchReports = useCallback(async () => {
     if (!currentSituationalReport?.id) {
       setSubmittedReports([])
@@ -628,7 +632,7 @@ export default function AddReport() {
       const lguCity = user?.city
       let finalReports = merged
       if (isLgu && lguCity) {
-        const lguCityLow = lguCity.toLowerCase()
+        const lguCityLow = normalizeCity(lguCity)
         const lguBarangays = new Set(
           getBarangaysForCity(lguCity).map(b => b.toLowerCase())
         )
@@ -637,11 +641,11 @@ export default function AddReport() {
           if (r.category === 'evacuation' && r.all_rows) {
             // For grouped evacuation, check if any row belongs to this LGU's city
             return r.all_rows.some(row => {
-              const rowCity = (row.city || getCityForBarangay(row.barangay) || '').toLowerCase()
+              const rowCity = normalizeCity(row.city || getCityForBarangay(row.barangay))
               return rowCity === lguCityLow
             })
           }
-          const reportCity = (r.city || getCityForBarangay(r.barangay) || '').toLowerCase()
+          const reportCity = normalizeCity(r.city || getCityForBarangay(r.barangay))
           const reportBarangay = (r.barangay || '').toLowerCase()
           return reportCity === lguCityLow || lguBarangays.has(reportBarangay)
         })
@@ -1607,7 +1611,21 @@ useEffect(() => {
         setSubmitting(true)
         try {
           await resetSitRepStatus()
-          const validRows = rows.filter((r) => r.barangay || (activeCategoryModal === 'roads' && r.roadBridgeName))
+          
+          // Categories that require barangay (for LGU users) vs can be submitted at city level
+          const categoriesRequiringBarangay = ['evacuation', 'incidents', 'houses', 'class', 'work', 'calamity', 'preemptive', 'assistance']
+          const validRows = rows.filter((r) => {
+            if (categoriesRequiringBarangay.includes(activeCategoryModal)) {
+              return r.barangay && r.barangay.trim() !== ''
+            }
+            return true
+          })
+
+          if (validRows.length === 0) {
+            showSuccess('Validation Error', 'Please ensure all entries have a barangay selected.')
+            setSubmitting(false)
+            return
+          }
           const table = CATEGORY_TO_TABLE[activeCategoryModal]
           let reportId = null
           
@@ -1651,10 +1669,11 @@ useEffect(() => {
 
           } else {
             const preparePayload = (row) => {
+              const cityValue = row.city || user?.city || defaultCity
               const base = {
                 event_id: selectedEvent?.id,
                 situational_report_id: currentSituationalReport.id,
-                city: row.city,
+                city: cityValue,
                 barangay: row.barangay,
                 remarks: row.remarks || ''
               }
@@ -1663,9 +1682,9 @@ useEffect(() => {
                 case 'water':
                   return {
                     ...base,
-                    type: row.type,
-                    service_provider: row.serviceProvider,
-                    date_of_interruption: row.dateInterruption || null,
+                    type: row.type || 'Other',
+                    service_provider: row.serviceProvider || 'N/A',
+                    date_of_interruption: row.dateInterruption || '1970-01-01',
                     time_of_interruption: row.timeInterruption || null,
                     date_restored: row.dateRestored || null,
                     time_restored: row.timeRestored || null,
@@ -1685,28 +1704,28 @@ useEffect(() => {
                 case 'communication':
                   return {
                     ...base,
-                    telecompany: row.telecompany,
-                    status_of_communication: row.statusOfCommunication,
+                    telecompany: row.telecompany || '',
+                    status_of_communication: row.statusOfCommunication || '',
                     date_interruption: row.dateInterruption || null,
                     time_interruption: row.timeInterruption || null,
                     date_restoration: row.dateRestoration || null,
                     time_restoration: row.timeRestoration || null,
-                    site_count_2g: row.siteCount2g ? Number(row.siteCount2g) : null,
-                    with_coverage_2g: row.withCoverage2g ? Number(row.withCoverage2g) : null,
-                    pct_coverage_2g: row.pctCoverage2g ? Number(row.pctCoverage2g) : null,
-                    site_count_3g: row.siteCount3g ? Number(row.siteCount3g) : null,
-                    with_coverage_3g: row.withCoverage3g ? Number(row.withCoverage3g) : null,
-                    pct_coverage_3g: row.pctCoverage3g ? Number(row.pctCoverage3g) : null,
-                    site_count_4g: row.siteCount4g ? Number(row.siteCount4g) : null,
-                    with_coverage_4g: row.withCoverage4g ? Number(row.withCoverage4g) : null,
-                    pct_coverage_4g: row.pctCoverage4g ? Number(row.pctCoverage4g) : null,
+                    site_count_2g: parseInt(row.siteCount2g) || null,
+                    with_coverage_2g: parseInt(row.withCoverage2g) || null,
+                    pct_coverage_2g: parseFloat(row.pctCoverage2g) || null,
+                    site_count_3g: parseInt(row.siteCount3g) || null,
+                    with_coverage_3g: parseInt(row.withCoverage3g) || null,
+                    pct_coverage_3g: parseFloat(row.pctCoverage3g) || null,
+                    site_count_4g: parseInt(row.siteCount4g) || null,
+                    with_coverage_4g: parseInt(row.withCoverage4g) || null,
+                    pct_coverage_4g: parseFloat(row.pctCoverage4g) || null,
                     status: row.status || 'Operational'
                   }
                 case 'incidents':
                   return {
                     ...base,
-                    type_of_incident: row.typeOfIncident,
-                    date_of_occurrence: row.dateOfOccurrence || null,
+                    type_of_incident: row.typeOfIncident || 'Other',
+                    date_of_occurrence: row.dateOfOccurrence || '1970-01-01',
                     time_of_occurrence: row.timeOfOccurrence || null,
                     description: row.description || '',
                     actions_taken: row.actionsTaken || '',
@@ -1715,18 +1734,18 @@ useEffect(() => {
                 case 'houses':
                   return {
                     ...base,
-                    totally_damaged: Number(row.totallyDamaged || 0),
-                    partially_damaged: Number(row.partiallyDamaged || 0),
-                    grand_total: Number(row.grandTotal || 0),
-                    amount_php: row.amountPhp ? parseFloat(row.amountPhp) : 0,
+                    totally_damaged: parseInt(row.totallyDamaged) || 0,
+                    partially_damaged: parseInt(row.partiallyDamaged) || 0,
+                    grand_total: parseInt(row.grandTotal) || 0,
+                    amount_php: parseFloat(row.amountPhp) || 0,
                     status: row.status || 'Reported'
                   }
                 case 'class':
                 case 'work':
                   return {
                     ...base,
-                    level_from: row.level,
-                    type: row.typeOfSuspension,
+                    level_from: row.level || '',
+                    type: row.typeOfSuspension || '',
                     date_of_suspension: row.dateOfSuspension || null,
                     time_of_suspension: row.timeOfSuspension || null,
                     date_resumed: row.dateOfResumption || null,
@@ -1736,73 +1755,73 @@ useEffect(() => {
                 case 'calamity':
                   return {
                     ...base,
-                    type: row.type,
-                    count_soc: row.countSoc ? parseInt(row.countSoc) : null,
-                    resolution_number: row.resolutionNo,
+                    type: row.type || '',
+                    count_soc: parseInt(row.countSoc) || null,
+                    resolution_number: row.resolutionNo || '',
                     resolution_date: row.resolutionDate || null,
                     status: row.status || 'Declared'
                   }
                 case 'preemptive':
                   return {
                     ...base,
-                    families: Number(row.families || 0),
-                    male_count: Number(row.maleCount || 0),
-                    female_count: Number(row.femaleCount || 0),
-                    total: Number(row.total || 0),
+                    families: parseInt(row.families) || 0,
+                    male_count: parseInt(row.maleCount) || 0,
+                    female_count: parseInt(row.femaleCount) || 0,
+                    total: parseInt(row.total) || 0,
                     status: row.status || 'Completed'
                   }
                 case 'assistance':
                   return {
                     ...base,
-                    no_families_affected: Number(row.noFamiliesAffected || 0),
-                    no_families_requiring_assistance: Number(row.noFamiliesRequiringAssistance || 0),
-                    needs: row.needs,
-                    fnfi_qty: row.fnfiQty ? parseFloat(row.fnfiQty) : null,
-                    fnfi_unit: row.fnfiUnit,
-                    fnfi_cost_per_unit: row.fnfiCostPerUnit ? parseFloat(row.fnfiCostPerUnit) : null,
-                    fnfi_amount: Number(row.fnfiAmount || 0),
-                    fnfi_source: row.fnfiSource,
-                    no_families_assisted: Number(row.noFamiliesAssisted || 0),
-                    pct_families_assisted: row.pctFamiliesAssisted || 0,
+                    no_families_affected: parseInt(row.familiesAffected) || 0,
+                    needs: row.needs || '',
+                    no_families_requiring_assistance: parseInt(row.familiesRequiring) || 0,
+                    fnfi_qty: parseFloat(row.fnfiQty) || null,
+                    fnfi_unit: row.fnfiUnit || '',
+                    fnfi_cost_per_unit: parseFloat(row.fnfiCostPerUnit) || null,
+                    fnfi_amount: parseFloat(row.fnfiAmount) || 0,
+                    fnfi_source: row.fnfiSource || '',
+                    no_families_assisted: parseInt(row.familiesAssisted) || 0,
+                    pct_families_assisted: parseFloat(row.pctAssisted) || 0,
                     status: row.status || 'Ongoing'
                   }
                 case 'assistance_lgus':
                   return {
                     ...base,
-                    type: row.type,
-                    qty: row.qty ? parseFloat(row.qty) : null,
-                    unit: row.unit,
-                    cost_per_unit: row.costPerUnit ? parseFloat(row.costPerUnit) : null,
-                    amount: row.amount ? parseFloat(row.amount) : null,
-                    source: row.source,
+                    type: row.type || '',
+                    qty: parseFloat(row.qty) || null,
+                    unit: row.unit || '',
+                    cost_per_unit: parseFloat(row.costPerUnit) || null,
+                    amount: parseFloat(row.amount) || null,
+                    source: row.source || '',
                     status: row.status || 'Ongoing'
                   }
                 case 'agriculture':
                   return {
                     ...base,
-                    classification: row.classification,
-                    type: row.type,
-                    farmers_affected: row.farmersAffected ? parseInt(row.farmersAffected) : 0,
-                    area_totally_damaged: row.areaTotally ? parseFloat(row.areaTotally) : 0,
-                    area_partially_damaged: row.areaPartially ? parseFloat(row.areaPartially) : 0,
-                    area_total: row.areaTotal ? parseFloat(row.areaTotal) : 0,
-                    infra_totally_damaged: row.infraTotally ? parseFloat(row.infraTotally) : 0,
-                    infra_partially_damaged: row.infraPartially ? parseFloat(row.infraPartially) : 0,
-                    infra_total: row.infraTotal ? parseFloat(row.infraTotal) : 0,
-                    production_loss_volume: row.volumeLoss ? parseFloat(row.volumeLoss) : 0,
-                    production_loss_value: row.valueLoss ? parseFloat(row.valueLoss) : 0,
+                    classification: row.classification || 'Crop',
+                    type: row.type || '',
+                    farmers_affected: parseInt(row.farmersAffected) || 0,
+                    area_totally_damaged: parseFloat(row.areaTotally) || 0,
+                    area_partially_damaged: parseFloat(row.areaPartially) || 0,
+                    area_total: parseFloat(row.areaTotal) || 0,
+                    infra_totally_damaged: parseFloat(row.infraTotally) || 0,
+                    infra_partially_damaged: parseFloat(row.infraPartially) || 0,
+                    infra_total: parseFloat(row.infraTotal) || 0,
+                    production_loss_volume: parseFloat(row.volumeLoss) || 0,
+                    production_loss_value: parseFloat(row.valueLoss) || 0,
                     status: row.status || 'Ongoing'
                   }
                 case 'infrastructure':
                   return {
                     ...base,
-                    type: row.type,
-                    classification: row.classification,
-                    infrastructure_name: row.infrastructureName,
-                    number_damaged: row.numberDamaged ? parseInt(row.numberDamaged) : 0,
-                    unit: row.unit,
-                    quantity: row.quantity ? parseFloat(row.quantity) : 0,
-                    cost: row.cost ? parseFloat(row.cost) : 0,
+                    type: row.type || '',
+                    classification: row.classification || 'National',
+                    infrastructure_name: row.infrastructureName || '',
+                    number_damaged: parseInt(row.numberDamaged) || 0,
+                    unit: row.unit || '',
+                    quantity: parseFloat(row.quantity) || 0,
+                    cost: parseFloat(row.cost) || 0,
                     status: row.status || 'Ongoing'
                   }
                 default:
@@ -1823,7 +1842,6 @@ useEffect(() => {
           if (currentSituationalReport?.id) {
             await markSitRepNotificationsAsRead(currentSituationalReport.id)
           }
-          handleCloseActiveModal()
         } catch (err) {
           const errorMsg = err.response?.data?.details || err.response?.data?.error || err.message || 'Failed to submit report'
           const reportInfo = typeof reportId !== 'undefined' ? ` (Report ID: ${reportId})` : ''
@@ -3042,7 +3060,7 @@ useEffect(() => {
         onClose={handleCloseActiveModal}
         title={
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div style={{ color: '#3b82f6' }}>
+            <div style={{ color: '#3b82f6' }}> 
               <Users size={24} />
             </div>
             <span>Affected Population Report</span>
