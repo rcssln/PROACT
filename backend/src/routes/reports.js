@@ -77,10 +77,11 @@ router.get('/all-types', authenticate, async (req, res) => {
           const cleanCity = user.city.replace(/\s*\(.*\)\s*$/, '').trim();
           params.push(cleanCity);
           conditions.push(cityCondition('t', params.length));
-        } else if (isProvincial && user.province) {
+        } else if (user.province) {
           query += ` INNER JOIN situational_reports sr ON t.situational_report_id = sr.id`;
           params.push(user.province);
-          conditions.push(`(sr.province = $${params.length} OR sr.province IS NULL)`);
+          // Allow seeing own province OR Regional reports
+          conditions.push(`(sr.province = $${params.length} OR sr.province IS NULL OR sr.province = 'Region 1')`);
         }
       }
 

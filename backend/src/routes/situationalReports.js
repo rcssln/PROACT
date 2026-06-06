@@ -189,7 +189,8 @@ router.get('/', authenticate, async (req, res) => {
     const isRegional = ['Regional Admin', 'Regional', 'Super Admin', 'Regional Approver'].includes(req.user.account_type) || req.user.role === 'Super Admin';
     if (!isRegional && req.user.province) {
       params.push(req.user.province);
-      query += ` AND (sr.province = $${params.length} OR sr.province IS NULL)`;
+      // Allow them to see their own province, OR Regional reports (NULL or 'Region 1')
+      query += ` AND (sr.province = $${params.length} OR sr.province IS NULL OR sr.province = 'Region 1')`;
     }
 
     if (count_only === 'true') {
