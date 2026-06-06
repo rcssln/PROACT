@@ -613,8 +613,8 @@
   flex-wrap: nowrap;
   justify-content: flex-end;
   align-items: center;
-  min-width: 600px;   /* ← locks to the typhoon/longest size */
-  width: 720px;      	 /* ← fixed width, won't shrink or grow */
+  min-width: 800px;
+  width: 950px;      	 /* Increased to accommodate weather */
 }
 
 .dash-hero-icon {
@@ -748,10 +748,29 @@
   width: 190px;
 }
 
+/* Weather - new item */
+.weather-item {
+  min-width: 200px;
+  width: 200px;
+  border-left: 1px solid rgba(0,0,0,0.1);
+  padding-left: 1.5rem;
+}
+
 /* Date - fixed, dates are always same length */
-.meta-item:nth-child(4) {
+.meta-item:last-child {
   min-width: 150px;
   width: 150px;
+  border-left: 1px solid rgba(0,0,0,0.1);
+  padding-left: 1.5rem;
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 .meta-value {

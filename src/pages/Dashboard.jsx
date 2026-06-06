@@ -1946,6 +1946,18 @@ CHRONOLOGY OF EVENTS`;
               </div>
             </div>
 
+            <div className="meta-item weather-item">
+              <div className="meta-icon">
+                {weatherLoading ? <ArrowsClockwise size={18} className="animate-spin" /> : getWeatherIcon(weather?.code, weather?.desc)}
+              </div>
+              <div className="meta-content">
+                <span className="meta-label">Weather</span>
+                <span className="meta-value" style={{ whiteSpace: 'nowrap' }}>
+                  {weather ? `${weather.temp}°C · ${weather.desc}` : (weatherLoading ? 'Loading...' : 'N/A')}
+                </span>
+              </div>
+            </div>
+
             <div className="meta-item">
               <div className="meta-icon"><Calendar size={18} /></div>
               <div className="meta-content">
