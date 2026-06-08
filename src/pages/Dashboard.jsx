@@ -22,6 +22,7 @@ import { useEvents } from '../contexts/EventContext'
 import api from '../lib/api'
 import regionData, { getCityForBarangay, getBarangaysForCity } from '../data/locations'
 import { PROVINCE_NAMES, getCitiesForProvince, getProvinceForCity } from '../data/provinces'
+import weatherData from '../data/weatherClassifications.json'
 import '../styles/pages/PageStyles.css'
 import '../styles/pages/Dashboard.css'
 import '../styles/components/EventModal.css'
@@ -173,6 +174,13 @@ const CustomizedAxisTick = (props) => {
       ))}
     </g>
   );
+};
+
+const getTemperatureLabel = (temp) => {
+  if (temp === null || temp === undefined) return '';
+  const t = parseFloat(temp);
+  const classification = weatherData.classifications.find(c => t >= c.min && t < c.max);
+  return classification ? classification.label : '';
 };
 
 export default function Dashboard() {
@@ -1953,7 +1961,10 @@ CHRONOLOGY OF EVENTS`;
               <div className="meta-content">
                 <span className="meta-label">Weather</span>
                 <span className="meta-value" style={{ whiteSpace: 'nowrap' }}>
-                  {weather ? `${weather.temp}°C · ${weather.desc.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(' ')}` : (weatherLoading ? 'Loading...' : 'N/A')}
+                  {weather ? (
+                    `${weather.temp}°C` + 
+                    (getTemperatureLabel(weather.temp) ? ` · ${getTemperatureLabel(weather.temp)}` : '')
+                  ) : (weatherLoading ? 'Loading...' : 'N/A')}
                 </span>
               </div>
             </div>
