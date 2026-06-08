@@ -455,7 +455,7 @@ const enrichReportItem = (item) => {
 }
 
 // Category Selection Modal Component
-function CategorySelectionModal({ onClose, onSelect, pingedReportTypes = [], submittedCategories = new Set() }) {
+function CategorySelectionModal({ onClose, onSelect, pingedReportTypes = [], submittedCategories = new Set()}) {
   return (
     <HeaderFooterModal
       isOpen={true}

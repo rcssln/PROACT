@@ -17,6 +17,7 @@ const signalsRoutes = require('./routes/signals');
 const deploymentsRoutes = require('./routes/deployments');
 const activityLogsRoutes = require('./routes/activityLogs');
 const lguSubmissionsRoutes = require('./routes/lguSubmissions');
+const settingsRoutes = require('./routes/settings');
 const { seedAdmin } = require('./seed');
 
 const app = express();
@@ -71,7 +72,12 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
 
 // --- Routes ---
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  res.json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    file: __filename,
+    cwd: process.cwd()
+  });
 });
 
 app.use('/api/auth', authRoutes);
@@ -84,6 +90,8 @@ app.use('/api/lgu-submissions', lguSubmissionsRoutes);
 app.use('/api/signals', signalsRoutes);
 app.use('/api/deployments', deploymentsRoutes);
 app.use('/api/activity-logs', activityLogsRoutes);
+app.get('/api/test-route', (req, res) => res.json({ message: 'API is reachable' }));
+app.use('/api/settings', settingsRoutes);
 
 // --- Error Handler ---
 app.use((err, req, res, next) => {

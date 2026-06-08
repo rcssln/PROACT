@@ -555,6 +555,17 @@ CREATE TABLE IF NOT EXISTS public.event_signals (
 );
 
 -- ============================================================
+-- TABLE: settings
+-- ============================================================
+CREATE TABLE IF NOT EXISTS public.settings (
+  id UUID NOT NULL DEFAULT gen_random_uuid(),
+  key TEXT NOT NULL UNIQUE,
+  value JSONB NOT NULL DEFAULT '{}'::JSONB,
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT settings_pkey PRIMARY KEY (id)
+);
+
+-- ============================================================
 -- SEED: Default Super Admin User
 -- Email:    admin@proact.local
 -- Password: Admin@1234

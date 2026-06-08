@@ -248,14 +248,41 @@ export default function Dashboard() {
   const prevStepRef = useRef(-1)
   const [showEditEventModal, setShowEditEventModal] = useState(false)
   const [showSignalDetailsModal, setShowSignalDetailsModal] = useState(false)
+  const [editForm, setEditForm] = useState({ name: '', color: '#6366f1', startDate: '', endDate: '', eventType: 'calamity', alertStatus: 'white', pingedReportTypes: [] })
+  const [activeTab, setActiveTab] = useState('All Reports')
+
+  const handleTabChangeWithScroll = (tab) => {
+    setActiveTab(tab);
+    setTimeout(() => {
+      const mainCard = document.querySelector('.dash-main-card');
+      if (mainCard) {
+        mainCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 100);
+  };
+
+  const handleScrollToBottom = (tab) => {
+    setActiveTab(tab);
+    setTimeout(() => {
+      const targetSection = document.getElementById('damaged-houses-section');
+      if (targetSection) {
+        targetSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else {
+        const mainCard = document.querySelector('.dash-main-card');
+        if (mainCard) {
+          mainCard.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        } else {
+          window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+        }
+      }
+    }, 150);
+  };
   const [signalSearchTerm, setSignalSearchTerm] = useState('')
   const [activeSignalTab, setActiveSignalTab] = useState('lgus')
   const [showSelectEventToEdit, setShowSelectEventToEdit] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [selectedEventIdToEdit, setSelectedEventIdToEdit] = useState('')
   const [isEditingExistingEvent, setIsEditingExistingEvent] = useState(false)
-  const [editForm, setEditForm] = useState({ name: '', color: '#6366f1', startDate: '', endDate: '', eventType: 'calamity', alertStatus: 'white', pingedReportTypes: [] })
-  const [activeTab, setActiveTab] = useState('All Reports')
 
   const handleTabChangeWithScroll = (tab) => {
     setActiveTab(tab);
@@ -1869,11 +1896,9 @@ CHRONOLOGY OF EVENTS`;
         {/* Hero Section */}
         <section className="dash-hero">
           <div className={`dash-hero-icon alert-status-${currentEvent?.alertStatus || 'white'} ${
-            !userSignal ? (
-              currentEvent?.alertStatus === 'red' ? 'dash-hero-icon-alarm-red' :
-              currentEvent?.alertStatus === 'blue' ? 'dash-hero-icon-alarm-blue' :
-              currentEvent?.alertStatus === 'white' ? 'dash-hero-icon-alarm-white' : ''
-            ) : ''
+            currentEvent?.alertStatus === 'red' ? 'dash-hero-icon-alarm-red' :
+            currentEvent?.alertStatus === 'blue' ? 'dash-hero-icon-alarm-blue' :
+            currentEvent?.alertStatus === 'white' ? 'dash-hero-icon-alarm-white' : ''
           }`} style={{
             background: userSignal === '1' ? '#fde047' : 
                         userSignal === '2' ? '#fdba74' : 
@@ -1886,15 +1911,11 @@ CHRONOLOGY OF EVENTS`;
             color: (!userSignal && (currentEvent?.alertStatus === 'red' || currentEvent?.alertStatus === 'blue')) ? '#ffffff' : '#1e293b',
             border: (!userSignal && currentEvent?.alertStatus === 'white') ? '1px solid #e2e8f0' : undefined
           }}>
-            {userSignal ? (
-              <span style={{ fontSize: '2rem', fontWeight: 900, color: '#1e293b' }}>{userSignal}</span>
-            ) : (
-              EVENT_TYPE_ICONS[currentEvent?.eventType] || <WarningCircle size={32} weight="duotone" />
-            )}
+            {EVENT_TYPE_ICONS[currentEvent?.eventType] || <WarningCircle size={32} weight="duotone" />}
           </div>
 
           <div className="dash-hero-title-wrap">
-            {currentEvent?.alertLevel && (
+            {currentEvent?.alertLevel && currentEvent?.id !== 'default-good-day' && currentEvent?.alertStatus !== 'white' && (
               <span style={{
                 display: 'inline-block',
                 fontSize: '0.75rem',
@@ -1907,16 +1928,25 @@ CHRONOLOGY OF EVENTS`;
                 {currentEvent.alertLevel}
               </span>
             )}
-            <h2 className="dash-hero-amount">
-              {currentEvent ? currentEvent.name : 'Clear Skies (No Active Event)'}
+            <h2 className="dash-hero-amount" style={{
+              fontSize: (!currentEvent || currentEvent.id === 'default-good-day' || currentEvent.alertStatus === 'white') ? '2rem' : undefined,
+              lineHeight: (!currentEvent || currentEvent.id === 'default-good-day' || currentEvent.alertStatus === 'white') ? '1.2' : undefined
+            }}>
+              {!currentEvent || currentEvent.id === 'default-good-day' || currentEvent.alertStatus === 'white'
+                ? "It's a good day! (No Active Threats)"
+                : currentEvent.name}
             </h2>
-            {userSignal ? (
+            {userSignal && currentEvent?.alertStatus !== 'white' ? (
               <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: '4px 0 0', fontWeight: 600 }}>
                 Signal <strong style={{ color: SIGNAL_COLORS[userSignal].text }}>{userSignal}</strong> assigned to your area
               </p>
-            ) : currentEvent && currentEvent.id !== 'default-good-day' && currentEvent.alertLevel && (
+            ) : currentEvent && currentEvent.id !== 'default-good-day' && currentEvent.alertLevel && currentEvent.alertStatus !== 'white' ? (
               <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: '4px 0 0', fontWeight: 600 }}>
                 Currently monitoring a <strong style={{ color: 'var(--text-main)' }}>{currentEvent.alertLevel}</strong> event in your area
+              </p>
+            ) : (
+              <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: '4px 0 0', fontWeight: 600 }}>
+                All systems normal. Routine monitoring active.
               </p>
             )}
           </div>
@@ -2219,7 +2249,7 @@ CHRONOLOGY OF EVENTS`;
                       <div className="kpi-sub-premium">Obstructions reported</div>
                     </div>
 
-                    <div className="kpi-card-premium teal" onClick={() => setActiveTab('Assistance')} style={{ cursor: 'pointer' }}>
+                    <div className="kpi-card-premium teal" onClick={() => handleTabChangeWithScroll('Assistance')} style={{ cursor: 'pointer' }}>
                       <div className="kpi-label-premium">Assistance Value</div>
                       <div className="kpi-value-premium">₱ {(() => {
                         const val = Object.values(details.assistanceByLgu || {}).reduce((s, v) => s + v, 0);

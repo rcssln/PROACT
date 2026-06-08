@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { X, Shield, Palette, Eye, EyeClosed, ClockCounterClockwise, Info, Database, DownloadSimple, UploadSimple, WarningCircle, FileZip } from '@phosphor-icons/react'
+import { X, Shield, Palette, Eye, EyeClosed, ClockCounterClockwise, Info, Database, DownloadSimple, UploadSimple, WarningCircle, FileZip, Envelope } from '@phosphor-icons/react'
 import { zip, unzip, strToU8, strFromU8 } from 'fflate'
 import pkg from '../../package.json'
 
@@ -36,6 +36,61 @@ export default function SettingsModal({ isOpen, onClose, user, onLogout, onUserU
     
     const isSuperAdmin = user?.role === 'Super Admin' || user?.account_type === 'Super Admin'
 
+    // Email Config state
+    const [emailConfig, setEmailConfig] = useState({
+        provider: 'Outlook',
+        senderEmail: '',
+        host: 'smtp.office365.com',
+        port: 587,
+        username: '',
+        password: ''
+    })
+    const [emailLoading, setEmailLoading] = useState(false)
+    const [emailError, setEmailError] = useState(null)
+    const [emailSuccess, setEmailSuccess] = useState(false)
+
+    const fetchEmailConfig = async () => {
+        try {
+            setEmailLoading(true)
+            const { data } = await api.get('/settings/smtp')
+            if (data && Object.keys(data).length > 0) {
+                setEmailConfig(data)
+            }
+        } catch (err) {
+            console.error('Failed to fetch email config', err)
+        } finally {
+            setEmailLoading(false)
+        }
+    }
+
+    const handleSaveEmailConfig = async () => {
+        try {
+            setEmailLoading(true)
+            setEmailError(null)
+            setEmailSuccess(false)
+            
+            // Basic validation
+            if (!emailConfig.username || !emailConfig.password || !emailConfig.host) {
+                setEmailError('Please fill in Host, Username, and Password.')
+                setEmailLoading(false)
+                return
+            }
+
+            const { data } = await api.put('/settings/smtp', emailConfig)
+            if (data.success) {
+                setEmailSuccess('Email configuration saved successfully.')
+            } else {
+                setEmailError('Failed to save configuration.')
+            }
+        } catch (err) {
+            console.error('Save failed:', err)
+            const msg = err.response?.data?.error || err.message || 'Server error'
+            setEmailError(`Failed: ${msg}`)
+        } finally {
+            setEmailLoading(false)
+        }
+    }
+
     // Reset state when modal opens
     useEffect(() => {
         if (isOpen) {
@@ -49,8 +104,16 @@ export default function SettingsModal({ isOpen, onClose, user, onLogout, onUserU
             setMaintenanceError('')
             setMaintenanceSuccess('')
             setMaintenanceProgress('')
+            setEmailError(null)
+            setEmailSuccess(false)
         }
     }, [isOpen])
+
+    useEffect(() => {
+        if (isOpen && isSuperAdmin && activeTab === 'email') {
+            fetchEmailConfig()
+        }
+    }, [isOpen, activeTab, isSuperAdmin])
 
     const handleThemeChange = async (newTheme) => {
         setTheme(newTheme)
@@ -171,6 +234,15 @@ export default function SettingsModal({ isOpen, onClose, user, onLogout, onUserU
                             className={`modal-sidebar-tab ${activeTab === 'maintenance' ? 'active' : ''}`}
                         >
                             <Database size={16} /> Maintenance
+                        </button>
+                    )}
+
+                    {isSuperAdmin && (
+                        <button
+                            onClick={() => setActiveTab('email')}
+                            className={`modal-sidebar-tab ${activeTab === 'email' ? 'active' : ''}`}
+                        >
+                            <Envelope size={16} /> Email Config
                         </button>
                     )}
 
@@ -381,6 +453,101 @@ export default function SettingsModal({ isOpen, onClose, user, onLogout, onUserU
                                     </div>
                                 )}
                             </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'email' && isSuperAdmin && (
+                        <div className="settings-tab-pane">
+                            <h3 className="settings-section-title">SMTP Configuration</h3>
+                            <p className="settings-section-desc">
+                                Configure the email provider and credentials used by the system to send welcome and verification emails.
+                            </p>
+                            
+                            {emailError && <div className="settings-error-msg">{emailError}</div>}
+                            {emailSuccess && typeof emailSuccess === 'string' && <div className="settings-success-msg">{emailSuccess}</div>}
+                            
+                            <form onSubmit={(e) => { e.preventDefault(); handleSaveEmailConfig() }} className="settings-form">
+                                <div className="form-group">
+                                    <label>Email Provider</label>
+                                    <select 
+                                        className="settings-input"
+                                        value={emailConfig.provider} 
+                                        onChange={e => setEmailConfig({...emailConfig, provider: e.target.value})}
+                                    >
+                                        <option value="Outlook">Outlook / Office 365</option>
+                                        <option value="Gmail">Gmail</option>
+                                        <option value="Custom">Custom SMTP</option>
+                                    </select>
+                                </div>
+                                
+                                <div className="form-group">
+                                    <label>Sender Email Address (Optional Display)</label>
+                                    <input
+                                        type="email"
+                                        className="settings-input"
+                                        placeholder="e.g. noreply@dost.gov.ph"
+                                        value={emailConfig.senderEmail}
+                                        onChange={e => setEmailConfig({...emailConfig, senderEmail: e.target.value})}
+                                    />
+                                    <span className="settings-hint">The system will try to mask the sender with this address (Note: Some providers restrict this).</span>
+                                </div>
+
+                                <div style={{ display: 'grid', gridTemplateColumns: '1fr 100px', gap: '15px' }}>
+                                    <div className="form-group">
+                                        <label>SMTP Host</label>
+                                        <input
+                                            type="text"
+                                            className="settings-input"
+                                            placeholder="e.g. smtp.office365.com"
+                                            value={emailConfig.host}
+                                            onChange={e => setEmailConfig({...emailConfig, host: e.target.value})}
+                                        />
+                                    </div>
+                                    <div className="form-group">
+                                        <label>Port</label>
+                                        <input
+                                            type="number"
+                                            className="settings-input"
+                                            value={emailConfig.port}
+                                            onChange={e => setEmailConfig({...emailConfig, port: e.target.value})}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="form-group">
+                                    <label>Authentication Username (Email)</label>
+                                    <input
+                                        type="text"
+                                        className="settings-input"
+                                        placeholder="e.g. admin@proact.local"
+                                        value={emailConfig.username}
+                                        onChange={e => setEmailConfig({...emailConfig, username: e.target.value})}
+                                        required
+                                    />
+                                </div>
+
+                                <div className="form-group">
+                                    <label>Authentication Password / App Password</label>
+                                    <input
+                                        type="password"
+                                        className="settings-input"
+                                        placeholder="Enter password"
+                                        value={emailConfig.password}
+                                        onChange={e => setEmailConfig({...emailConfig, password: e.target.value})}
+                                        required
+                                    />
+                                </div>
+
+                                <Button 
+                                    type="submit" 
+                                    variant="solid" 
+                                    color="primary" 
+                                    isLoading={emailLoading}
+                                    style={{ marginTop: '10px' }}
+                                >
+                                    Save Email Settings
+                                </Button>
+                            </form>
                         </div>
                     )}
                 </div>

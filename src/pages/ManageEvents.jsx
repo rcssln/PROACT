@@ -214,12 +214,18 @@ eventType: event.eventType,
       showSuccess('Validation Error', 'Please enter an Event Name.')
       return null
     }
-    if (form.eventType === 'earthquake' && !form.magnitude) {
+    if (form.eventType === 'earthquake' && !form.magnitude && form.alertStatus !== 'white') {
       showSuccess('Validation Error', 'Please enter the Magnitude.')
       return null
-    } else if (form.eventType !== 'earthquake' && ALERT_LEVELS[form.eventType]?.length > 0 && !form.typhoonCategory) {
-      showSuccess('Validation Error', 'Please select a Specific Alert Level / Category.')
-      return null
+    } else if (form.eventType !== 'earthquake' && ALERT_LEVELS[form.eventType]?.length > 0 && form.alertStatus !== 'white') {
+      const selectedValue = form.eventType === 'flood' ? form.floodLevel :
+                            form.eventType === 'tsunami' ? form.tsunamiAlert :
+                            form.eventType === 'weather' ? form.alertLevel :
+                            form.typhoonCategory;
+      if (!selectedValue) {
+        showSuccess('Validation Error', 'Please select a Specific Alert Level / Category.')
+        return null
+      }
     }
     if (form.affectedProvinces.length === 0) {
       showSuccess('Validation Error', 'Please select at least one province for the Deployment Scope.')

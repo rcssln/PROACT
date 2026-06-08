@@ -168,7 +168,7 @@ router.get('/', authenticate, async (req, res) => {
   try {
     let query = `
       SELECT sr.*, 
-             u.name as creator_name,
+             concat(u.first_name, ' ', u.last_name) as creator_name,
              u.city as creator_city,
              json_build_object('id', e.id, 'name', e.name) as events
       FROM situational_reports sr
@@ -418,6 +418,46 @@ router.get('/:id/report-data', authenticate, async (req, res) => {
   } catch (err) {
     console.error('[SitReps/report-data]', err);
     res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// DELETE /api/situational-reports/:id
+router.delete('/:id', authenticate, async (req, res) => {
+  const { id } = req.params;
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    
+    const tables = [
+      'related_incidents', 'agriculture_damage_reports', 'assistance_lgus_agencies_reports',
+      'assistance_provided_reports', 'class_suspension_reports', 'communication_lines_reports',
+      'damaged_houses_reports', 'declaration_state_of_calamity_reports',
+      'infrastructure_damage_reports', 'power_reports', 'pre_emptive_evacuation_reports',
+      'roads_and_bridges', 'water_supply_reports', 'work_suspension_reports',
+      'reports'
+    ];
+    
+    // Delete child rows from report tables to handle cascade manually if needed
+    for (const table of tables) {
+      await client.query(`DELETE FROM ${table} WHERE situational_report_id = $1`, [id]);
+    }
+    
+    // Deleting from situational_reports will naturally delete child records if CASCADE is set,
+    // but the manual deletion above ensures no orphans in non-cascading setups
+    await client.query('DELETE FROM situational_reports WHERE id = $1', [id]);
+    
+    await client.query('COMMIT');
+    
+    const io = req.app.locals.io;
+    io.emit('sitrep:deleted', { id });
+    
+    res.json({ success: true });
+  } catch (err) {
+    await client.query('ROLLBACK');
+    console.error('[SitReps/DELETE]', err);
+    res.status(500).json({ error: 'Server error' });
+  } finally {
+    client.release();
   }
 });
 

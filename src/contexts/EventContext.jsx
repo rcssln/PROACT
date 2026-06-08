@@ -608,7 +608,14 @@ export function EventProvider({ children, user }) {
 
       const { data } = await api.patch(`/events/${id}`, payload)
       const updated = mapEvent(data)
-      // Removed manual setEvents call - handled by socket events:updated
+      setEvents(prev => {
+        const exists = prev.some(e => e.id === updated.id)
+        if (!exists) return [updated, ...prev]
+        if (updated.isDeployed) {
+          return prev.map(e => e.id === updated.id ? updated : { ...e, isDeployed: false })
+        }
+        return prev.map(e => e.id === updated.id ? updated : e)
+      })
       showToast('Event Updated', `Successfully updated event details.`, 'success')
     } catch (err) {
       console.error('Error updating event:', err)

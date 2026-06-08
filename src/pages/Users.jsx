@@ -219,6 +219,31 @@ export default function Users() {
     setShowEditConfirmPassword(false)
   }
 
+  const handleDeleteUser = async (userId, userEmail) => {
+    if (userId === currentUser?.id) {
+      showSuccess('Error', 'You cannot delete your own account.')
+      return
+    }
+
+    showConfirm({
+      title: 'Delete User Account',
+      message: `Are you sure you want to delete ${userEmail}? This action is permanent and the user will lose all access immediately.`,
+      type: 'danger',
+      onConfirm: async () => {
+        try {
+          await api.delete(`/users/${userId}`)
+          showSuccess('User Deleted', 'The account has been successfully removed.')
+          closeViewDetailsModal()
+          closeEditModal()
+          fetchUsers()
+          if (fetchPendingUsersCount) fetchPendingUsersCount()
+        } catch (err) {
+          showSuccess('Error', err.response?.data?.error || 'Failed to delete user.')
+        }
+      }
+    })
+  }
+
   const handleSubmit = async (e) => {
     e.preventDefault()
     if (!form.email.trim() || !form.firstName.trim() || !form.lastName.trim()) {
@@ -716,6 +741,16 @@ export default function Users() {
         maxWidth="500px"
         footer={
           <>
+            {isSuperAdmin && viewDetailsUser?.id !== currentUser?.id && (
+              <Button 
+                variant="outline" 
+                color="danger" 
+                onClick={() => handleDeleteUser(viewDetailsUser.id, viewDetailsUser.email)}
+                style={{ marginRight: 'auto' }}
+              >
+                Delete Account
+              </Button>
+            )}
             <Button variant="subtle" onClick={closeViewDetailsModal}>Close</Button>
             <Button variant="solid" onClick={openEditModalFromDetails}>Edit</Button>
           </>
@@ -783,6 +818,16 @@ export default function Users() {
         bodyPadding="0"
         footer={
           <>
+            {isSuperAdmin && editingUser?.id !== currentUser?.id && (
+              <Button 
+                variant="outline" 
+                color="danger" 
+                onClick={() => handleDeleteUser(editingUser.id, form.email)}
+                style={{ marginRight: 'auto' }}
+              >
+                Delete Account
+              </Button>
+            )}
             <Button variant="subtle" onClick={closeEditModal}>Cancel</Button>
             <Button variant="solid" onClick={() => document.getElementById('edit-user-form').requestSubmit()} isLoading={submittingEdit}>Save Changes</Button>
           </>
