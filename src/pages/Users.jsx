@@ -63,11 +63,11 @@ export default function Users() {
   // --- Allowed account types each admin tier can create (hierarchy) ---
   const allowedAccountTypes = (() => {
     if (isSuperAdmin || isRegionalAdmin)
-      return ['Regional Admin', 'Regional', 'Provincial Admin', 'Provincial Approver', 'Provincial', 'LGU Admin', 'LGU Approver', 'LGU']
+      return ['Regional Admin', 'Regional', 'Provincial Admin', 'Provincial', 'LGU Admin', 'LGU']
     if (isProvincialAdmin)
-      return ['Provincial Admin', 'Provincial Approver', 'Provincial', 'LGU Admin', 'LGU Approver', 'LGU']
+      return ['Provincial Admin', 'Provincial', 'LGU Admin', 'LGU']
     if (isLguAdmin)
-      return ['LGU Admin', 'LGU Approver', 'LGU']
+      return ['LGU Admin', 'LGU']
     return []
   })()
 
@@ -251,7 +251,7 @@ export default function Users() {
             last_name: form.lastName.trim(),
             account_type: form.accountType || null,
             province: form.province || null,
-            city: (form.accountType?.includes('LGU') || form.accountType?.includes('Provincial')) ? (form.city.trim() || null) : null,
+            city: form.accountType?.includes('LGU') ? (form.city.trim() || null) : null,
           })
           
           await fetchUsers()
@@ -349,7 +349,7 @@ export default function Users() {
       if (canCreateAccounts) {
         payload.account_type = form.accountType || null
         payload.province = form.accountType === 'Regional' ? null : (form.province || null)
-        payload.city = (form.accountType?.includes('LGU') || form.accountType?.includes('Provincial')) ? (form.city.trim() || null) : null
+        payload.city = form.accountType?.includes('LGU') ? (form.city.trim() || null) : null
       }
       if (form.password) {
         payload.password = form.password
@@ -683,7 +683,7 @@ export default function Users() {
                   />
                 )}
               </div>
-              {(form.accountType?.includes('LGU') || form.accountType?.includes('Provincial')) && (
+              {form.accountType?.includes('LGU') && (
                 <div className="users-form-group">
                   <label htmlFor="user-city-lgu">City / Municipality *</label>
                   {isLgu ? (
@@ -882,7 +882,7 @@ export default function Users() {
                     />
                   )}
                 </div>
-                {(form.accountType?.includes('LGU') || form.accountType?.includes('Provincial')) && (
+                {form.accountType?.includes('LGU') && (
                   <div className="users-form-group">
                     <label htmlFor="edit-user-city-lgu">City / Municipality *</label>
                     {isLgu ? (

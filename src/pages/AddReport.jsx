@@ -692,9 +692,9 @@ export default function AddReport() {
             situational_report_id: currentSituationalReport.id,
             city: user.city
           })
-          setLguSubmissionStatus('Submitted')
+          setLguSubmissionStatus('Approved')
           setLguSubmissionRemarks(null)
-          showSuccess('Success', `Your data for "${currentSituationalReport.title}" has been submitted successfully.`)
+          showSuccess('Success', `Your data for "${currentSituationalReport.title}" has been submitted and approved successfully.`)
         } catch (err) {
           console.error('[LGU] Submit error:', err)
           showSuccess('Error', err.response?.data?.error || err.message || 'Failed to submit data.')
@@ -1051,42 +1051,56 @@ useEffect(() => {
       })
       
       const pdfUrl = uploadData.url
+      const newStatus = isLGU ? 'Pending Provincial Review' : 'Approved'
 
       await api.patch(`/situational-reports/${currentSituationalReport.id}`, { 
-        status: 'Pending Approval', 
-        pending_pdf_url: pdfUrl 
+        status: newStatus, 
+        approved_pdf_url: !isLGU ? pdfUrl : null,
+        pending_pdf_url: isLGU ? pdfUrl : null,
+        rejection_remarks: null
       })
 
       if (selectedEvent) fetchSituationalReports(selectedEvent.id)
 
-      // Notify Approvers (Provincial Approvers in same province + Super Admins/Regional)
+      // Notify relevant users
       try {
-        const province = user?.province
-        const { data: approvers } = await api.get('/users', {
-          params: { 
-            account_type: ['Super Admin', 'Regional Admin', 'Regional'],
-            status: 'Active'
+        if (isLGU) {
+          // Notify Provincial users in the same province
+          const { data: provincialUsers } = await api.get('/users', {
+            params: { province: userProvince, account_type: 'Provincial', status: 'Active' }
+          })
+          const targetUsers = (provincialUsers || []).filter(u => u.id !== user?.id)
+          if (targetUsers.length > 0) {
+            const notifications = targetUsers.map(u => ({
+              user_id: u.id,
+              type: 'lgu_sitrep_submission',
+              title: 'New LGU SitRep for Review',
+              message: `LGU ${user?.city} has submitted a situational report "${currentSituationalReport.title}" for your review.`,
+              data: { sitrep_id: currentSituationalReport.id, event_id: selectedEvent?.id }
+            }))
+            await api.post('/notifications/bulk', notifications)
           }
-        })
-        
-        // Filter: Provincial Approvers must match province, others get everything
-        const targetUsers = (approvers || []).filter(u => {
-          if (u.id === user?.id) return false
-          if (u.account_type === 'Provincial Approver') {
-            return u.province === province
-          }
-          return true // Super Admin / Regional see everything
-        })
+        } else {
+          // Provincial/Admin flow: Notify Super Admins/Regional that a new approved report is available
+          const { data: admins } = await api.get('/users', {
+            params: { 
+              account_type: ['Super Admin', 'Regional Admin', 'Regional'],
+              status: 'Active'
+            }
+          })
+          
+          const targetUsers = (admins || []).filter(u => u.id !== user?.id)
 
-        if (targetUsers.length > 0) {
-          const notifications = targetUsers.map(u => ({
-            user_id: u.id,
-            type: 'sitrep_submission',
-            title: 'New Sitrep Submission',
-            message: `A new situational report "${currentSituationalReport.title}" has been submitted for your approval.`,
-            data: { sitrep_id: currentSituationalReport.id, event_id: selectedEvent?.id }
-          }))
-          await api.post('/notifications/bulk', notifications)
+          if (targetUsers.length > 0) {
+            const notifications = targetUsers.map(u => ({
+              user_id: u.id,
+              type: 'sitrep_approved',
+              title: 'New Approved SitRep',
+              message: `A new approved situational report "${currentSituationalReport.title}" has been uploaded by ${user?.province || 'Province'}.`,
+              data: { sitrep_id: currentSituationalReport.id, event_id: selectedEvent?.id }
+            }))
+            await api.post('/notifications/bulk', notifications)
+          }
         }
       } catch (notifErr) {
         console.error('Failed to send submission notifications:', notifErr)
@@ -1097,7 +1111,10 @@ useEffect(() => {
       }
 
       setShowApprovalUploadModal(false)
-      setApprovalConfirmMessage('The signed PDF has been uploaded successfully. The report is now pending approval by the Provincial Approver.')
+      const successMsg = isLGU 
+        ? 'The signed PDF has been uploaded and submitted to the Province for review.'
+        : 'The signed PDF has been uploaded and the report is now marked as Approved and visible to Regional users.'
+      setApprovalConfirmMessage(successMsg)
       setShowApprovalConfirmation(true)
     } catch (err) {
       showSuccess('Error', err.message || 'Failed to upload PDF.')
@@ -1150,27 +1167,23 @@ useEffect(() => {
         pending_pdf_url: null
       })
 
-      // Send notifications to Provincial users in the same province
+      // Notify the creator (LGU or Provincial)
       try {
-        const reportProvince = reviewSitRep.province || user?.province
-        if (reportProvince) {
-          const { data: provincialUsers } = await api.get('/users', {
-            params: { province: reportProvince, account_type: 'Provincial' }
-          })
-          
-          if (provincialUsers?.length > 0) {
-            const notifications = provincialUsers.map(u => ({
-              user_id: u.id,
+        if (reviewSitRep.created_by) {
+          const { data: creator } = await api.get(`/users/${reviewSitRep.created_by}`).catch(() => ({ data: null }))
+          if (creator) {
+            const notifData = {
+              user_id: creator.id,
               type: 'sitrep_approval',
               title: 'Situational Report Approved',
-              message: `Your report "${reviewSitRep.title}" has been approved.`,
+              message: `Your report "${reviewSitRep.title}" has been approved by the Province.`,
               data: { sitrep_id: reviewSitRep.id, event_id: selectedEvent?.id }
-            }))
-            await api.post('/notifications/bulk', notifications)
+            }
+            await api.post('/notifications', notifData)
           }
         }
       } catch (notifErr) {
-        console.error('Failed to send approval notifications:', notifErr)
+        console.error('Failed to send approval notification to creator:', notifErr)
       }
 
       showSuccess('Approved', `"${reviewSitRep.title}" has been approved successfully.`)
@@ -1196,30 +1209,26 @@ useEffect(() => {
         rejection_remarks: rejectRemarks.trim() 
       })
 
-      // Send notifications to Provincial users in the same province
+      // Notify the creator (LGU or Provincial)
       try {
-        const reportProvince = reviewSitRep.province || user?.province
-        if (reportProvince) {
-          const { data: provincialUsers } = await api.get('/users', {
-            params: { province: reportProvince, account_type: 'Provincial' }
-          })
-          
-          if (provincialUsers?.length > 0) {
-            const notifications = provincialUsers.map(u => ({
-              user_id: u.id,
+        if (reviewSitRep.created_by) {
+          const { data: creator } = await api.get(`/users/${reviewSitRep.created_by}`).catch(() => ({ data: null }))
+          if (creator) {
+            const notifData = {
+              user_id: creator.id,
               type: 'sitrep_rejection',
               title: 'Situational Report Rejected',
-              message: `Your report "${reviewSitRep.title}" was rejected. Remarks: ${rejectRemarks.trim()}`,
+              message: `Your report "${reviewSitRep.title}" was rejected by the Province. Remarks: ${rejectRemarks.trim()}`,
               data: { sitrep_id: reviewSitRep.id, event_id: selectedEvent?.id, remarks: rejectRemarks.trim() }
-            }))
-            await api.post('/notifications/bulk', notifications)
+            }
+            await api.post('/notifications', notifData)
           }
         }
       } catch (notifErr) {
-        console.error('Failed to send rejection notifications:', notifErr)
+        console.error('Failed to send rejection notification to creator:', notifErr)
       }
 
-      showSuccess('Rejected', `"${reviewSitRep.title}" has been rejected. The Provincial user will be notified.`)
+      showSuccess('Rejected', `"${reviewSitRep.title}" has been rejected. The creator has been notified.`)
       setShowReviewModal(false)
       await markSitRepNotificationsAsRead(reviewSitRep.id)
       if (selectedEvent) fetchSituationalReports(selectedEvent.id)
@@ -2646,8 +2655,8 @@ useEffect(() => {
                   </>
                 )}
 
-                {/* Only non-LGUs can create new Situation Reports. Everyone can add entries to an existing report. */}
-                {(view === 'entries' || (view === 'versions' && !isLGU)) && (
+                {/* Everyone can create new Situation Reports in the new flow. Everyone can add entries to an existing report. */}
+                {(view === 'entries' || view === 'versions') && (
                   <Button 
                     variant="solid" 
                     color="primary" 
@@ -2798,6 +2807,7 @@ useEffect(() => {
                   <tr>
                     <th style={{ width: '150px', textAlign: 'left' }}>Report Number</th>
                     <th style={{ textAlign: 'left' }}>Report Title</th>
+                    <th style={{ width: '150px', textAlign: 'left' }}>Creator</th>
                     {(isSuperAdmin || isRegional) && (
                       <th style={{ width: '150px', textAlign: 'left' }}>Province</th>
                     )}
@@ -2839,6 +2849,9 @@ useEffect(() => {
                             </div>
                           )}
                         </td>
+                        <td style={{ color: '#334155' }}>
+                          {sr.creator_city ? sr.creator_city : (sr.creator_name || '-')}
+                        </td>
                         {(isSuperAdmin || isRegional) && (
                           <td style={{ color: '#64748b', fontSize: '0.875rem' }}>
                             {sr.province || '-'}
@@ -2859,13 +2872,29 @@ useEffect(() => {
                               icon={<FileText size={14} />}>
                               Manage
                             </Button>
-                            {(isProvincial || isSuperAdmin || isRegional) && (
+                            
+                            {/* Send Button: visible to LGU (to Province) and Provincial/Admin (to Regional/Super Admin) */}
+                            {((isLGU && sr.status === 'Draft') || (isProvincial || isSuperAdmin || isRegional)) && (
                               <Button variant="solid" color="success" size="sm"
                                 onClick={() => handleUploadPdfClick(sr)}
                                 icon={<Upload size={14} />}>
-                                Send
+                                {isLGU ? 'Send to Prov' : 'Send'}
                               </Button>
                             )}
+
+                            {/* Review Button: visible to Provincial users for LGU reports pending review */}
+                            {isProvincial && sr.status === 'Pending Provincial Review' && (
+                              <Button variant="solid" color="warning" size="sm"
+                                onClick={() => handleOpenReviewModal(sr)}
+                                icon={<Eye size={14} />}>
+                                Review
+                              </Button>
+                            )}
+                            
+                            <Button variant="ghost" color="success" size="sm"
+                              onClick={() => handleReportDownload(sr)}
+                              icon={<Download size={14} />}>
+                            </Button>
                           </div>
                         </td>
                       </tr>
@@ -4078,9 +4107,9 @@ useEffect(() => {
           <div style={{ display: 'flex', flexDirection: 'column', height: '70vh' }}>
             {/* PDF viewer */}
             <div style={{ flex: 1, background: '#e2e8f0', overflow: 'hidden', minHeight: 0, borderRadius: '8px' }}>
-              {reviewSitRep.approved_pdf_url ? (
+              {(reviewSitRep.pending_pdf_url || reviewSitRep.approved_pdf_url) ? (
                 <iframe
-                  src={reviewSitRep.approved_pdf_url}
+                  src={reviewSitRep.pending_pdf_url || reviewSitRep.approved_pdf_url}
                   title="Situational Report PDF"
                   style={{ width: '100%', height: '100%', border: 'none' }}
                 />

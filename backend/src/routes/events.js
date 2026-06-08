@@ -75,6 +75,36 @@ router.post('/', authenticate, async (req, res) => {
     const io = req.app.locals.io;
     io.emit('events:created', rows[0]);
 
+    // Send notifications to users in affected provinces
+    if (affected_provinces && affected_provinces.length > 0) {
+      try {
+        const usersToNotify = await pool.query(
+          `SELECT id FROM users WHERE province = ANY($1::text[]) OR account_type IN ('Regional Admin', 'Regional')`,
+          [affected_provinces]
+        );
+        
+        if (usersToNotify.rows.length > 0) {
+          const notifications = usersToNotify.rows.map(u => ({
+            user_id: u.id,
+            type: 'event_created',
+            title: 'New Event Created',
+            message: `A new event "${name}" has been created for your province.`,
+            data: { event_id: rows[0].id }
+          }));
+          
+          for (const n of notifications) {
+            const notifRes = await pool.query(
+              'INSERT INTO notifications (user_id, type, title, message, data) VALUES ($1,$2,$3,$4,$5) RETURNING *',
+              [n.user_id, n.type, n.title, n.message, JSON.stringify(n.data)]
+            );
+            if (io) io.emit(`notification:${n.user_id}`, notifRes.rows[0]);
+          }
+        }
+      } catch (notifErr) {
+        console.error('[Events/POST] Failed to send notifications:', notifErr);
+      }
+    }
+
     // Log activity
     await pool.query(
       'INSERT INTO activity_logs (user_id, action, details) VALUES ($1, $2, $3)',
@@ -137,6 +167,35 @@ router.patch('/:id', authenticate, async (req, res) => {
     // We should probably broadcast to all clients to refresh their list if we undeployed others
     if (fields.is_deployed === true) {
       io.emit('events:refresh_needed'); 
+      
+      // Notify users about deployment
+      try {
+        const affectedProvinces = rows[0].affected_provinces || [];
+        const usersToNotify = await pool.query(
+          `SELECT id FROM users WHERE province = ANY($1::text[]) OR account_type IN ('Regional Admin', 'Regional')`,
+          [affectedProvinces]
+        );
+        
+        if (usersToNotify.rows.length > 0) {
+          const notifications = usersToNotify.rows.map(u => ({
+            user_id: u.id,
+            type: 'event_deployed',
+            title: 'Event Deployed',
+            message: `The event "${rows[0].name}" has been deployed. Please start reporting as needed.`,
+            data: { event_id: rows[0].id }
+          }));
+          
+          for (const n of notifications) {
+            const notifRes = await pool.query(
+              'INSERT INTO notifications (user_id, type, title, message, data) VALUES ($1,$2,$3,$4,$5) RETURNING *',
+              [n.user_id, n.type, n.title, n.message, JSON.stringify(n.data)]
+            );
+            if (io) io.emit(`notification:${n.user_id}`, notifRes.rows[0]);
+          }
+        }
+      } catch (notifErr) {
+        console.error('[Events/PATCH] Failed to send deployment notifications:', notifErr);
+      }
     }
 
     res.json(rows[0]);

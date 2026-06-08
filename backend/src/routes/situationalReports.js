@@ -168,9 +168,12 @@ router.get('/', authenticate, async (req, res) => {
   try {
     let query = `
       SELECT sr.*, 
+             u.name as creator_name,
+             u.city as creator_city,
              json_build_object('id', e.id, 'name', e.name) as events
       FROM situational_reports sr
       LEFT JOIN events e ON sr.event_id = e.id
+      LEFT JOIN users u ON sr.created_by = u.id
       WHERE 1=1
     `;
     const params = [];
@@ -180,13 +183,18 @@ router.get('/', authenticate, async (req, res) => {
       query += ` AND sr.event_id = $${params.length}`;
     }
 
+    // Regional/Super Admin: Only see data from APPROVED situational reports
+    const isRegional = ['Regional Admin', 'Regional', 'Super Admin'].includes(req.user.account_type) || req.user.role === 'Super Admin';
+    if (isRegional) {
+      query += " AND sr.status = 'Approved'";
+    }
+
     if (status) {
       params.push(status);
       query += ` AND sr.status = $${params.length}`;
     }
 
-    // Provincial-level scoping
-    const isRegional = ['Regional Admin', 'Regional', 'Super Admin', 'Regional Approver'].includes(req.user.account_type) || req.user.role === 'Super Admin';
+    // Provincial/LGU-level scoping
     if (!isRegional && req.user.province) {
       params.push(req.user.province);
       // Allow them to see their own province, OR Regional reports (NULL or 'Region 1')

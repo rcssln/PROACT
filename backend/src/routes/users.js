@@ -24,7 +24,7 @@ router.get('/', authenticate, async (req, res) => {
       conditions.push(`city = $${params.length + 1}`);
       params.push(user.city);
       conditions.push(`account_type = ANY($${params.length + 1}::text[])`);
-      params.push(['LGU Admin','LGU','LGU Approver']);
+      params.push(['LGU Admin','LGU']);
     }
     // Regional Admin / Super Admin → all users
 
@@ -53,7 +53,7 @@ router.get('/pending-count', authenticate, async (req, res) => {
       params.push(user.province, ['Provincial Admin','Provincial Approver','Provincial','LGU Admin','LGU','LGU Approver']);
     } else if (user.account_type === 'LGU Admin') {
       query += ` AND city = $1 AND account_type = ANY($2::text[])`;
-      params.push(user.city, ['LGU Admin','LGU','LGU Approver']);
+      params.push(user.city, ['LGU Admin','LGU']);
     }
 
     const { rows } = await pool.query(query, params);

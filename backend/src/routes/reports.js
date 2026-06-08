@@ -47,6 +47,18 @@ router.get('/all-types', authenticate, async (req, res) => {
   const isLgu = ['LGU', 'LGU Admin', 'LGU Approver'].includes(user.account_type);
   const isProvincial = ['Provincial', 'Provincial Admin', 'Provincial Approver'].includes(user.account_type);
 
+  // Check if report is approved if user is Regional/Super Admin
+  if (isRegional) {
+    try {
+      const { rows: srRows } = await pool.query('SELECT status FROM situational_reports WHERE id = $1', [situational_report_id]);
+      if (srRows.length > 0 && srRows[0].status !== 'Approved') {
+        return res.status(403).json({ error: 'This report has not been approved by the Province yet.' });
+      }
+    } catch (err) {
+      console.error('[Reports/all-types] Status check failed:', err);
+    }
+  }
+
   try {
     const tables = [
       { name: 'related_incidents', id: 'incidents' },
@@ -251,6 +263,11 @@ router.get('/:table', authenticate, async (req, res) => {
 
   const conditions = [];
   const params = [];
+
+  // Regional/Super Admin: Only see data from APPROVED situational reports
+  if (isRegional) {
+    conditions.push("sr.status = 'Approved'");
+  }
 
   if (!isRegional) {
     const isLgu = ['LGU', 'LGU Admin', 'LGU Approver'].includes(user.account_type);

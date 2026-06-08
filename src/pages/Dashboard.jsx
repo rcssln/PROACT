@@ -254,25 +254,43 @@ export default function Dashboard() {
   const [weatherLoading, setWeatherLoading] = useState(false)
 
   const fetchWeather = useCallback(async () => {
-    const location = user?.city || user?.province || 'Region 1, Philippines'
-    try {
-      setWeatherLoading(true)
-      // wttr.in is free and doesn't require an API key
-      const response = await fetch(`https://wttr.in/${encodeURIComponent(location)}?format=j1`)
-      const data = await response.json()
-      if (data && data.current_condition && data.current_condition[0]) {
-        setWeather({
-          temp: data.current_condition[0].temp_C,
-          desc: data.current_condition[0].weatherDesc[0].value,
-          code: data.current_condition[0].weatherCode,
-          humidity: data.current_condition[0].humidity,
-          wind: data.current_condition[0].windspeedKmph
-        })
+    setWeatherLoading(true)
+    const profileLocation = user?.city || user?.province || 'Region 1, Philippines'
+
+    const doFetch = async (query) => {
+      try {
+        const response = await fetch(`https://wttr.in/${encodeURIComponent(query)}?format=j1`)
+        const data = await response.json()
+        if (data && data.current_condition && data.current_condition[0]) {
+          setWeather({
+            temp: data.current_condition[0].temp_C,
+            desc: data.current_condition[0].weatherDesc[0].value,
+            code: data.current_condition[0].weatherCode,
+            humidity: data.current_condition[0].humidity,
+            wind: data.current_condition[0].windspeedKmph
+          })
+        }
+      } catch (err) {
+        console.error('Weather fetch error:', err)
+      } finally {
+        setWeatherLoading(false)
       }
-    } catch (err) {
-      console.error('Weather fetch error:', err)
-    } finally {
-      setWeatherLoading(false)
+    }
+
+    if ("geolocation" in navigator) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude, longitude } = pos.coords
+          doFetch(`${latitude},${longitude}`)
+        },
+        (err) => {
+          console.warn('Geolocation failed, using profile location:', err.message)
+          doFetch(profileLocation)
+        },
+        { timeout: 8000 }
+      )
+    } else {
+      doFetch(profileLocation)
     }
   }, [user])
 
@@ -688,13 +706,24 @@ const handleNotificationClick = (notif) => {
       params: { event_id: currentEventId }
     })
 
-    // Group by province and find latest approved for aggregation
-    const latestApprovedPerProvince = (allSitreps || []).reduce((acc, sr) => {
-      if (sr.status === 'Approved') {
-        const prov = sr.province || 'Unknown'
-        if (!acc[prov] || new Date(sr.created_at) > new Date(acc[prov].created_at)) {
-          acc[prov] = sr
-        }
+    // Group by province and find relevant situational reports for aggregation
+    const isRegional = ['Regional Admin', 'Regional', 'Super Admin'].includes(user?.account_type) || user?.role === 'Super Admin';
+    const isProvincial = ['Provincial Admin', 'Provincial'].includes(user?.account_type);
+    const isLgu = ['LGU Admin', 'LGU'].includes(user?.account_type);
+
+    const relevantSitreps = (allSitreps || []).filter(sr => {
+      if (isRegional) return sr.status === 'Approved';
+      // Provincial and LGU can see reports for their province
+      if (isProvincial || isLgu) {
+        return sr.province === user?.province || sr.province === 'Region 1';
+      }
+      return sr.status === 'Approved';
+    });
+
+    const latestRelevantPerProvince = relevantSitreps.reduce((acc, sr) => {
+      const prov = sr.province || 'Unknown'
+      if (!acc[prov] || new Date(sr.created_at) > new Date(acc[prov].created_at)) {
+        acc[prov] = sr
       }
       return acc
     }, {})
@@ -705,12 +734,12 @@ const handleNotificationClick = (notif) => {
       approvedIdsCsv = selectedDashboardSitRepId
       approvedIds = [selectedDashboardSitRepId]
     } else {
-      approvedIds = Object.values(latestApprovedPerProvince).map(s => s.id)
+      approvedIds = Object.values(latestRelevantPerProvince).map(s => s.id)
       approvedIdsCsv = approvedIds.join(',') || '00000000-0000-0000-0000-000000000000'
     }
 
     if (approvedIds.length === 0) {
-      console.warn('[Dashboard] No situational reports with "Approved" status found for event:', currentEventId)
+      console.warn('[Dashboard] No situational reports found for event:', currentEventId)
     }
 
     const lguCityFilter = isLguUser ? (user?.city || null) : null
