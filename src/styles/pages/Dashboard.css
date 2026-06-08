@@ -581,9 +581,11 @@
 .dash-hero {
 	display: flex;
 	align-items: center;
-	gap: 2rem;
+	gap: 0.6rem;
 	margin-bottom: 1.25rem;
-	padding: 0 1rem;
+	padding: 0;
+	width: 100%;
+	min-width: 0;
 }
 
 .dash-hero-meta,
@@ -599,56 +601,58 @@
 	box-shadow: var(--shadow-premium);
 	display: flex;
 	align-items: center;
-	justify-content: center;
 	color: var(--dash-text-main);
 	position: relative;
-	overflow: hidden;
-}
-/* Meta Section */
-.dash-hero-meta {
-  padding: 1.25rem 1.5rem;
-  gap: 1.5rem;
-  margin-left: auto;
-  display: flex;
-  flex-wrap: nowrap;
-  justify-content: flex-end;
-  align-items: center;
-  min-width: 800px;
-  width: 1000px;      	 /* Increased to accommodate weather */
 }
 
 .dash-hero-icon {
-	width: 56px;
-	height: 56px;
-	border-radius: 16px;	
+	width: 42px;
+	height: 42px;
+	border-radius: 10px;	
 	flex-shrink: 0;
+	justify-content: center;
+}
+
+/* Meta Section */
+.dash-hero-meta {
+  margin-left: auto;
+  padding: 0.4rem 0.6rem;
+  gap: 0.4rem;
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-start;
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 .dash-hero-title-wrap {
 	display: flex;
 	flex-direction: column;
 	justify-content: center;
-	flex: 1;
-	min-width: 0;
+	width: auto;
+	max-width: 240px;
+	flex-shrink: 1;
+	min-width: 100px;
 }
 
 .dash-hero-amount {
-	font-size: 3.5rem;
+	font-size: 1.65rem;
 	font-weight: 800;
 	letter-spacing: -0.04em;
 	margin: 0;
 	color: var(--text-main);
-	line-height: 1.05;
-	max-width: 600px;
+	line-height: 1.1;
+	max-width: 100%;
 	word-wrap: break-word;
 }
 
 .dash-hero-subtitle {
-	font-size: 1.1rem;
+	font-size: 0.9rem;
 	font-weight: 700;
 	color: var(--accent);
 	/* Primary Indigo */
-	margin: 0.5rem 0 0 0;
+	margin: 0.25rem 0 0 0;
 	letter-spacing: 0.02em;
 	text-transform: uppercase;
 	opacity: 0.9;
@@ -671,7 +675,7 @@
 .dash-hero-meta.alert-status-white,
 .dash-hero-icon.alert-status-white {
 	background: var(--glass-bg);
-	border-color: #000;
+	border-color: #d4d4d4;
 	color: var(--text-muted);
 }
 
@@ -712,7 +716,6 @@
 	color: var(--text-muted);
 }
 
-
 .dash-hero-meta.alert-status-red .meta-icon,
 .dash-hero-meta.alert-status-blue .meta-icon,
 .dash-hero-meta.alert-status-yellow .meta-icon,
@@ -724,74 +727,74 @@
 }
 
 .meta-item {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  flex-shrink: 0;        /* don't shrink */
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	flex-shrink: 0;        /* don't shrink */
 }
 
-/* Alert Status - based on "WHITE" being longest */
+/* Alert Status - condensed */
 .meta-item:nth-child(1) {
-  min-width: 100px;
-  width: 100px;
+	padding-left: 0.7rem;
+	min-width: 0;
+	padding-bottom: 0.5rem;
 }
 
-/* Type - based on "Tropical Cyclone" being longest */
+/* Type - condensed */
 .meta-item:nth-child(2) {
-  min-width: 170px;
-  width: 170px;
+	padding-left: 0.5rem;
+	min-width: 0;
 }
 
-/* Category - based on "Tropical Depression" being longest */
+/* Category - condensed */
 .meta-item:nth-child(3) {
-  min-width: 190px;
-  width: 190px;
+	border-left: 1px solid rgba(0, 0, 0, 0.2);
+	padding-left: 0.5rem;
+	min-width: 0;
 }
 
-/* Weather - new item */
+/* Weather - condensed */
 .weather-item {
-  min-width: 250px;
-  width: 25	0px;
-  border-left: 1px solid rgba(0,0,0,0.1);
-  padding-left: 1.5rem;
+	min-width: 0;
+	border-left: 1px solid rgba(0,0,0,0.2);
+	padding-left: 0.5rem;
 }
 
-/* Date - fixed, dates are always same length */
+/* Date - condensed */
 .meta-item:last-child {
-  min-width: 150px;
-  width: 150px;
-  border-left: 1px solid rgba(0,0,0,0.1);
-  padding-left: 1.5rem;
+	min-width: 0;
+	border-left: 1px solid rgba(0,0,0,0.2);
+	padding-left: 0.5rem;
 }
 
 .animate-spin {
-  animation: spin 1s linear infinite;
+	animation: spin 1s linear infinite;
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+	from { transform: rotate(0deg); }
+	to { transform: rotate(360deg); }
 }
 
 .meta-value {
-  font-size: 1.1rem;
-  font-weight: 700;
-  color: var(--text-main);
-  white-space: nowrap;    /* prevent wrapping */
+	font-size: 1rem;
+	font-weight: 700;
+	color: var(--text-main);
+	white-space: nowrap;    /* prevent wrapping */
 }
 
 .meta-label {
-  font-size: 0.8125rem;
-  font-weight: 500;
-  color: var(--text-muted);
-  text-transform: capitalize;
-  white-space: nowrap;    /* prevent wrapping */
+	font-size: 0.75rem;
+	font-weight: 500;
+	color: var(--text-muted);
+	text-transform: capitalize;
+	white-space: nowrap;    /* prevent wrapping */
 }
 
 .meta-icon {
-	width: 38px;
-	height: 38px;
-	border-radius: 12px;
+	width: 32px;
+	height: 32px;
+	border-radius: 10px;
 	background: var(--bg-card);
 	backdrop-filter: blur(10px);
 	-webkit-backdrop-filter: blur(10px);
@@ -2851,4 +2854,119 @@
 .alert-orange {
   background: #ffedd5 !important;
   color: #9a3412 !important;
+}
+
+/* Responsive Grid and Viz Styles */
+.dashboard-viz-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 2rem;
+}
+
+.dashboard-chart-container {
+  min-height: 400px;
+  background: var(--bg-page);
+  border-radius: 12px;
+  padding: 1.5rem;
+}
+
+/* Media Queries for Responsiveness */
+
+/* Large Tablets and Smaller Desktops */
+@media (max-width: 1440px) {
+  .metrics-row {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 1200px) {
+  .dashboard-viz-grid {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+
+  .sidebar-rankings {
+    max-width: 100%;
+  }
+}
+
+/* Tablets */
+@media (max-width: 1024px) {
+  .metrics-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .dash-hero {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .dash-hero-meta {
+    width: 100%;
+    min-width: 100;
+    justify-content: flex-start;
+    overflow-x: auto;
+    padding-bottom: 0.5rem;
+  }
+
+  .dash-hero-title-wrap {
+    width: 100%;
+  }
+}
+
+/* Mobile Devices */
+@media (max-width: 768px) {
+  .metrics-row {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-viz-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .dash-hero-amount {
+    font-size: 1.75rem;
+  }
+
+  .dash-hero-meta {
+    display: flex !important; /* Overriding previous display: none */
+    justify-content: flex-start;
+    gap: 1rem;
+    padding: 1rem;
+  }
+
+  .meta-item {
+    min-width: calc(50% - 1rem);
+    flex: 1;
+  }
+
+  /* Ensure charts have enough room on mobile */
+  .dashboard-chart-container {
+    padding: 1rem;
+    min-height: 350px;
+  }
+
+  .dash-header-title {
+    font-size: 1.25rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .meta-item {
+    min-width: 100%;
+  }
+
+  .dash-hero-amount {
+    font-size: 1.5rem;
+  }
+
+  .card-tabs {
+    gap: 0.5rem;
+  }
+
+  .card-tab {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.75rem;
+  }
 }
