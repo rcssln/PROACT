@@ -257,48 +257,57 @@ export default function Dashboard() {
   const [editForm, setEditForm] = useState({ name: '', color: '#6366f1', startDate: '', endDate: '', eventType: 'calamity', alertStatus: 'white', pingedReportTypes: [] })
   const [activeTab, setActiveTab] = useState('All Reports')
 
+  const handleTabChangeWithScroll = (tab) => {
+    setActiveTab(tab);
+    setTimeout(() => {
+      const mainCard = document.querySelector('.dash-main-card');
+      if (mainCard) {
+        mainCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 100);
+  };
+
+  const handleScrollToBottom = (tab) => {
+    setActiveTab(tab);
+    setTimeout(() => {
+      const targetSection = document.getElementById('damaged-houses-section');
+      if (targetSection) {
+        targetSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      } else {
+        const mainCard = document.querySelector('.dash-main-card');
+        if (mainCard) {
+          mainCard.scrollIntoView({ behavior: 'smooth', block: 'end' });
+        } else {
+          window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+        }
+      }
+    }, 150);
+  };
+
   // --- Weather Logic ---
   const [weather, setWeather] = useState(null)
   const [weatherLoading, setWeatherLoading] = useState(false)
 
   const fetchWeather = useCallback(async () => {
-    setWeatherLoading(true)
-    const profileLocation = user?.city || user?.province || 'Region 1, Philippines'
-
-    const doFetch = async (query) => {
-      try {
-        const response = await fetch(`https://wttr.in/${encodeURIComponent(query)}?format=j1`)
-        const data = await response.json()
-        if (data && data.current_condition && data.current_condition[0]) {
-          setWeather({
-            temp: data.current_condition[0].temp_C,
-            desc: data.current_condition[0].weatherDesc[0].value,
-            code: data.current_condition[0].weatherCode,
-            humidity: data.current_condition[0].humidity,
-            wind: data.current_condition[0].windspeedKmph
-          })
-        }
-      } catch (err) {
-        console.error('Weather fetch error:', err)
-      } finally {
-        setWeatherLoading(false)
+    const location = user?.city || user?.province || 'Region 1, Philippines'
+    try {
+      setWeatherLoading(true)
+      // wttr.in is free and doesn't require an API key
+      const response = await fetch(`https://wttr.in/${encodeURIComponent(location)}?format=j1`)
+      const data = await response.json()
+      if (data && data.current_condition && data.current_condition[0]) {
+        setWeather({
+          temp: data.current_condition[0].temp_C,
+          desc: data.current_condition[0].weatherDesc[0].value,
+          code: data.current_condition[0].weatherCode,
+          humidity: data.current_condition[0].humidity,
+          wind: data.current_condition[0].windspeedKmph
+        })
       }
-    }
-
-    if ("geolocation" in navigator) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const { latitude, longitude } = pos.coords
-          doFetch(`${latitude},${longitude}`)
-        },
-        (err) => {
-          console.warn('Geolocation failed, using profile location:', err.message)
-          doFetch(profileLocation)
-        },
-        { timeout: 8000 }
-      )
-    } else {
-      doFetch(profileLocation)
+    } catch (err) {
+      console.error('Weather fetch error:', err)
+    } finally {
+      setWeatherLoading(false)
     }
   }, [user])
 
@@ -714,24 +723,13 @@ const handleNotificationClick = (notif) => {
       params: { event_id: currentEventId }
     })
 
-    // Group by province and find relevant situational reports for aggregation
-    const isRegional = ['Regional Admin', 'Regional', 'Super Admin'].includes(user?.account_type) || user?.role === 'Super Admin';
-    const isProvincial = ['Provincial Admin', 'Provincial'].includes(user?.account_type);
-    const isLgu = ['LGU Admin', 'LGU'].includes(user?.account_type);
-
-    const relevantSitreps = (allSitreps || []).filter(sr => {
-      if (isRegional) return sr.status === 'Approved';
-      // Provincial and LGU can see reports for their province
-      if (isProvincial || isLgu) {
-        return sr.province === user?.province || sr.province === 'Region 1';
-      }
-      return sr.status === 'Approved';
-    });
-
-    const latestRelevantPerProvince = relevantSitreps.reduce((acc, sr) => {
-      const prov = sr.province || 'Unknown'
-      if (!acc[prov] || new Date(sr.created_at) > new Date(acc[prov].created_at)) {
-        acc[prov] = sr
+    // Group by province and find latest approved for aggregation
+    const latestApprovedPerProvince = (allSitreps || []).reduce((acc, sr) => {
+      if (sr.status === 'Approved') {
+        const prov = sr.province || 'Unknown'
+        if (!acc[prov] || new Date(sr.created_at) > new Date(acc[prov].created_at)) {
+          acc[prov] = sr
+        }
       }
       return acc
     }, {})
@@ -742,12 +740,12 @@ const handleNotificationClick = (notif) => {
       approvedIdsCsv = selectedDashboardSitRepId
       approvedIds = [selectedDashboardSitRepId]
     } else {
-      approvedIds = Object.values(latestRelevantPerProvince).map(s => s.id)
+      approvedIds = Object.values(latestApprovedPerProvince).map(s => s.id)
       approvedIdsCsv = approvedIds.join(',') || '00000000-0000-0000-0000-000000000000'
     }
 
     if (approvedIds.length === 0) {
-      console.warn('[Dashboard] No situational reports found for event:', currentEventId)
+      console.warn('[Dashboard] No situational reports with "Approved" status found for event:', currentEventId)
     }
 
     const lguCityFilter = isLguUser ? (user?.city || null) : null
@@ -2197,25 +2195,25 @@ CHRONOLOGY OF EVENTS`;
                     <div className="kpi-sub-premium">Total lives impacted</div>
                   </div>
 
-                    <div className="kpi-card-premium orange" onClick={() => setActiveTab('Pre-Evacuation')} style={{ cursor: 'pointer' }}>
+                    <div className="kpi-card-premium orange" onClick={() => handleTabChangeWithScroll('Pre-Evacuation')} style={{ cursor: 'pointer' }}>
                       <div className="kpi-label-premium">Currently Evacuated</div>
                       <div className="kpi-value-premium">{((result?.details?.evacStatus?.inside || 0) + (result?.details?.evacStatus?.outside || 0)).toLocaleString()}</div>
                       <div className="kpi-sub-premium">In ECs & with relatives</div>
                     </div>
 
-                    <div className="kpi-card-premium amber" onClick={() => setActiveTab('Pre-Evacuation')} style={{ cursor: 'pointer' }}>
+                    <div className="kpi-card-premium amber" onClick={() => handleScrollToBottom('Pre-Evacuation')} style={{ cursor: 'pointer' }}>
                       <div className="kpi-label-premium">Damaged Houses</div>
                       <div className="kpi-value-premium">{(categoryCards.find(c => c.category === 'damagedHouses')?.totalCount || 0).toLocaleString()}</div>
                       <div className="kpi-sub-premium">Totally & partially impacted</div>
                     </div>
 
-                    <div className="kpi-card-premium blue" onClick={() => setActiveTab('Infrastructure')} style={{ cursor: 'pointer', borderTopColor: T.indigo }}>
+                    <div className="kpi-card-premium blue" onClick={() => handleTabChangeWithScroll('Infrastructure')} style={{ cursor: 'pointer', borderTopColor: T.indigo }}>
                       <div className="kpi-label-premium">Power Still Out</div>
                       <div className="kpi-value-premium">{details.infrastructure.filter(i => i.type === 'power' && i.status === 'interrupted').length}</div>
                       <div className="kpi-sub-premium">Areas without restoration</div>
                     </div>
 
-                    <div className="kpi-card-premium slate" onClick={() => setActiveTab('Infrastructure')} style={{ cursor: 'pointer' }}>
+                    <div className="kpi-card-premium slate" onClick={() => handleTabChangeWithScroll('Infrastructure')} style={{ cursor: 'pointer' }}>
                       <div className="kpi-label-premium">Roads Not Passable</div>
                       <div className="kpi-value-premium">{details.infrastructure.filter(i => i.type === 'road' && i.status === 'notPassable').length}</div>
                       <div className="kpi-sub-premium">Obstructions reported</div>
@@ -2225,10 +2223,7 @@ CHRONOLOGY OF EVENTS`;
                       <div className="kpi-label-premium">Assistance Value</div>
                       <div className="kpi-value-premium">₱ {(() => {
                         const val = Object.values(details.assistanceByLgu || {}).reduce((s, v) => s + v, 0);
-                        if (val >= 1000000000) return `${(val / 1000000000).toLocaleString(undefined, { maximumFractionDigits: 1 })}B`;
-                        if (val >= 1000000) return `${(val / 1000000).toLocaleString(undefined, { maximumFractionDigits: 1 })}M`;
-                        if (val >= 1000) return `${(val / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })}K`;
-                        return val.toLocaleString();
+                        return val >= 1000 ? `${(val / 1000).toLocaleString(undefined, { maximumFractionDigits: 1 })}K` : val.toLocaleString();
                       })()}</div>
                       <div className="kpi-sub-premium">Total funds disbursed</div>
                     </div>
@@ -3250,7 +3245,7 @@ CHRONOLOGY OF EVENTS`;
                     </div>
                   </div>
                   {/* Damaged Houses Section (Integrated into Pre-Evacuation reporting as per plan) */}
-                  <div className="premium-card">
+                  <div className="premium-card" id="damaged-houses-section">
                     <div className="premium-card-header">
                       <div className="premium-card-title">Damaged Houses — City Breakdown</div>
                       <span style={{ fontSize: '10px', color: T.orange, background: 'rgba(249,115,22,0.15)', padding: '2px 8px', borderRadius: '4px' }}>HOUSING IMPACT</span>
