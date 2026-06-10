@@ -1,11 +1,11 @@
 {
   "classifications": [
-    { "min": -100, "max": 0, "label": "Freezing" },
-    { "min": 0, "max": 10, "label": "Cold" },
-    { "min": 10, "max": 18, "label": "Cool" },
-    { "min": 18, "max": 24, "label": "Moderate" },
-    { "min": 24, "max": 30, "label": "Warm" },
-    { "min": 30, "max": 35, "label": "Hot" },
-    { "min": 35, "max": 100, "label": "Extreme Heat" }
+    { "min": -100, "max": 0, "label": "Freezing"},
+    { "min": 0, "max": 10, "label": "Cold"},
+    { "min": 10, "max": 18, "label": "Cool"},
+    { "min": 18, "max": 24, "label": "Moderate"},
+    { "min": 24, "max": 30, "label": "Warm"},
+    { "min": 30, "max": 35, "label": "Hot"},
+    { "min": 35, "max": 100, "label": "Extreme Heat"}
   ]
 }

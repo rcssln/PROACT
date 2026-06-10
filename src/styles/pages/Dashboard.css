@@ -586,7 +586,7 @@
 	padding: 0 1rem;
 	width: 100%;
 	min-width: 0;
-	flex-wrap: nowrap; /* Prevent wrapping to keep title and meta on same line */
+	flex-wrap: wrap; /* Allow wrapping for responsiveness */
 }
 
 .dash-hero-meta,
@@ -617,16 +617,14 @@
 /* Meta Section */
 .dash-hero-meta {
   margin-left: auto;
-  margin-right: 1.5rem;
-  padding: 0.8rem 1.5rem; /* More vertical and horizontal padding */
-  display: grid;
-  grid-template-columns: 220px 180px 180px 180px 180px; /* Spacious columns */
+  padding: 0.4rem 0.6rem;
+  gap: 0.4rem;
+  display: flex;
+  flex-wrap: nowrap;
   align-items: center;
-  flex: 0 0 auto;
-  width: 940px; /* Locked total width */
-  height: 90px; /* Increased from 54px for a bigger look */
-  border-radius: 14px; /* Slightly more rounded to match size */
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  justify-content: flex-start;
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 .dash-hero-title-wrap {
@@ -732,45 +730,46 @@
 .meta-item {
 	display: flex;
 	align-items: center;
-	gap: 0.6rem;
-	flex-shrink:
+	gap: 0.5rem;
+	flex-shrink: 0;        /* don't shrink */
 }
 
-/* Alert Status - first item */
+/* Alert Status - condensed */
 .meta-item:nth-child(1) {
-	padding-left: 7.8rem;
-	min-width: 0;}
+	padding-left: 0.7rem;
+	min-width: 0;
+	padding-bottom: 0.5rem;
+}
 
-/* Type - locked column 2 */
+/* Type - condensed */
 .meta-item:nth-child(2) {
-	border-left: 1px solid rgba(0, 0, 0, 0.15);
-	padding-left: 1.25rem;
+	padding-left: 1rem;
 	padding-right: 0.5rem;
 	min-width: 0;
 }
 
-/* Category - locked column 3 */
+/* Category - condensed */
 .meta-item:nth-child(3) {
-	border-left: 1px solid rgba(0, 0, 0, 0.15);
-	padding-left: 1.25rem;
+	border-left: 1px solid rgba(0, 0, 0, 0.2);
+	padding-left: 1rem;
 	padding-right: 0.5rem;
 	min-width: 0;
 }
 
-/* Weather - locked column 4 */
+/* Weather - condensed */
 .weather-item {
 	min-width: 0;
-	border-left: 1px solid rgba(0, 0, 0, 0.15);
-	padding-left: 1.25rem;
+	border-left: 1px solid rgba(0,0,0,0.2);
+	padding-left: 1rem;
 	padding-right: 0.5rem;
 
 }
 
-/* Date - locked column 5 */
+/* Date - condensed */
 .meta-item:last-child {
 	min-width: 0;
-	border-left: 1px solid rgba(0, 0, 0, 0.15);
-	padding-left: 1.25rem;
+	border-left: 1px solid rgba(0,0,0,0.2);
+	padding-left: 1rem;
 	padding-right: 0.5rem;
 }
 
@@ -784,14 +783,10 @@
 }
 
 .meta-value {
-	font-size: 0.95rem;
+	font-size: 1rem;
 	font-weight: 700;
 	color: var(--text-main);
 	white-space: nowrap;    /* prevent wrapping */
-	overflow: hidden;
-	text-overflow: ellipsis;
-	display: block;
-	width: 100%;
 }
 
 .meta-label {
@@ -800,10 +795,6 @@
 	color: var(--text-muted);
 	text-transform: capitalize;
 	white-space: nowrap;    /* prevent wrapping */
-	overflow: hidden;
-	text-overflow: ellipsis;
-	display: block;
-	width: 100%;
 }
 
 .meta-icon {
@@ -827,9 +818,7 @@
 .meta-content {
 	display: flex;
 	flex-direction: column;
-	width: 100%;
 }
-
 /* Summary Bar */
 .dash-summary-bar {
 	background: var(--bg-card);
@@ -1742,12 +1731,12 @@
 }
 
 .metric-card {
-	background: var(--bg-card);
-	backdrop-filter: blur(12px) saturate(160%);
-	-webkit-backdrop-filter: blur(12px) saturate(160%);
+	background: var(--glass-bg);
+	backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+	-webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
 	padding: 1.5rem;
 	border-radius: 22px;
-	border: 1px solid var(--border-color);
+	border: 1px solid var(--glass-border);
 	box-shadow: var(--shadow-premium);
 	display: flex;
 	flex-direction: column;
@@ -1757,7 +1746,7 @@
 
 .metric-card:hover {
 	transform: translateY(-4px);
-	background: rgba(255, 255, 255, 0.9);
+	background: rgba(255, 255, 255, 0.6);
 	box-shadow: var(--shadow-elevated);
 }
 
@@ -1855,12 +1844,12 @@
 .trend-card,
 .distribution-card,
 .full-width-card {
-	background: var(--bg-card);
-	backdrop-filter: blur(16px);
-	-webkit-backdrop-filter: blur(16px);
+	background: var(--glass-bg);
+	backdrop-filter: blur(var(--glass-blur)) saturate(180%);
+	-webkit-backdrop-filter: blur(var(--glass-blur)) saturate(180%);
 	padding: 1.75rem;
 	border-radius: var(--glass-radius);
-	border: 1px solid var(--border-color);
+	border: 1px solid var(--glass-border);
 	box-shadow: var(--shadow-premium);
 	transition: all 0.3s ease;
 }
@@ -2914,20 +2903,21 @@
   }
 
   .dash-hero {
-    align-items: center;
+    flex-direction: column;
+    align-items: flex-start;
     gap: 1rem;
   }
 
   .dash-hero-meta {
-    margin-left: auto;
-    min-width: 0;
+    width: 100%;
+    min-width: 100;
     justify-content: flex-start;
     overflow-x: auto;
     padding-bottom: 0.5rem;
   }
 
   .dash-hero-title-wrap {
-    width: auto;
+    width: 100%;
   }
 }
 
