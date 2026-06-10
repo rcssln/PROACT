@@ -100,6 +100,16 @@ router.get('/all-types', authenticate, async (req, res) => {
         }
       }
 
+      // Keep visibility check from remote: non-LGUs only see Approved data
+      if (!isLgu) {
+        conditions.push(`(t.city IS NULL OR t.city = '' OR EXISTS (
+          SELECT 1 FROM lgu_submissions ls 
+          WHERE ls.situational_report_id = t.situational_report_id 
+            AND ls.city = t.city 
+            AND ls.status = 'Approved'
+        ))`);
+      }
+
       const { rows } = await pool.query(`${query} WHERE ${conditions.join(' AND ')}`, params);
       
       rows.forEach(r => {
@@ -121,12 +131,18 @@ router.get('/all-types', authenticate, async (req, res) => {
       const rowsConditions = [`t.report_id = ANY($1::uuid[])`];
       const rowsParams = [reportIds];
 
-      if (!isSuperAdmin) {
-        if (isLgu && user.city) {
-          const cleanCity = user.city.replace(/\s*\(.*\)\s*$/, '').trim();
-          rowsParams.push(cleanCity);
-          rowsConditions.push(cityCondition('t', rowsParams.length));
-        }
+      if (isLgu && user.city) {
+        const cleanCity = user.city.replace(/\s*\(.*\)\s*$/, '').trim();
+        rowsParams.push(cleanCity);
+        rowsConditions.push(cityCondition('t', rowsParams.length));
+      } else if (!isLgu) {
+        // Keep visibility check from remote: non-LGUs only see Approved data
+        rowsConditions.push(`(t.city IS NULL OR t.city = '' OR EXISTS (
+          SELECT 1 FROM lgu_submissions ls 
+          WHERE ls.situational_report_id = r.situational_report_id 
+            AND ls.city = t.city 
+            AND ls.status = 'Approved'
+        ))`);
       }
 
       const { rows: reportRows } = await pool.query(`${rowsQuery} WHERE ${rowsConditions.join(' AND ')}`, rowsParams);
@@ -404,7 +420,7 @@ router.patch('/:table/bulk', authenticate, async (req, res) => {
     for (const row of data) {
       const { id, ...body } = row;
       const cols = Object.keys(body);
-      const vals = cols.map(c => typeof body[c] === 'object' && body[c] !== null ? JSON.stringify(body[c]) : body[c]);
+      const vals = cols.map(c => typeof body[c] === 'object' && body[c] !== null ? JSON.stringify(body[c]) : body[col]);
       vals.push(id);
       const { rows } = await client.query(`UPDATE ${table} SET ${cols.map((c, i) => `${c}=$${i+1}`).join(',')} WHERE id=$${vals.length} RETURNING *`, vals);
       if (rows.length > 0) results.push(rows[0]);
