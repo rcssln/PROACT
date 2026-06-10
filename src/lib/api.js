@@ -2,6 +2,10 @@ import axios from 'axios'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:4000/api'
 
+if (import.meta.env.MODE === 'production') {
+  console.log(`[API] Initialized with Base URL: ${API_URL}`);
+}
+
 const api = axios.create({
   baseURL: API_URL,
   headers: { 'Content-Type': 'application/json' },

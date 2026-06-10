@@ -111,10 +111,11 @@ export async function generateAISummary(data, event, relatedIncidents = []) {
   try {
     const { data: configData } = await api.get('/settings/ai')
     if (configData) {
+      console.log('[summaryService] AI config successfully fetched from backend.')
       aiConfig = { ...aiConfig, ...configData }
     }
   } catch (err) {
-    console.warn('[summaryService] Failed to fetch AI config from backend, using env fallback.')
+    console.warn(`[summaryService] Backend fetch failed (${err.response?.status || err.message}). Using local VITE_ env variables. Current URL: ${api.defaults.baseURL}/settings/ai`)
   }
 
   const activeModel = aiConfig.activeModel || 'groq'

@@ -71,6 +71,10 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
 });
 
 // --- Routes ---
+// Legacy/Redundant routes to handle stripped /api prefix in some production environments
+app.get('/health', (req, res) => res.json({ status: 'ok', msg: 'Non-prefixed health check' }));
+app.use('/auth', authRoutes);
+
 app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'ok', 
