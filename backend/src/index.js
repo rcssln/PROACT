@@ -73,29 +73,31 @@ app.post('/api/upload', upload.single('file'), (req, res) => {
 // --- Routes ---
 // Legacy/Redundant routes to handle stripped /api prefix in some production environments
 app.get('/health', (req, res) => res.json({ status: 'ok', msg: 'Non-prefixed health check' }));
-app.use('/auth', authRoutes);
+app.get('/test-route', (req, res) => res.json({ message: 'API is reachable (non-prefixed)' }));
 
-app.get('/api/health', (req, res) => {
-  res.json({ 
-    status: 'ok', 
-    timestamp: new Date().toISOString(),
-    file: __filename,
-    cwd: process.cwd()
-  });
+// Standard /api routes
+app.get('/api/health', (req, res) => res.json({ status: 'ok', msg: 'Prefixed health check' }));
+app.get('/api/test-route', (req, res) => res.json({ message: 'API is reachable (prefixed)' }));
+
+// Apply routes to BOTH prefixed and non-prefixed paths for maximum compatibility
+const routeModules = [
+  { path: 'auth', router: authRoutes },
+  { path: 'events', router: eventsRoutes },
+  { path: 'situational-reports', router: sitRepsRoutes },
+  { path: 'users', router: usersRoutes },
+  { path: 'notifications', router: notificationsRoutes },
+  { path: 'reports', router: reportsRoutes },
+  { path: 'lgu-submissions', router: lguSubmissionsRoutes },
+  { path: 'signals', router: signalsRoutes },
+  { path: 'deployments', router: deploymentsRoutes },
+  { path: 'activity-logs', router: activityLogsRoutes },
+  { path: 'settings', router: settingsRoutes }
+];
+
+routeModules.forEach(m => {
+  app.use(`/${m.path}`, m.router);      // backup: /auth/login
+  app.use(`/api/${m.path}`, m.router);  // standard: /api/auth/login
 });
-
-app.use('/api/auth', authRoutes);
-app.use('/api/events', eventsRoutes);
-app.use('/api/situational-reports', sitRepsRoutes);
-app.use('/api/users', usersRoutes);
-app.use('/api/notifications', notificationsRoutes);
-app.use('/api/reports', reportsRoutes);
-app.use('/api/lgu-submissions', lguSubmissionsRoutes);
-app.use('/api/signals', signalsRoutes);
-app.use('/api/deployments', deploymentsRoutes);
-app.use('/api/activity-logs', activityLogsRoutes);
-app.get('/api/test-route', (req, res) => res.json({ message: 'API is reachable' }));
-app.use('/api/settings', settingsRoutes);
 
 // --- Error Handler ---
 app.use((err, req, res, next) => {
