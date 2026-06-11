@@ -597,6 +597,7 @@ export default function AddReport() {
   const [selectedHistoryId, setSelectedHistoryId] = useState('current')
   const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false)
   const [isSavingSummary, setIsSavingSummary] = useState(false)
+  const [showPdfPreview, setShowPdfPreview] = useState(true)
   const [signatoryRole, setSignatoryRole] = useState('preparedBy') // 'preparedBy', 'notedBy', 'approvedBy'
   const [signatorySearch, setSignatorySearch] = useState('')
   const [preparedBy, setPreparedBy] = useState([])
@@ -2899,7 +2900,7 @@ useEffect(() => {
                     </Button>
 
                     {/* LGU Submit button (direct submit, no approval gate) */}
-                    {isLGU && currentSituationalReport && (
+                    {(isLGU || isSuperAdmin) && currentSituationalReport && (
                       <Button
                         variant="solid"
                         color={lguSubmissionStatus === 'Submitted' || lguSubmissionStatus === 'Approved' ? 'success' : 'primary'}
@@ -4226,7 +4227,16 @@ useEffect(() => {
         {generatedSummaryData && (
           <div style={{ display: 'flex', height: '65vh', gap: '1.5rem', minHeight: 0 }}>
             {/* LEFT: Premium PDF Preview */}
-            <div style={{ flex: 1.4, display: 'flex', flexDirection: 'column', gap: '1rem', minWidth: 0 }}>
+            <div style={{ 
+              flex: showPdfPreview ? 1.4 : 0, 
+              display: 'flex', 
+              flexDirection: 'column', 
+              gap: '1rem', 
+              minWidth: 0,
+              transition: 'all 0.3s ease',
+              overflow: 'hidden',
+              opacity: showPdfPreview ? 1 : 0
+            }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <Eye size={16} style={{ color: '#64748b' }} />
@@ -4265,6 +4275,30 @@ useEffect(() => {
                     <LoadingSpinner label="Generating live preview..." />
                   </div>
                 )}
+              </div>
+            </div>
+
+            {/* MIDDLE: Toggle Handle (Vertical) */}
+            <div 
+              onClick={() => setShowPdfPreview(!showPdfPreview)}
+              style={{
+                width: '12px',
+                height: '100%',
+                background: '#f1f5f9',
+                borderRadius: '6px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                transition: 'background 0.2s',
+                border: '1px solid #e2e8f0'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.background = '#e2e8f0'}
+              onMouseLeave={(e) => e.currentTarget.style.background = '#f1f5f9'}
+              title={showPdfPreview ? "Hide PDF Preview" : "Show PDF Preview"}
+            >
+              <div style={{ color: '#64748b' }}>
+                {showPdfPreview ? <CaretDown size={12} style={{ transform: 'rotate(90deg)' }} /> : <CaretDown size={12} style={{ transform: 'rotate(-90deg)' }} />}
               </div>
             </div>
 
@@ -4393,7 +4427,7 @@ useEffect(() => {
         onClose={() => setShowReviewModal(false)}
         title={`Review: ${reviewSitRep?.title}`}
         subtitle="Review the signed PDF below, then Approve or Reject it."
-        maxWidth="1100px"
+        maxWidth="1200px"
         footer={
           <div style={{ display: 'flex', gap: '0.75rem', justifyContent: 'center', width: '100%' }}>
             <Button
@@ -4439,43 +4473,106 @@ useEffect(() => {
         }
       >
         {reviewSitRep && (
-          <div style={{ display: 'flex', flexDirection: 'column', height: '70vh' }}>
-            {/* PDF viewer */}
-            <div style={{ flex: 1, background: '#e2e8f0', overflow: 'hidden', minHeight: 0, borderRadius: '8px' }}>
-              {(reviewSitRep.pending_pdf_url || reviewSitRep.approved_pdf_url) ? (
-                <iframe
-                  src={reviewSitRep.pending_pdf_url || reviewSitRep.approved_pdf_url}
-                  title="Situational Report PDF"
-                  style={{ width: '100%', height: '100%', border: 'none' }}
-                />
-              ) : (
-                <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', flexDirection: 'column', gap: '0.5rem' }}>
-                  <FileText size={40} />
-                  <p>No PDF uploaded yet.</p>
+          <div style={{ display: 'flex', height: '70vh', gap: '1.5rem', minHeight: 0 }}>
+            {/* LEFT: PDF Viewer */}
+            <div style={{ 
+              flex: showPdfPreview ? 1.5 : 0, 
+              display: 'flex', 
+              flexDirection: 'column', 
+              gap: '1rem', 
+              minWidth: 0,
+              transition: 'all 0.3s ease',
+              overflow: 'hidden',
+              opacity: showPdfPreview ? 1 : 0
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Eye size={16} style={{ color: '#64748b' }} />
+                <span style={{ fontWeight: 700, fontSize: '0.875rem', color: '#334155' }}>PDF Document</span>
+              </div>
+              <div style={{ flex: 1, background: '#e2e8f0', overflow: 'hidden', minHeight: 0, borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+                {(reviewSitRep.pending_pdf_url || reviewSitRep.approved_pdf_url) ? (
+                  <iframe
+                    src={reviewSitRep.pending_pdf_url || reviewSitRep.approved_pdf_url}
+                    title="Situational Report PDF"
+                    style={{ width: '100%', height: '100%', border: 'none' }}
+                  />
+                ) : (
+                  <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', flexDirection: 'column', gap: '0.5rem' }}>
+                    <FileText size={40} />
+                    <p>No PDF uploaded yet.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* MIDDLE: Toggle Handle */}
+            <div 
+              onClick={() => setShowPdfPreview(!showPdfPreview)}
+              style={{
+                width: '12px',
+                height: '100%',
+                background: '#f1f5f9',
+                borderRadius: '6px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                transition: 'background 0.2s',
+                border: '1px solid #e2e8f0'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.background = '#e2e8f0'}
+              onMouseLeave={(e) => e.currentTarget.style.background = '#f1f5f9'}
+              title={showPdfPreview ? "Hide PDF Preview" : "Show PDF Preview"}
+            >
+              <div style={{ color: '#64748b' }}>
+                {showPdfPreview ? <CaretDown size={12} style={{ transform: 'rotate(90deg)' }} /> : <CaretDown size={12} style={{ transform: 'rotate(-90deg)' }} />}
+              </div>
+            </div>
+
+            {/* RIGHT: Status & Remarks */}
+            <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '1.25rem', padding: '0.5rem' }}>
+              <div className="signatories-card-modern" style={{ marginTop: 0 }}>
+                <div style={{ fontWeight: 800, fontSize: '0.8125rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '1rem' }}>Report Status</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <span className={`status-pill status-${(reviewSitRep.status || 'draft').toLowerCase().replace(/\s+/g, '-')}`}>
+                    {reviewSitRep.status}
+                  </span>
+                  <span style={{ fontSize: '0.8125rem', color: '#64748b' }}>
+                    Created by {reviewSitRep.creator_name || reviewSitRep.creator_city || 'System'}
+                  </span>
+                </div>
+              </div>
+
+              {/* Reject remarks (shown when reject clicked) */}
+              {showRejectInput && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', padding: '1.25rem', background: '#fff1f2', borderRadius: '12px', border: '1px solid #fecdd3' }}>
+                  <label style={{ fontSize: '0.875rem', fontWeight: 700, color: '#be123c', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <Warning size={16} />
+                    Rejection Remarks <span style={{ color: '#ef4444' }}>*</span>
+                  </label>
+                  <textarea
+                    value={rejectRemarks}
+                    onChange={e => setRejectRemarks(e.target.value)}
+                    placeholder="Please explain why this report is being rejected..."
+                    rows={6}
+                    style={{
+                      width: '100%', padding: '0.75rem', border: '1.5px solid #fca5a5', borderRadius: '0.5rem',
+                      fontSize: '0.875rem', resize: 'none', outline: 'none', boxSizing: 'border-box',
+                      fontFamily: 'inherit', background: '#fff'
+                    }}
+                    autoFocus
+                  />
+                  <p style={{ fontSize: '0.75rem', color: '#991b1b', margin: 0 }}>The creator will be notified and asked to revise the report based on these remarks.</p>
+                </div>
+              )}
+
+              {!showRejectInput && reviewSitRep.rejection_remarks && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', padding: '1rem', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>Previous Rejection Remarks</span>
+                  <p style={{ margin: 0, fontSize: '0.875rem', color: '#334155', lineHeight: 1.5 }}>{reviewSitRep.rejection_remarks}</p>
                 </div>
               )}
             </div>
-
-            {/* Reject remarks (shown when reject clicked) */}
-            {showRejectInput && (
-              <div style={{ padding: '1rem 0', marginTop: '1rem', borderTop: '1px solid #fee2e2' }}>
-                <label style={{ fontSize: '0.85rem', fontWeight: 600, color: '#dc2626', display: 'block', marginBottom: '0.5rem' }}>
-                  Rejection Remarks <span style={{ color: '#ef4444' }}>*</span>
-                </label>
-                <textarea
-                  value={rejectRemarks}
-                  onChange={e => setRejectRemarks(e.target.value)}
-                  placeholder="Please explain why this report is being rejected..."
-                  rows={3}
-                  style={{
-                    width: '100%', padding: '0.625rem', border: '1.5px solid #fca5a5', borderRadius: '0.5rem',
-                    fontSize: '0.875rem', resize: 'vertical', outline: 'none', boxSizing: 'border-box',
-                    fontFamily: 'inherit'
-                  }}
-                  autoFocus
-                />
-              </div>
-            )}
           </div>
         )}
       </HeaderFooterModal>

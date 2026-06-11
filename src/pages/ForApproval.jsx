@@ -4,7 +4,9 @@ import {
   CheckCircle, 
   Eye, 
   FileText, 
-  Info
+  Info,
+  CaretDown,
+  Warning
 } from '@phosphor-icons/react'
 import api from '../lib/api'
 import { useEvents } from '../contexts/EventContext'
@@ -27,6 +29,7 @@ export default function ForApproval() {
   const [reviewSitRep, setReviewSitRep] = useState(null)
   const [processingReview, setProcessingReview] = useState(false)
   const [showPreviewModal, setShowPreviewModal] = useState(false)
+  const [showPdfPreview, setShowPdfPreview] = useState(true)
   const [previewUrl, setPreviewUrl] = useState(null)
 
   const fetchPendingSitreps = async () => {
@@ -171,31 +174,97 @@ export default function ForApproval() {
             </div>
           }
         >
-          <div className="review-modal-content" style={{ display: 'flex', flexDirection: 'column', height: '70vh', gap: '1rem' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', background: '#f8fafc', padding: '1rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-              <div>
-                <label style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Event</label>
-                <div style={{ fontSize: '0.875rem', fontWeight: 600, color: '#1e293b' }}>{reviewSitRep.events?.name}</div>
+          <div className="review-modal-content" style={{ display: 'flex', height: '70vh', gap: '1.5rem', minHeight: 0 }}>
+            {/* LEFT: PDF Viewer */}
+            <div style={{ 
+              flex: showPdfPreview ? 1.5 : 0, 
+              display: 'flex', 
+              flexDirection: 'column', 
+              gap: '1rem', 
+              minWidth: 0,
+              transition: 'all 0.3s ease',
+              overflow: 'hidden',
+              opacity: showPdfPreview ? 1 : 0
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Eye size={16} style={{ color: '#64748b' }} />
+                <span style={{ fontWeight: 700, fontSize: '0.875rem', color: '#334155' }}>PDF Document</span>
               </div>
-              <div>
-                <label style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Province</label>
-                <div style={{ fontSize: '0.875rem', fontWeight: 600, color: '#1e293b' }}>{reviewSitRep.province}</div>
+              <div style={{ flex: 1, background: '#e2e8f0', overflow: 'hidden', minHeight: 0, borderRadius: '8px', border: '1px solid #cbd5e1' }}>
+                {(reviewSitRep.pending_pdf_url || reviewSitRep.approved_pdf_url) ? (
+                  <iframe
+                    src={`${reviewSitRep.pending_pdf_url || reviewSitRep.approved_pdf_url}#toolbar=0`}
+                    style={{ width: '100%', height: '100%', border: 'none' }}
+                    title="PDF Review"
+                  />
+                ) : (
+                  <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', flexDirection: 'column', gap: '0.5rem' }}>
+                    <FileText size={40} />
+                    <p>No PDF uploaded yet.</p>
+                  </div>
+                )}
               </div>
             </div>
-            {reviewSitRep.pending_pdf_url || reviewSitRep.approved_pdf_url ? (
-              <div style={{ flex: 1, background: '#e2e8f0', overflow: 'hidden', minHeight: 0, borderRadius: '8px', border: '1px solid #cbd5e1' }}>
-                <iframe
-                  src={`${reviewSitRep.pending_pdf_url || reviewSitRep.approved_pdf_url}#toolbar=0`}
-                  style={{ width: '100%', height: '100%', border: 'none' }}
-                  title="PDF Review"
-                />
+
+            {/* MIDDLE: Toggle Handle */}
+            <div 
+              onClick={() => setShowPdfPreview(!showPdfPreview)}
+              style={{
+                width: '12px',
+                height: '100%',
+                background: '#f1f5f9',
+                borderRadius: '6px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                transition: 'background 0.2s',
+                border: '1px solid #e2e8f0'
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.background = '#e2e8f0'}
+              onMouseLeave={(e) => e.currentTarget.style.background = '#f1f5f9'}
+              title={showPdfPreview ? "Hide PDF Preview" : "Show PDF Preview"}
+            >
+              <div style={{ color: '#64748b' }}>
+                {showPdfPreview ? <CaretDown size={12} style={{ transform: 'rotate(90deg)' }} /> : <CaretDown size={12} style={{ transform: 'rotate(-90deg)' }} />}
               </div>
-            ) : (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '1.5rem', background: '#fff7ed', border: '1px solid #ffedd5', borderRadius: '8px', color: '#9a3412', flex: 1, justifyContent: 'center' }}>
-                <Info size={24} />
-                <span style={{ fontSize: '1rem', fontWeight: 500 }}>No signed PDF was uploaded with this report.</span>
+            </div>
+
+            {/* RIGHT: Status & Remarks */}
+            <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: '1.25rem', padding: '0.5rem' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '1rem', background: '#f8fafc', padding: '1.25rem', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                <div>
+                  <label style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Event</label>
+                  <div style={{ fontSize: '1rem', fontWeight: 700, color: '#1e293b', marginTop: '0.25rem' }}>{reviewSitRep.events?.name}</div>
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Province / Scope</label>
+                  <div style={{ fontSize: '0.875rem', fontWeight: 600, color: '#1e293b', marginTop: '0.25rem' }}>{reviewSitRep.province || 'Regional'}</div>
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.7rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Current Status</label>
+                  <div style={{ marginTop: '0.4rem' }}>
+                    <span className={`status-pill status-${(reviewSitRep.status || 'draft').toLowerCase().replace(/\s+/g, '-')}`}>
+                      {reviewSitRep.status}
+                    </span>
+                  </div>
+                </div>
               </div>
-            )}
+
+              {!reviewSitRep.pending_pdf_url && !reviewSitRep.approved_pdf_url && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', padding: '1.25rem', background: '#fff7ed', border: '1px solid #ffedd5', borderRadius: '12px', color: '#9a3412' }}>
+                  <Info size={24} />
+                  <span style={{ fontSize: '0.875rem', fontWeight: 500 }}>No signed PDF was uploaded with this report. Please verify before approving.</span>
+                </div>
+              )}
+
+              {reviewSitRep.rejection_remarks && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', padding: '1rem', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase' }}>Previous Rejection Remarks</span>
+                  <p style={{ margin: 0, fontSize: '0.875rem', color: '#334155', lineHeight: 1.5 }}>{reviewSitRep.rejection_remarks}</p>
+                </div>
+              )}
+            </div>
           </div>
         </HeaderFooterModal>
       )}
