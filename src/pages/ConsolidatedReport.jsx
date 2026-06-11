@@ -2105,7 +2105,12 @@ export default function ConsolidatedReport() {
                               color="info"
                               size="sm"
                               onClick={() => {
-                                setPreviewUrl(v.approved_pdf_url || v.pending_pdf_url)
+                                let url = v.approved_pdf_url || v.pending_pdf_url;
+                                // Local development fix: Sanitize protocol if on localhost
+                                if (url && (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')) {
+                                  url = url.replace(/^https:\/\//, 'http://');
+                                }
+                                setPreviewUrl(url)
                                 setShowPreviewModal(true)
                               }}
                               leftIcon={<Eye size={14} />}

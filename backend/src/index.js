@@ -75,12 +75,15 @@ const uploadHandler = (req, res) => {
   let baseUrl = process.env.VITE_API_URL ? process.env.VITE_API_URL.replace(/\/api$/, '') : '';
   
   if (!baseUrl) {
-    const protocol = 'https'; // Force https for production
     const host = req.headers['x-forwarded-host'] || req.get('host');
+    const protocol = host.includes('localhost') || host.includes('127.0.0.1') ? 'http' : 'https';
     baseUrl = `${protocol}://${host}`;
   } else {
-    // Ensure baseUrl itself uses https
-    baseUrl = baseUrl.replace(/^http:/, 'https');
+    // Only force https if not on localhost
+    const host = req.get('host') || '';
+    if (!host.includes('localhost') && !host.includes('127.0.0.1')) {
+      baseUrl = baseUrl.replace(/^http:/, 'https');
+    }
   }
   
   const url = `${baseUrl}/uploads/${req.file.filename}`;
@@ -98,25 +101,31 @@ app.get('/test-route', (req, res) => res.json({ message: 'API is reachable (non-
 app.get('/api/health', (req, res) => res.json({ status: 'ok', msg: 'Prefixed health check' }));
 app.get('/api/test-route', (req, res) => res.json({ message: 'API is reachable (prefixed)' }));
 
-// Apply routes to BOTH prefixed and non-prefixed paths for maximum compatibility
-const routeModules = [
-  { path: 'auth', router: authRoutes },
-  { path: 'events', router: eventsRoutes },
-  { path: 'situational-reports', router: sitRepsRoutes },
-  { path: 'users', router: usersRoutes },
-  { path: 'notifications', router: notificationsRoutes },
-  { path: 'reports', router: reportsRoutes },
-  { path: 'lgu-submissions', router: lguSubmissionsRoutes },
-  { path: 'signals', router: signalsRoutes },
-  { path: 'deployments', router: deploymentsRoutes },
-  { path: 'activity-logs', router: activityLogsRoutes },
-  { path: 'settings', router: settingsRoutes }
-];
+// Standard API Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/events', eventsRoutes);
+app.use('/api/situational-reports', sitRepsRoutes);
+app.use('/api/users', usersRoutes);
+app.use('/api/notifications', notificationsRoutes);
+app.use('/api/reports', reportsRoutes);
+app.use('/api/lgu-submissions', lguSubmissionsRoutes);
+app.use('/api/signals', signalsRoutes);
+app.use('/api/deployments', deploymentsRoutes);
+app.use('/api/activity-logs', activityLogsRoutes);
+app.use('/api/settings', settingsRoutes);
 
-routeModules.forEach(m => {
-  app.use(`/${m.path}`, m.router);      // backup: /auth/login
-  app.use(`/api/${m.path}`, m.router);  // standard: /api/auth/login
-});
+// Backup Routes (non-prefixed)
+app.use('/auth', authRoutes);
+app.use('/events', eventsRoutes);
+app.use('/situational-reports', sitRepsRoutes);
+app.use('/users', usersRoutes);
+app.use('/notifications', notificationsRoutes);
+app.use('/reports', reportsRoutes);
+app.use('/lgu-submissions', lguSubmissionsRoutes);
+app.use('/signals', signalsRoutes);
+app.use('/deployments', deploymentsRoutes);
+app.use('/activity-logs', activityLogsRoutes);
+app.use('/settings', settingsRoutes);
 
 // --- Error Handler ---
 app.use((err, req, res, next) => {

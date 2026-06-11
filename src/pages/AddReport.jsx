@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useSearchParams, useLocation, useOutletContext } from 'react-router-dom'
-import { FilePlus, Plus, Trash, X, Eye, PencilSimple, Upload, PaperPlaneRight, CaretDown, CaretUp, ArrowLeft, Lightning, Drop, Warning, CloudRain, Info, ShieldWarning, Phone, HardHat, House, FileText, CalendarX, Handshake, Users, Pulse, FileArrowDown, ChartBar, ArrowsClockwise, Check, CheckCircle, Sparkle, Download, ArrowSquareOut, FileXls } from '@phosphor-icons/react'
+import { FilePlus, Plus, Trash, X, Eye, PencilSimple, Upload, PaperPlaneRight, CaretDown, CaretUp, ArrowLeft, Lightning, Drop, Warning, CloudRain, Info, ShieldWarning, Phone, HardHat, House, FileText, CalendarX, Handshake, Users, Pulse, FileArrowDown, ChartBar, ArrowsClockwise, Check, CheckCircle, Sparkle, Download, ArrowSquareOut, FileXls, ClockCounterClockwise, FloppyDisk } from '@phosphor-icons/react'
 import SearchInput from '../components/SearchInput'
 import SearchableSelect from '../components/SearchableSelect'
 import ModernDateTimePicker from '../components/ModernDateTimePicker'
@@ -593,6 +593,10 @@ export default function AddReport() {
   const [aiGeneratedSummaryText, setAiGeneratedSummaryText] = useState('')
   const [pdfPreviewBlobUrl, setPdfPreviewBlobUrl] = useState(null)
   const [downloadTypeModalInfo, setDownloadTypeModalInfo] = useState(null)
+  const [summaryHistory, setSummaryHistory] = useState([])
+  const [selectedHistoryId, setSelectedHistoryId] = useState('current')
+  const [showRegenerateConfirm, setShowRegenerateConfirm] = useState(false)
+  const [isSavingSummary, setIsSavingSummary] = useState(false)
   const [signatoryRole, setSignatoryRole] = useState('preparedBy') // 'preparedBy', 'notedBy', 'approvedBy'
   const [signatorySearch, setSignatorySearch] = useState('')
   const [preparedBy, setPreparedBy] = useState([])
@@ -1078,59 +1082,69 @@ export default function AddReport() {
     setPdfPreviewBlobUrl(null)
     setGeneratedSummaryData(null)
     setAiGeneratedSummaryText('')
+    setSummaryHistory([])
+    setSelectedHistoryId('current')
     currentGeneratingSitRepId.current = sr.id
 
     try {
-      // Ensure we have the correct event object, even if state is slightly out of sync
       const eventToUse = selectedEvent || events?.find(e => e.id === sr.event_id)
-      console.log('DEBUG: eventToUse found:', !!eventToUse, eventToUse?.name)
-
       const data = await fetchFullSitRepData(sr)
-      console.log('DEBUG: fetchFullSitRepData result:', !!data)
       
-      // If the user started another generation while this was fetching, abort this one.
-      if (currentGeneratingSitRepId.current !== sr.id) {
-        console.log('DEBUG: Aborting generation, another sitrep was selected.')
-        return
-      }
+      if (currentGeneratingSitRepId.current !== sr.id) return
 
       if (data) {
-        const summaryPlaceholder = sr.summary || 'Generating AI Summary... Please wait.'
-        setAiGeneratedSummaryText(summaryPlaceholder)
         setGeneratedSummaryData({ pdfParams: data, event: eventToUse, situationalReportId: sr.id })
         
-        console.log('DEBUG: Generating initial PDF preview...')
-        const blobUrl = generatePdfBlobUrl(data, summaryPlaceholder, { preparedBy: [], notedBy: null, approvedBy: null })
-        setPdfPreviewBlobUrl(blobUrl)
+        // Fetch history first
+        const history = await fetchSummaryHistory(sr.id)
         
-        if (!sr.summary) {
-          console.log('DEBUG: Starting background AI summary generation...')
+        let initialText = ''
+        if (history.length > 0) {
+          // Use latest from history
+          initialText = history[0].summary_text
+          setAiGeneratedSummaryText(initialText)
+          setSelectedHistoryId(history[0].id)
+        } else if (sr.summary) {
+          // Legacy/fallback: use current column and save it as first history entry
+          initialText = sr.summary
+          setAiGeneratedSummaryText(initialText)
+          await saveSummaryToHistory(initialText)
+        } else {
+          // No history and no current summary: generate first one
+          const summaryPlaceholder = 'Generating AI Summary... Please wait.'
+          setAiGeneratedSummaryText(summaryPlaceholder)
+          
+          const blobUrl = generatePdfBlobUrl(data, summaryPlaceholder, { preparedBy: [], notedBy: null, approvedBy: null })
+          setPdfPreviewBlobUrl(blobUrl)
+
           const summaryPayload = data.summaryData || { 
             categoryTotals: data.categoryTotals || {}, 
             byCityCategory: data.byCityCategory || {}, 
             details: data 
           }
-          generateAISummary(summaryPayload, eventToUse, data.relatedIncidentsDetails || [])
-            .then(text => {
-              // Ensure we only update if this is still the active generation
-              if (currentGeneratingSitRepId.current === sr.id && text) {
-                console.log('DEBUG: AI Summary generated (Length:', text.length, ')')
-                setAiGeneratedSummaryText(text)
-                // Use Refs for signatories to ensure we have the absolute latest if they were changed
-                const newUrl = generatePdfBlobUrl(data, text, { 
-                  preparedBy: preparedByRef.current, 
-                  notedBy: notedByRef.current, 
-                  approvedBy: approvedByRef.current 
-                })
-                setPdfPreviewBlobUrl(newUrl)
-              }
-            })
-            .catch(err => {
-              if (currentGeneratingSitRepId.current === sr.id) {
-                console.error('Background AI summary failed:', err)
-                setAiGeneratedSummaryText('AI summary unavailable. Using rule-based fallback.')
-              }
-            })
+          
+          try {
+            const text = await generateAISummary(summaryPayload, eventToUse, data.relatedIncidentsDetails || [])
+            if (currentGeneratingSitRepId.current === sr.id) {
+              setAiGeneratedSummaryText(text)
+              // Auto-save the first generation
+              await api.post(`/situational-reports/${sr.id}/summaries`, { summary_text: text })
+              await fetchSummaryHistory(sr.id)
+              initialText = text
+            }
+          } catch (err) {
+            console.error('Initial generation failed:', err)
+            setAiGeneratedSummaryText('AI summary unavailable. Using rule-based fallback.')
+          }
+        }
+
+        if (initialText) {
+          const blobUrl = generatePdfBlobUrl(data, initialText, { 
+            preparedBy: preparedByRef.current, 
+            notedBy: notedByRef.current, 
+            approvedBy: approvedByRef.current 
+          })
+          setPdfPreviewBlobUrl(blobUrl)
         }
 
         fetchSignatories()
@@ -1143,6 +1157,67 @@ export default function AddReport() {
       if (currentGeneratingSitRepId.current === sr.id) {
         setProcessingExportId(null)
       }
+    }
+  }
+
+  const fetchSummaryHistory = async (sitRepId) => {
+    try {
+      const { data } = await api.get(`/situational-reports/${sitRepId}/summaries`)
+      setSummaryHistory(data || [])
+      return data || []
+    } catch (err) {
+      console.error('Failed to fetch summary history:', err)
+      return []
+    }
+  }
+
+  const saveSummaryToHistory = async (text) => {
+    if (!generatedSummaryData?.situationalReportId || !text) return
+    setIsSavingSummary(true)
+    try {
+      const { data } = await api.post(`/situational-reports/${generatedSummaryData.situationalReportId}/summaries`, {
+        summary_text: text
+      })
+      await fetchSummaryHistory(generatedSummaryData.situationalReportId)
+      setSelectedHistoryId(data.id)
+      showToast('Saved', 'Summary version saved successfully.', 'success')
+    } catch (err) {
+      showToast('Error', 'Failed to save summary version.', 'danger')
+    } finally {
+      setIsSavingSummary(false)
+    }
+  }
+
+  const handleRegenerateAISummary = async () => {
+    if (!generatedSummaryData) return
+    const { pdfParams, event, situationalReportId } = generatedSummaryData
+    
+    setPdfPreviewBlobUrl(null)
+    setAiGeneratedSummaryText('Regenerating AI Summary... Please wait.')
+    setShowRegenerateConfirm(false)
+
+    try {
+      const summaryPayload = pdfParams.summaryData || { 
+        categoryTotals: pdfParams.categoryTotals || {}, 
+        byCityCategory: pdfParams.byCityCategory || {}, 
+        details: pdfParams 
+      }
+      
+      const newText = await generateAISummary(summaryPayload, event, pdfParams.relatedIncidentsDetails || [])
+      setAiGeneratedSummaryText(newText)
+      
+      // Auto-save the regenerated summary
+      await api.post(`/situational-reports/${situationalReportId}/summaries`, {
+        summary_text: newText
+      })
+      await fetchSummaryHistory(situationalReportId)
+      setSelectedHistoryId('current') // Latest will be current in the map logic
+      
+      showToast('Regenerated', 'New AI summary generated and saved.', 'success')
+    } catch (err) {
+      console.error('Regeneration failed:', err)
+      showToast('Error', 'Failed to regenerate summary.', 'danger')
+      setAiGeneratedSummaryText('Failed to regenerate summary. Please try again or use existing versions.')
     }
   }
 
@@ -1178,6 +1253,24 @@ useEffect(() => {
     fetchReports()
   }
 }, [fetchReports, view])
+
+  useEffect(() => {
+    if (!showPdfEditModal || !generatedSummaryData) return
+    
+    const timeout = setTimeout(() => {
+      console.log('DEBUG: Debounced update triggering for PDF preview...')
+      const newUrl = generatePdfBlobUrl(
+        generatedSummaryData.pdfParams, 
+        aiGeneratedSummaryText, 
+        { preparedBy, notedBy, approvedBy }
+      )
+      if (newUrl) {
+        setPdfPreviewBlobUrl(newUrl)
+      }
+    }, 800) // 800ms debounce
+
+    return () => clearTimeout(timeout)
+  }, [aiGeneratedSummaryText, preparedBy, notedBy, approvedBy, showPdfEditModal, generatedSummaryData])
 
   useEffect(() => {
     if (showSignatoriesModal) fetchSignatories()
@@ -4139,18 +4232,25 @@ useEffect(() => {
                   <Eye size={16} style={{ color: '#64748b' }} />
                   <span style={{ fontWeight: 700, fontSize: '0.875rem', color: '#334155' }}>Live Preview</span>
                 </div>
-                <Button
-                  variant="subtle"
-                  size="sm"
-                  onClick={() => {
-                    if (pdfPreviewBlobUrl) URL.revokeObjectURL(pdfPreviewBlobUrl)
-                    const newUrl = generatePdfBlobUrl(generatedSummaryData.pdfParams, aiGeneratedSummaryText, { preparedBy, notedBy, approvedBy })
-                    setPdfPreviewBlobUrl(newUrl)
-                  }}
-                  icon={<ArrowsClockwise size={14} />}
-                >
-                  Refresh Preview
-                </Button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                  {isSavingSummary && (
+                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', color: '#3b82f6', fontSize: '0.75rem' }}>
+                       <LoadingSpinner size={12} /> Saving...
+                     </div>
+                  )}
+                  <Button
+                    variant="subtle"
+                    size="sm"
+                    onClick={() => {
+                      if (pdfPreviewBlobUrl) URL.revokeObjectURL(pdfPreviewBlobUrl)
+                      const newUrl = generatePdfBlobUrl(generatedSummaryData.pdfParams, aiGeneratedSummaryText, { preparedBy, notedBy, approvedBy })
+                      setPdfPreviewBlobUrl(newUrl)
+                    }}
+                    icon={<ArrowsClockwise size={14} />}
+                  >
+                    Refresh Preview
+                  </Button>
+                </div>
               </div>
               <div className="pdf-preview-container" style={{ flex: 1, border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden' }}>
                 {pdfPreviewBlobUrl ? (
@@ -4174,16 +4274,72 @@ useEffect(() => {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                   <div className="gemini-badge">
                     <Sparkle size={14} />
-                    Groq AI Summary
+                    AI Executive Summary
+                  </div>
+                  
+                  {summaryHistory.length > 0 && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <ClockCounterClockwise size={14} style={{ color: '#64748b' }} />
+                      <select 
+                        style={{ fontSize: '0.75rem', padding: '2px 4px', borderRadius: '4px', border: '1px solid #cbd5e1', outline: 'none' }}
+                        value={selectedHistoryId}
+                        onChange={(e) => {
+                          const val = e.target.value
+                          setSelectedHistoryId(val)
+                          if (val === 'current') return
+                          const selected = summaryHistory.find(h => h.id === val)
+                          if (selected) {
+                            setAiGeneratedSummaryText(selected.summary_text)
+                            showToast('History Loaded', `Loaded version from ${new Date(selected.created_at).toLocaleString()}`, 'info')
+                          }
+                        }}
+                      >
+                        <option value="current">Select a version...</option>
+                        {summaryHistory.map((h, i) => (
+                          <option key={h.id} value={h.id}>
+                            Version {summaryHistory.length - i} ({new Date(h.created_at).toLocaleDateString()})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
+                </div>
+
+                <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column' }}>
+                  <textarea
+                    className="summary-textarea-modern"
+                    value={aiGeneratedSummaryText}
+                    onChange={e => {
+                      setAiGeneratedSummaryText(e.target.value)
+                      if (selectedHistoryId !== 'current') setSelectedHistoryId('current')
+                    }}
+                    placeholder="Review and refine the report summary..."
+                    style={{ flex: 1, resize: 'none' }}
+                  />
+                  
+                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.75rem' }}>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => setShowRegenerateConfirm(true)}
+                      icon={<Sparkle size={14} />}
+                      style={{ flex: 1 }}
+                    >
+                      Regenerate
+                    </Button>
+                    <Button 
+                      variant="solid" 
+                      color="primary"
+                      size="sm" 
+                      onClick={() => saveSummaryToHistory(aiGeneratedSummaryText)}
+                      icon={<FloppyDisk size={14} />}
+                      disabled={isSavingSummary || !aiGeneratedSummaryText || aiGeneratedSummaryText.startsWith('Generating')}
+                      style={{ flex: 1 }}
+                    >
+                      Save Version
+                    </Button>
                   </div>
                 </div>
-                <textarea
-                  className="summary-textarea-modern"
-                  value={aiGeneratedSummaryText}
-                  onChange={e => setAiGeneratedSummaryText(e.target.value)}
-                  placeholder="Review and refine the report summary..."
-                  style={{ flex: 1, resize: 'none' }}
-                />
               </div>
 
               <div className="signatories-card-modern">
@@ -4323,6 +4479,16 @@ useEffect(() => {
           </div>
         )}
       </HeaderFooterModal>
+
+      <ConfirmationModal
+        isOpen={showRegenerateConfirm}
+        onClose={() => setShowRegenerateConfirm(false)}
+        type="warning"
+        title="Regenerate AI Summary"
+        message="Are you sure you want to regenerate the AI summary? Your current unsaved edits will be lost, but you can still access previous versions from the history dropdown."
+        confirmText="Yes, Regenerate"
+        onConfirm={handleRegenerateAISummary}
+      />
     </div>
   )
 }

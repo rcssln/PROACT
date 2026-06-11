@@ -566,6 +566,17 @@ CREATE TABLE IF NOT EXISTS public.settings (
 );
 
 -- ============================================================
+-- TABLE: ai_summaries
+-- ============================================================
+CREATE TABLE IF NOT EXISTS public.ai_summaries (
+  id UUID NOT NULL DEFAULT gen_random_uuid(),
+  situational_report_id UUID NOT NULL REFERENCES public.situational_reports(id) ON DELETE CASCADE,
+  summary_text TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT ai_summaries_pkey PRIMARY KEY (id)
+);
+
+-- ============================================================
 -- SEED: Default Super Admin User
 -- Email:    admin@proact.local
 -- Password: Admin@1234

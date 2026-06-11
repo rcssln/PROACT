@@ -4,6 +4,46 @@ const { authenticate } = require('../middleware/auth');
 
 const router = express.Router();
 
+// --- AI Summary History Routes (Defined first to prevent shadowing) ---
+
+// GET /api/situational-reports/:id/summaries
+router.get('/:id/summaries', authenticate, async (req, res) => {
+  try {
+    const { rows } = await pool.query(
+      'SELECT * FROM ai_summaries WHERE situational_report_id = $1 ORDER BY created_at DESC',
+      [req.params.id]
+    );
+    res.json(rows);
+  } catch (err) {
+    console.error('[SitReps/GET Summaries] ERROR:', err.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// POST /api/situational-reports/:id/summaries
+router.post('/:id/summaries', authenticate, async (req, res) => {
+  const { summary_text } = req.body;
+  if (!summary_text) return res.status(400).json({ error: 'summary_text is required' });
+  
+  try {
+    const { rows } = await pool.query(
+      'INSERT INTO ai_summaries (situational_report_id, summary_text) VALUES ($1, $2) RETURNING *',
+      [req.params.id, summary_text]
+    );
+    
+    // Also update the main summary column in situational_reports for convenience/legacy support
+    await pool.query(
+      'UPDATE situational_reports SET summary = $1 WHERE id = $2',
+      [summary_text, req.params.id]
+    );
+
+    res.status(201).json(rows[0]);
+  } catch (err) {
+    console.error('[SitReps/POST Summary] ERROR:', err.message);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 // --- HELPER FUNCTIONS FOR AUTO-CLONE ---
 
 function getCloneScope(user) {
