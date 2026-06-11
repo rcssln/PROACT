@@ -22,6 +22,30 @@ async function seedAdmin() {
       )
     `);
 
+    // 2. Create ai_summaries table if not exists
+    console.log('[Seed] Ensuring ai_summaries table exists...');
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS public.ai_summaries (
+        id UUID NOT NULL DEFAULT gen_random_uuid(),
+        situational_report_id UUID NOT NULL REFERENCES public.situational_reports(id) ON DELETE CASCADE,
+        summary_text TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        CONSTRAINT ai_summaries_pkey PRIMARY KEY (id)
+      );
+    `);
+
+    // 3. Ensure situational_reports has summary column
+    const columnCheck = await pool.query(`
+      SELECT column_name 
+      FROM information_schema.columns 
+      WHERE table_name = 'situational_reports' AND column_name = 'summary'
+    `);
+    
+    if (columnCheck.rows.length === 0) {
+      console.log('[Seed] Adding "summary" column to "situational_reports"...');
+      await pool.query('ALTER TABLE situational_reports ADD COLUMN summary TEXT');
+    }
+
     const { rows } = await pool.query('SELECT * FROM users WHERE email = $1', [adminEmail]);
 
     if (rows.length === 0) {

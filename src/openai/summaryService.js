@@ -84,7 +84,9 @@ function buildPromptPayload(data, event, relatedIncidents = []) {
     `Assistance Provided Records: ${fmt(assist)}`,
     `LGU/Agency Assistance Records: ${fmt(lguAssist)}`,
     incidentLines ? `\nTimeline of Incidents:\n${incidentLines}` : '',
-    categoryRemarks.length > 0 ? `\nDetailed Remarks & Observations:\n${categoryRemarks.join('\n\n')}` : ''
+    categoryRemarks.length > 0 ? `\nDetailed Remarks & Observations:\n${categoryRemarks.join('\n\n')}` : '',
+    `---`,
+    `Generation Seed: ${Date.now()}` // Forces AI to rethink and avoid cached/deterministic patterns
   ].filter(Boolean).join('\n')
 
   return `You are a professional disaster risk reduction officer. Based on the following situational report data and qualitative remarks, write a formal Executive Summary for an official government PDF document. Use clear, concise, and factual Philippine government report language. 
@@ -92,6 +94,8 @@ function buildPromptPayload(data, event, relatedIncidents = []) {
 Incorporate the qualitative remarks and specific observations into the relevant sections to provide context beyond just numbers. Structure it with sections: Introduction, Chronology of Events, Impact Overview, Infrastructure Status, Damage Assessment, Government Actions, and Response Efforts. 
 
 Each section should be a short, professional paragraph. Do not include section header labels if the section has no data. Keep the total summary under 500 words and ensure it flows logically.
+
+IMPORTANT: Provide a fresh perspective or slightly vary the phrasing/sentence structure compared to standard templates while maintaining professionalism.
 
 DATA & REMARKS:
 ${stats}`
@@ -131,7 +135,7 @@ export async function generateAISummary(data, event, relatedIncidents = []) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }],
-          generationConfig: { temperature: 0.4, maxOutputTokens: 700, topP: 0.8 }
+          generationConfig: { temperature: 0.8, maxOutputTokens: 1000, topP: 0.8 }
         })
       })
 
@@ -155,10 +159,10 @@ export async function generateAISummary(data, event, relatedIncidents = []) {
         body: JSON.stringify({
           model: 'llama-3.3-70b-versatile',
           messages: [
-            { role: 'system', content: 'You are a helpful assistant that generates professional disaster report summaries.' },
+            { role: 'system', content: 'You are a helpful assistant that generates professional disaster report summaries. Always vary your phrasing slightly between generations.' },
             { role: 'user', content: prompt }
           ],
-          temperature: 0.5,
+          temperature: 0.8,
           max_tokens: 1024
         })
       })
