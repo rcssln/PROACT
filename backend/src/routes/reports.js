@@ -122,7 +122,7 @@ router.get('/all-types', authenticate, async (req, res) => {
       });
     }));
 
-    // Affected Population (reports -> report_rows)
+      // Affected Population (reports -> report_rows)
     const { rows: reports } = await pool.query('SELECT id, created_at FROM reports WHERE situational_report_id = $1', [situational_report_id]);
 
     if (reports.length > 0) {
@@ -135,8 +135,8 @@ router.get('/all-types', authenticate, async (req, res) => {
         const cleanCity = user.city.replace(/\s*\(.*\)\s*$/, '').trim();
         rowsParams.push(cleanCity);
         rowsConditions.push(cityCondition('t', rowsParams.length));
-      } else if (!isLgu) {
-        // Keep visibility check from remote: non-LGUs only see Approved data
+      } else if (!isLgu && !isSuperAdmin) {
+        // Keep visibility check from remote: non-LGUs and non-Admins only see Approved data
         rowsConditions.push(`(t.city IS NULL OR t.city = '' OR EXISTS (
           SELECT 1 FROM lgu_submissions ls 
           WHERE ls.situational_report_id = r.situational_report_id 
@@ -211,11 +211,11 @@ router.get('/consolidated', authenticate, async (req, res) => {
           conditions.push(`(sr.province = $${params.length} OR sr.province IS NULL)`);
         }
 
-        if (!isLgu && !isProvincial && table !== 'reports' && !isRegional) {
+        if (!isLgu && !isProvincial && table !== 'reports' && !isRegional && !isSuperAdmin) {
           conditions.push(`(t.city IS NULL OR t.city = '' OR EXISTS (
             SELECT 1 FROM lgu_submissions ls 
             WHERE ls.situational_report_id = t.situational_report_id 
-              AND REGEXP_REPLACE(ls.city, '\\s*\\(.*\\)\\s*$/, '') = REGEXP_REPLACE(t.city, '\\s*\\(.*\\)\\s*$', '')
+              AND REGEXP_REPLACE(ls.city, '\\s*\\(.*\\)\\s*$', '') = REGEXP_REPLACE(t.city, '\\s*\\(.*\\)\\s*$', '')
               AND ls.status = 'Approved'
           ))`);
         }
@@ -336,7 +336,7 @@ router.get('/:table', authenticate, async (req, res) => {
       conditions.push(`(sr.province = $${params.length} OR sr.province IS NULL)`);
     }
 
-    if (!isLgu && !isProvincial && !isRegional && !['reports', 'report_rows', 'roads_and_bridges_sections'].includes(table)) {
+    if (!isLgu && !isProvincial && !isRegional && !isSuperAdmin && !['reports', 'report_rows', 'roads_and_bridges_sections'].includes(table)) {
        conditions.push(`(t.city IS NULL OR t.city = '' OR EXISTS (
         SELECT 1 FROM lgu_submissions ls 
         WHERE ls.situational_report_id = t.situational_report_id 
