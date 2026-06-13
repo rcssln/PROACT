@@ -53,10 +53,10 @@ const sendWelcomeEmail = async (userEmail, firstName, tempPassword) => {
       pass: smtpPassword,
     },
     tls: {
-      rejectUnauthorized: false,
+      rejectUnauthorized: port === 587 || port === 25 ? false : true,
       ciphers: 'SSLv3' 
     },
-    requireTLS: port === 587 || port === 25 // Common for STARTTLS
+    requireTLS: port === 587 || port === 25
   });
 
   const htmlContent = `
@@ -196,7 +196,11 @@ const sendWelcomeEmail = async (userEmail, firstName, tempPassword) => {
       replyTo: senderEmail || smtpEmail,
       to: userEmail,
       subject: "Welcome to PROACT - Your Account Details",
-      html: htmlContent
+      html: htmlContent,
+      headers: {
+        'X-Entity-Ref-ID': Date.now().toString(),
+        'X-Auto-Response-Suppress': 'OOF, AutoReply'
+      }
     });
 
     console.log('[Mailer] Email sent successfully to:', userEmail, 'MessageId:', info.messageId);
@@ -260,23 +264,41 @@ const sendEventNotificationEmail = async (userEmail, eventName, eventDetails) =>
 
   const fromAddress = `"${senderName}" <${senderEmail || smtpEmail}>`;
   const transporter = nodemailer.createTransport({
-    host, port, secure: port === 465,
+    host,
+    port,
+    secure: port === 465,
     auth: { user: smtpEmail, pass: smtpPassword },
-    tls: { rejectUnauthorized: false }
+    // Only use rejectUnauthorized: false if absolutely necessary for legacy servers
+    tls: { 
+      rejectUnauthorized: port === 587 || port === 25 ? false : true,
+      ciphers: 'SSLv3' 
+    }
   });
 
   const htmlContent = `
-    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 10px; padding: 20px;">
-      <h2 style="color: #2563eb;">New Event Created: ${eventName}</h2>
-      <p>A new monitoring event has been created in the PROACT system.</p>
-      <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin: 20px 0;">
-        <strong>Details:</strong><br/>
-        ${eventDetails}
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
+      <div style="background-color: #2563eb; padding: 24px; text-align: center;">
+        <h2 style="color: #ffffff; margin: 0; font-size: 20px;">PROACT Notification</h2>
       </div>
-      <p>Please log in to the dashboard for more information and to start your reporting duties if applicable.</p>
-      <a href="${clientUrl}" style="display: inline-block; background: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">View Dashboard</a>
-      <hr style="border: none; border-top: 1px solid #eee; margin-top: 30px;"/>
-      <p style="font-size: 12px; color: #666;">This is an automated notification from DOST PROACT.</p>
+      <div style="padding: 32px 24px; color: #1e293b; line-height: 1.6;">
+        <h3 style="margin-top: 0; color: #0f172a;">New Event: ${eventName}</h3>
+        <p>A new monitoring event has been created in the PROACT system.</p>
+        
+        <div style="background: #f8fafc; border: 1px solid #e2e8f0; padding: 20px; border-radius: 8px; margin: 24px 0;">
+          <h4 style="margin: 0 0 12px 0; font-size: 14px; text-transform: uppercase; color: #64748b; letter-spacing: 0.05em;">Event Details</h4>
+          <div style="font-size: 15px;">
+            ${eventDetails}
+          </div>
+        </div>
+
+        <div style="text-align: center; margin-top: 32px;">
+          <a href="${clientUrl}" style="display: inline-block; background: #2563eb; color: #ffffff; padding: 12px 32px; text-decoration: none; border-radius: 6px; font-weight: 600;">Open Dashboard</a>
+        </div>
+      </div>
+      <div style="background-color: #f1f5f9; padding: 20px; text-align: center; font-size: 12px; color: #64748b; border-top: 1px solid #e2e8f0;">
+        <p style="margin: 0;">This is an automated notification from <strong>DOST PROACT</strong>.</p>
+        <p style="margin: 4px 0 0 0;">Please do not reply to this email.</p>
+      </div>
     </div>
   `;
 
@@ -285,7 +307,12 @@ const sendEventNotificationEmail = async (userEmail, eventName, eventDetails) =>
       from: fromAddress,
       to: userEmail,
       subject: `[PROACT] New Event: ${eventName}`,
-      html: htmlContent
+      html: htmlContent,
+      headers: {
+        'X-Entity-Ref-ID': Date.now().toString(),
+        'Precedence': 'bulk',
+        'X-Auto-Response-Suppress': 'OOF, AutoReply' // Prevents out-of-office loops
+      }
     });
     return { success: true };
   } catch (error) {
