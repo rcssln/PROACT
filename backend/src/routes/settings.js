@@ -160,4 +160,40 @@ router.put('/smtp', authenticate, requireSuperAdmin, ensureSettingsTable, async 
   }
 });
 
+// GET /api/settings/weather
+router.get('/weather', authenticate, ensureSettingsTable, async (req, res) => {
+  try {
+    const { rows } = await pool.query('SELECT value FROM settings WHERE key = $1', ['weather_config']);
+    if (rows.length > 0) {
+      res.json(rows[0].value);
+    } else {
+      res.json({ condition: 'Clear Skies', icon: 'Sun' });
+    }
+  } catch (err) {
+    console.error('[Settings/GET weather]', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
+// PUT /api/settings/weather (Super Admin only)
+router.put('/weather', authenticate, requireSuperAdmin, ensureSettingsTable, async (req, res) => {
+  const { condition, icon } = req.body;
+  try {
+    const config = { condition, icon };
+    await pool.query(`
+      INSERT INTO settings (key, value, updated_at) 
+      VALUES ('weather_config', $1, NOW())
+      ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = NOW()
+    `, [JSON.stringify(config)]);
+
+    const io = req.app.locals.io;
+    if (io) io.emit('weather:updated', config);
+
+    res.json({ success: true, config });
+  } catch (err) {
+    console.error('[Settings/PUT weather]', err);
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 module.exports = router;

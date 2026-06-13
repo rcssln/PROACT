@@ -18,7 +18,7 @@ import '../styles/pages/ConsolidatedReport.css'
 
 export default function ForApproval() {
   const { user } = useOutletContext() ?? {}
-  const { showSuccess, showConfirm, showToast } = useEvents()
+  const { showSuccess, showConfirm, showToast, lastReportsUpdate } = useEvents()
 
   const isLguApprover = user?.account_type === 'LGU Approver'
   const isSuperAdmin = user?.role === 'Super Admin' || user?.account_type === 'Super Admin'
@@ -47,7 +47,7 @@ export default function ForApproval() {
 
   useEffect(() => {
     fetchPendingSitreps()
-  }, [user, isLguApprover])
+  }, [user, isLguApprover, lastReportsUpdate])
 
   const handleApprove = async () => {
     if (!reviewSitRep) return

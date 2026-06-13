@@ -2,11 +2,20 @@ import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
 import { NavLink, useNavigate, useLocation } from 'react-router-dom'
 import {
-  SquaresFour, FilePlus, Users, Gear, SignOut, FileText, ChartBar, User, CalendarCheck, CheckSquareOffset, CaretLeft, CaretRight, CaretDown } from '@phosphor-icons/react'
+  SquaresFour, FilePlus, Users, Gear, SignOut, FileText, ChartBar, User, CalendarCheck, CheckSquareOffset, CaretLeft, CaretRight, CaretDown, Sun, Cloud, CloudRain, CloudLightning, Wind, ThermometerHot } from '@phosphor-icons/react'
 import { useEvents } from '../contexts/EventContext'
 import SettingsModal from './SettingsModal'
 import ConfirmationModal from './ConfirmationModal'
 import '../styles/components/Sidebar.css'
+
+const weatherIcons = {
+  Sun,
+  Cloud,
+  CloudRain,
+  CloudLightning,
+  Wind,
+  ThermometerHot
+}
 
 export default function Sidebar({ user, onLogout, onUserUpdate, isCollapsed, onToggle }) {
   const accountType = user?.account_type || ''
@@ -21,9 +30,11 @@ export default function Sidebar({ user, onLogout, onUserUpdate, isCollapsed, onT
   const isAdmin = isRegionalAdmin || isProvincialAdmin || isLguAdmin || isSuperAdmin
   const navigate = useNavigate()
   const location = useLocation()
-  const { currentEvent, notifications, pendingUsersCount, pendingApprovalsCount } = useEvents()
+  const { currentEvent, notifications, pendingUsersCount, pendingApprovalsCount, weatherCondition } = useEvents()
   
   const unreadNotifs = notifications?.filter(n => !n.is_read) || []
+  
+  const WeatherIcon = weatherIcons[weatherCondition.icon] || Sun
   
   const getNavCount = (path) => {
     switch(path) {
@@ -255,6 +266,34 @@ const [showLogoutModal, setShowLogoutModal] = useState(false)
 
       </nav>
       <div className="sidebar-footer">
+        <div className="sidebar-weather-status" style={{ 
+          padding: '12px 16px', 
+          borderBottom: '1px solid var(--border-color)', 
+          marginBottom: '8px',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '12px',
+          color: 'var(--text-primary)'
+        }}>
+          <div className="weather-icon-wrapper" style={{
+            width: '32px',
+            height: '32px',
+            borderRadius: '8px',
+            background: 'var(--accent-glow)',
+            color: 'var(--accent)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            <WeatherIcon size={20} weight="fill" />
+          </div>
+          {!isCollapsed && (
+            <div className="weather-info" style={{ display: 'flex', flexDirection: 'column' }}>
+              <span style={{ fontSize: '0.6875rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Current Weather</span>
+              <span style={{ fontSize: '0.8125rem', fontWeight: 700 }}>{weatherCondition.condition}</span>
+            </div>
+          )}
+        </div>
         <div className="sidebar-user-profile">
           <div className="user-avatar-small" title={isCollapsed ? displayName : ''}>
             <User size={16} />

@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { X, Shield, Palette, Eye, EyeClosed, ClockCounterClockwise, Info, Database, DownloadSimple, UploadSimple, WarningCircle, FileZip, Envelope, Sparkle } from '@phosphor-icons/react'
+import { X, Shield, Palette, Eye, EyeClosed, ClockCounterClockwise, Info, Database, DownloadSimple, UploadSimple, WarningCircle, FileZip, Envelope, Sparkle, Sun, Cloud, CloudRain, CloudLightning, Wind, ThermometerHot } from '@phosphor-icons/react'
 import { zip, unzip, strToU8, strFromU8 } from 'fflate'
 import pkg from '../../package.json'
 
 import api from '../lib/api'
 import { validatePassword } from '../lib/passwordUtils'
+import { useEvents } from '../contexts/EventContext'
 import LoadingSpinner from './LoadingSpinner'
 import Button from './Button'
 import SearchableSelect from './SearchableSelect'
@@ -13,6 +14,7 @@ import HeaderFooterModal from './HeaderFooterModal'
 
 export default function SettingsModal({ isOpen, onClose, user, onLogout, onUserUpdate }) {
     const navigate = useNavigate()
+    const { weatherCondition, updateWeatherCondition } = useEvents()
 
     const [activeTab, setActiveTab] = useState('security')
 
@@ -345,6 +347,15 @@ export default function SettingsModal({ isOpen, onClose, user, onLogout, onUserU
                             className={`modal-sidebar-tab ${activeTab === 'ai-config' ? 'active' : ''}`}
                         >
                             <Sparkle size={16} /> AI Configuration
+                        </button>
+                    )}
+
+                    {isSuperAdmin && (
+                        <button
+                            onClick={() => setActiveTab('weather')}
+                            className={`modal-sidebar-tab ${activeTab === 'weather' ? 'active' : ''}`}
+                        >
+                            <Sun size={16} /> Weather Setting
                         </button>
                     )}
 
@@ -812,6 +823,62 @@ export default function SettingsModal({ isOpen, onClose, user, onLogout, onUserU
                                             )}
                                         </tbody>
                                     </table>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {activeTab === 'weather' && isSuperAdmin && (
+                        <div className="settings-tab-pane">
+                            <h3 className="settings-section-title">Global Weather Condition</h3>
+                            <p className="settings-section-desc">
+                                Manually set the weather condition that will be displayed to all users across the system.
+                            </p>
+                            
+                            <div className="weather-selector-section" style={{ marginTop: '1.5rem' }}>
+                                <div className="form-group">
+                                    <label>Current Condition Text</label>
+                                    <input 
+                                        type="text" 
+                                        className="settings-input"
+                                        placeholder="e.g. Clear Skies, Heavy Rain, etc."
+                                        value={weatherCondition.condition}
+                                        onChange={(e) => updateWeatherCondition({ ...weatherCondition, condition: e.target.value })}
+                                    />
+                                </div>
+
+                                <label className="settings-label" style={{ display: 'block', marginBottom: '0.75rem' }}>Select Weather Icon</label>
+                                <div className="weather-icons-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px' }}>
+                                    {[
+                                        { name: 'Sun', icon: Sun },
+                                        { name: 'Cloud', icon: Cloud },
+                                        { name: 'CloudRain', icon: CloudRain },
+                                        { name: 'CloudLightning', icon: CloudLightning },
+                                        { name: 'Wind', icon: Wind },
+                                        { name: 'ThermometerHot', icon: ThermometerHot }
+                                    ].map((item) => (
+                                        <button
+                                            key={item.name}
+                                            className={`weather-icon-btn ${weatherCondition.icon === item.name ? 'active' : ''}`}
+                                            onClick={() => updateWeatherCondition({ ...weatherCondition, icon: item.name })}
+                                            style={{
+                                                padding: '15px',
+                                                borderRadius: '12px',
+                                                border: '2px solid',
+                                                borderColor: weatherCondition.icon === item.name ? 'var(--accent)' : 'var(--border-color)',
+                                                background: weatherCondition.icon === item.name ? 'var(--accent-glow)' : 'transparent',
+                                                display: 'flex',
+                                                flexDirection: 'column',
+                                                alignItems: 'center',
+                                                gap: '8px',
+                                                cursor: 'pointer',
+                                                transition: 'all 0.2s ease'
+                                            }}
+                                        >
+                                            <item.icon size={24} weight={weatherCondition.icon === item.name ? 'fill' : 'regular'} />
+                                            <span style={{ fontSize: '0.75rem' }}>{item.name}</span>
+                                        </button>
+                                    ))}
                                 </div>
                             </div>
                         </div>

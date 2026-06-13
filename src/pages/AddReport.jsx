@@ -508,7 +508,7 @@ function CategorySelectionModal({ onClose, onSelect, pingedReportTypes = [], sub
 
 export default function AddReport() {
   const { user } = useOutletContext() || {}
-  const { events, currentEventId, openSelectEventModal, selectedEventForReport, showSuccess, showConfirm, notifications, showToast } = useEvents()
+  const { events, currentEventId, openSelectEventModal, selectedEventForReport, showSuccess, showConfirm, notifications, showToast, lastReportsUpdate } = useEvents()
 
   const T = {
     blue: '#3b82f6',
@@ -1254,7 +1254,7 @@ useEffect(() => {
   if (view === 'entries') {
     fetchReports()
   }
-}, [fetchReports, view])
+}, [fetchReports, view, lastReportsUpdate])
 
   useEffect(() => {
     if (!showPdfEditModal || !generatedSummaryData) return

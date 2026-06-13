@@ -227,4 +227,71 @@ const sendWelcomeEmail = async (userEmail, firstName, tempPassword) => {
   }
 };
 
-module.exports = { sendWelcomeEmail };
+/**
+ * Sends a notification email about a new event.
+ */
+const sendEventNotificationEmail = async (userEmail, eventName, eventDetails) => {
+  // Fetch SMTP settings from DB
+  let smtpEmail = process.env.OUTLOOK_EMAIL;
+  let smtpPassword = process.env.OUTLOOK_PASSWORD;
+  let senderName = process.env.OUTLOOK_SENDER_NAME || 'DOST DRRMO';
+  let host = 'smtp.office365.com';
+  let port = 587;
+  let senderEmail = '';
+
+  const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+
+  try {
+    const { rows } = await pool.query('SELECT value FROM settings WHERE key = $1', ['smtp_config']);
+    if (rows.length > 0 && rows[0].value) {
+      const config = rows[0].value;
+      smtpEmail = config.username || smtpEmail;
+      smtpPassword = config.password || smtpPassword;
+      host = config.host || host;
+      port = parseInt(config.port) || port;
+      senderEmail = config.senderEmail || '';
+      senderName = config.senderName || senderName;
+    }
+  } catch (dbErr) {
+    console.warn('[Mailer] Could not fetch SMTP config from DB', dbErr.message);
+  }
+
+  if (!smtpEmail || !smtpPassword) return { success: false, error: 'SMTP not configured' };
+
+  const fromAddress = `"${senderName}" <${senderEmail || smtpEmail}>`;
+  const transporter = nodemailer.createTransport({
+    host, port, secure: port === 465,
+    auth: { user: smtpEmail, pass: smtpPassword },
+    tls: { rejectUnauthorized: false }
+  });
+
+  const htmlContent = `
+    <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 10px; padding: 20px;">
+      <h2 style="color: #2563eb;">New Event Created: ${eventName}</h2>
+      <p>A new monitoring event has been created in the PROACT system.</p>
+      <div style="background: #f8fafc; padding: 15px; border-radius: 8px; margin: 20px 0;">
+        <strong>Details:</strong><br/>
+        ${eventDetails}
+      </div>
+      <p>Please log in to the dashboard for more information and to start your reporting duties if applicable.</p>
+      <a href="${clientUrl}" style="display: inline-block; background: #2563eb; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold;">View Dashboard</a>
+      <hr style="border: none; border-top: 1px solid #eee; margin-top: 30px;"/>
+      <p style="font-size: 12px; color: #666;">This is an automated notification from DOST PROACT.</p>
+    </div>
+  `;
+
+  try {
+    await transporter.sendMail({
+      from: fromAddress,
+      to: userEmail,
+      subject: `[PROACT] New Event: ${eventName}`,
+      html: htmlContent
+    });
+    return { success: true };
+  } catch (error) {
+    console.error('[Mailer] Event Email Error:', error.message);
+    return { success: false, error: error.message };
+  }
+};
+
+module.exports = { sendWelcomeEmail, sendEventNotificationEmail };

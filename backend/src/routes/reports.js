@@ -373,7 +373,11 @@ router.post('/:table', authenticate, async (req, res) => {
 
   try {
     const { rows } = await pool.query(`INSERT INTO ${table} (${columns.join(', ')}) VALUES (${placeholders}) RETURNING *`, values);
-    if (req.app.locals.io) req.app.locals.io.emit(`${table}:created`, rows[0]);
+    const io = req.app.locals.io;
+    if (io) {
+      io.emit(`${table}:created`, rows[0]);
+      io.emit('reports:changed', { situational_report_id: rows[0].situational_report_id, table });
+    }
     res.status(201).json(rows[0]);
   } catch (err) {
     console.error(`[Reports/POST/${table}] ERROR:`, err.message);
@@ -399,7 +403,13 @@ router.post('/:table/bulk', authenticate, async (req, res) => {
       results.push(rows[0]);
     }
     await client.query('COMMIT');
-    if (req.app.locals.io) req.app.locals.io.emit(`${table}:bulk_created`, { count: results.length });
+    const io = req.app.locals.io;
+    if (io) {
+      io.emit(`${table}:bulk_created`, { count: results.length });
+      if (results.length > 0) {
+        io.emit('reports:changed', { situational_report_id: results[0].situational_report_id, table });
+      }
+    }
     res.status(201).json(results);
   } catch (err) {
     await client.query('ROLLBACK');
@@ -426,6 +436,10 @@ router.patch('/:table/bulk', authenticate, async (req, res) => {
       if (rows.length > 0) results.push(rows[0]);
     }
     await client.query('COMMIT');
+    const io = req.app.locals.io;
+    if (io && results.length > 0) {
+      io.emit('reports:changed', { situational_report_id: results[0].situational_report_id, table });
+    }
     res.json(results);
   } catch (err) { 
     await client.query('ROLLBACK'); 
@@ -485,6 +499,12 @@ router.delete('/:table/:id', authenticate, async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+
+    // Fetch situational_report_id before deleting for socket notification
+    let sitRepId = null;
+    const findRes = await client.query(`SELECT situational_report_id FROM ${table} WHERE id = $1`, [id]);
+    if (findRes.rows.length > 0) sitRepId = findRes.rows[0].situational_report_id;
+
     if (table === 'reports') {
       await client.query('DELETE FROM report_rows WHERE report_id = $1', [id]);
     } else if (table === 'roads_and_bridges') {
@@ -492,6 +512,12 @@ router.delete('/:table/:id', authenticate, async (req, res) => {
     }
     const { rowCount } = await client.query(`DELETE FROM ${table} WHERE id = $1`, [id]);
     await client.query('COMMIT');
+    
+    const io = req.app.locals.io;
+    if (io && sitRepId) {
+      io.emit('reports:changed', { situational_report_id: sitRepId, table, action: 'deleted' });
+    }
+
     console.log(`[Reports/DELETE] Successfully deleted row from ${table}. rowCount: ${rowCount}`);
     res.json({ success: true });
   } catch (err) {

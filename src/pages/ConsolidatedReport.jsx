@@ -85,7 +85,7 @@ const CATEGORY_TO_TABLE = {
 
 export default function ConsolidatedReport() {
   const { user } = useOutletContext() ?? {}
-  const { events, loading: eventsLoading, showSuccess, showToast, showConfirm, fetchSituationalReports, sendSituationalReport, notifications, markSitRepNotificationsAsRead, markEventNotificationsAsRead } = useEvents()
+  const { events, loading: eventsLoading, showSuccess, showToast, showConfirm, fetchSituationalReports, sendSituationalReport, notifications, markSitRepNotificationsAsRead, markEventNotificationsAsRead, lastReportsUpdate } = useEvents()
 
   const unreadNotifs = useMemo(() => notifications?.filter(n => !n.is_read) || [], [notifications])
 

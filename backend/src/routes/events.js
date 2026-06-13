@@ -1,6 +1,7 @@
 const express = require('express');
 const pool = require('../db');
 const { authenticate } = require('../middleware/auth');
+const { sendEventNotificationEmail } = require('../utils/mailer');
 
 const router = express.Router();
 
@@ -70,39 +71,45 @@ router.post('/', authenticate, async (req, res) => {
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
       [name, color, start_date || null, end_date || null, event_type, alert_status,
         alert_level || null, JSON.stringify(pinged_report_types || []),
-        summary || '', affected_provinces || []] // Don't stringify affected_provinces!
+        summary || '', affected_provinces || []]
     );
     const io = req.app.locals.io;
     io.emit('events:created', rows[0]);
+    io.emit('global:notification', {
+      title: 'New Event Created',
+      message: `A new monitoring event "${name}" has been created.`,
+      type: 'info'
+    });
 
-    // Send notifications to users in affected provinces
-    if (affected_provinces && affected_provinces.length > 0) {
-      try {
-        const usersToNotify = await pool.query(
-          `SELECT id FROM users WHERE province = ANY($1::text[]) OR account_type IN ('Regional Admin', 'Regional')`,
-          [affected_provinces]
-        );
-        
-        if (usersToNotify.rows.length > 0) {
-          const notifications = usersToNotify.rows.map(u => ({
-            user_id: u.id,
-            type: 'event_created',
-            title: 'New Event Created',
-            message: `A new event "${name}" has been created for your province.`,
-            data: { event_id: rows[0].id }
-          }));
-          
-          for (const n of notifications) {
-            const notifRes = await pool.query(
-              'INSERT INTO notifications (user_id, type, title, message, data) VALUES ($1,$2,$3,$4,$5) RETURNING *',
-              [n.user_id, n.type, n.title, n.message, JSON.stringify(n.data)]
-            );
-            if (io) io.emit(`notification:${n.user_id}`, notifRes.rows[0]);
-          }
+    // Notify ALL active users via system notification and email
+    try {
+      const allUsers = await pool.query(
+        `SELECT id, email, first_name, province FROM users WHERE status = 'Active'`
+      );
+      
+      if (allUsers.rows.length > 0) {
+        const eventDetails = `
+          <strong>Type:</strong> ${event_type}<br/>
+          <strong>Alert:</strong> ${alert_status} ${alert_level || ''}<br/>
+          <strong>Start Date:</strong> ${start_date ? new Date(start_date).toLocaleString() : 'N/A'}
+        `;
+
+        for (const user of allUsers.rows) {
+          // System Notification
+          const notifRes = await pool.query(
+            'INSERT INTO notifications (user_id, type, title, message, data) VALUES ($1,$2,$3,$4,$5) RETURNING *',
+            [user.id, 'event_created', 'New Event Created', `A new event "${name}" has been created.`, JSON.stringify({ event_id: rows[0].id })]
+          );
+          if (io) io.emit(`notification:${user.id}`, notifRes.rows[0]);
+
+          // Email Notification (Background)
+          sendEventNotificationEmail(user.email, name, eventDetails).catch(e => 
+            console.error(`[Events] Failed to send email to ${user.email}:`, e.message)
+          );
         }
-      } catch (notifErr) {
-        console.error('[Events/POST] Failed to send notifications:', notifErr);
       }
+    } catch (notifErr) {
+      console.error('[Events/POST] Failed to send notifications:', notifErr);
     }
 
     // Log activity

@@ -59,6 +59,8 @@ export function EventProvider({ children, user }) {
   const [toast, setToast] = useState({ show: false, title: '', message: '', type: 'info' })
   const [eventSignals, setEventSignals] = useState([])
   const [loadingSignals, setLoadingSignals] = useState(false)
+  const [weatherCondition, setWeatherCondition] = useState({ condition: 'Clear Skies', icon: 'Sun' })
+  const [lastReportsUpdate, setLastReportsUpdate] = useState(Date.now())
 
   // 3. UI Utility Hooks (Must be defined before they are used in other hooks' dependencies)
   const showSuccess = useCallback((title, message) => {
@@ -272,6 +274,26 @@ export function EventProvider({ children, user }) {
     }
   }, [user])
 
+  const fetchWeatherCondition = useCallback(async () => {
+    try {
+      const { data } = await api.get('/settings/weather')
+      setWeatherCondition(data)
+    } catch (err) {
+      console.error('Error fetching weather:', err)
+    }
+  }, [])
+
+  const updateWeatherCondition = useCallback(async (config) => {
+    try {
+      await api.put('/settings/weather', config)
+      setWeatherCondition(config)
+      showToast('Weather Updated', 'Global weather condition has been updated.', 'success')
+    } catch (err) {
+      console.error('Error updating weather:', err)
+      showToast('Error', 'Failed to update weather condition.', 'danger')
+    }
+  }, [showToast])
+
   const markNotificationAsRead = useCallback(async (notifId) => {
     try {
       await api.patch(`/notifications/${notifId}/read`)
@@ -346,8 +368,9 @@ export function EventProvider({ children, user }) {
     fetchNotifications()
     fetchPendingUsersCount()
     fetchPendingApprovalsCount()
+    fetchWeatherCondition()
     if (currentEventId) fetchUserSignal(currentEventId)
-  }, [user, fetchEvents, fetchNotifications, fetchPendingUsersCount, fetchPendingApprovalsCount, currentEventId, fetchUserSignal])
+  }, [user, fetchEvents, fetchNotifications, fetchPendingUsersCount, fetchPendingApprovalsCount, currentEventId, fetchUserSignal, fetchWeatherCondition])
 
   // 5. Computed State
   const defaultEvent = {
@@ -427,6 +450,24 @@ export function EventProvider({ children, user }) {
 
     // Users changed (badge refresh)
     socket.on('users:changed', () => fetchPendingUsersCount())
+
+    // Global Notifications
+    socket.on('global:notification', (data) => {
+      showToast(data.title, data.message, data.type || 'info')
+    })
+
+    // Weather updates
+    socket.on('weather:updated', (data) => {
+      setWeatherCondition(data)
+      showToast('Weather Update', `Weather condition changed to: ${data.condition}`, 'info')
+    })
+
+    // Reports changed (triggered by entries mutations)
+    socket.on('reports:changed', (data) => {
+      console.log('[Socket.io] Reports changed:', data)
+      setLastReportsUpdate(Date.now())
+      // Optional: more targeted refresh if needed
+    })
 
     return () => {
       console.log('[Socket.io] Disconnecting')
@@ -901,7 +942,10 @@ setEventSignals(Object.values(deduplicated))
     eventSignals,
     loadingSignals,
     userSignal,
+    weatherCondition,
+    updateWeatherCondition,
     socket: socketRef.current,
+    lastReportsUpdate,
     toast,
     showToast,
     closeToast

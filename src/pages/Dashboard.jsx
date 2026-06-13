@@ -1342,8 +1342,9 @@ const handleNotificationClick = (notif) => {
       socket.on(`${table}:bulk_created`, handleUpdate)
     })
     
-    // Also listen for report_rows
+    // Also listen for report_rows and generic reports:changed
     socket.on('report_rows:created', handleUpdate)
+    socket.on('reports:changed', handleUpdate)
 
     return () => {
       console.log(`Cleaning up dashboard monitoring for event: ${currentEventId}`)
@@ -1352,6 +1353,7 @@ const handleNotificationClick = (notif) => {
         socket.off(`${table}:bulk_created`, handleUpdate)
       })
       socket.off('report_rows:created', handleUpdate)
+      socket.off('reports:changed', handleUpdate)
     }
   }, [currentEventId, fetchData, socket])
 

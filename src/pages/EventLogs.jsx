@@ -12,6 +12,7 @@ const PAGE_SIZES = [10, 25, 50, 100]
 
 export default function EventLogs() {
     const { user } = useOutletContext() ?? {}
+    const { lastReportsUpdate } = useEvents()
     const [logs, setLogs] = useState([])
     const [loading, setLoading] = useState(true)
     const [error, setError] = useState(null)
@@ -40,7 +41,7 @@ export default function EventLogs() {
         }
 
         fetchEventLogs()
-    }, [user])
+    }, [user, lastReportsUpdate])
 
     const handleSort = (key) => {
         if (sortKey === key) {
