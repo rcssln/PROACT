@@ -16,7 +16,8 @@ import {
   AreaChart,
   Area,
   CartesianGrid,
-  Legend
+  Legend,
+  LabelList
 } from 'recharts'
 import { useEvents } from '../contexts/EventContext'
 import api from '../lib/api'
@@ -283,6 +284,14 @@ export default function Dashboard() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [selectedEventIdToEdit, setSelectedEventIdToEdit] = useState('')
   const [isEditingExistingEvent, setIsEditingExistingEvent] = useState(false)
+  const [selectedProvinceFilter, setSelectedProvinceFilter] = useState('All')
+
+  // Set initial province filter based on user account
+  useEffect(() => {
+    if (isProvincialUser && user?.province) {
+      setSelectedProvinceFilter(user.province)
+    }
+  }, [isProvincialUser, user?.province])
 
   // --- Weather Logic ---
   const [weather, setWeather] = useState(null)
@@ -1468,6 +1477,18 @@ const handleNotificationClick = (notif) => {
   const trendData = result?.trendChartData ?? []
 
   const categoryCards = result?.categoryCards ?? []
+  const sortedCityData = useMemo(() => {
+    if (!result?.details?.byCity) return [];
+    return Object.entries(result.details.byCity)
+      .filter(([city, data]) => {
+        if (data.persons <= 0) return false;
+        if (selectedProvinceFilter === 'All') return true;
+        return getProvinceForCity(city) === selectedProvinceFilter;
+      })
+      .sort((a, b) => b[1].persons - a[1].persons)
+      .map(([name, data]) => ({ name, persons: data.persons }));
+  }, [result?.details?.byCity, selectedProvinceFilter]);
+
   const details = result?.details || {
     sexDistribution: { male: 0, female: 0 },
     evacStatus: { inside: 0, outside: 0, total: 0 },
@@ -2243,25 +2264,80 @@ CHRONOLOGY OF EVENTS`;
 
                     {/* Affected Persons by City Bar Chart */}
                     <div className="premium-card">
-                      <div className="premium-card-header">
-                        <div className="premium-card-title">Affected Persons</div>
-                        <span style={{ fontSize: '10px', color: 'var(--text-muted)', background: 'var(--bg-page)', padding: '2px 8px', borderRadius: '4px' }}>BY CITY</span>
+                      <div className="premium-card-header" style={{ flexDirection: 'column', alignItems: 'flex-start', gap: '10px', paddingBottom: '16px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', width: '100%', alignItems: 'center' }}>
+                          <div className="premium-card-title">Affected Persons</div>
+                          <div style={{ display: 'flex', gap: '6px' }}>
+                            <span style={{ fontSize: '10px', color: 'var(--text-muted)', background: 'var(--bg-page)', padding: '2px 8px', borderRadius: '4px', fontWeight: 800 }}>BY CITY</span>
+                            {selectedProvinceFilter !== 'All' && (
+                              <span style={{ fontSize: '10px', color: T.indigo, background: 'rgba(99, 102, 241, 0.1)', padding: '2px 8px', borderRadius: '4px', fontWeight: 800 }}>{selectedProvinceFilter.toUpperCase()}</span>
+                            )}
+                          </div>
+                        </div>
+                        
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%', overflowX: 'auto', paddingBottom: '4px', scrollbarWidth: 'none' }}>
+                          <span style={{ fontSize: '9px', fontWeight: 800, color: 'var(--text-muted)', whiteSpace: 'nowrap', letterSpacing: '0.5px' }}>FILTER:</span>
+                          <div style={{ display: 'flex', gap: '4px' }}>
+                            {['All', ...PROVINCE_NAMES].map(prov => (
+                              <button
+                                key={prov}
+                                onClick={() => setSelectedProvinceFilter(prov)}
+                                style={{
+                                  fontSize: '9px',
+                                  padding: '3px 10px',
+                                  borderRadius: '6px',
+                                  border: '1px solid',
+                                  borderColor: selectedProvinceFilter === prov ? T.indigo : 'var(--border-color)',
+                                  cursor: 'pointer',
+                                  transition: 'all 0.2s',
+                                  background: selectedProvinceFilter === prov ? T.indigo : 'transparent',
+                                  color: selectedProvinceFilter === prov ? '#fff' : 'var(--text-muted)',
+                                  fontWeight: 700,
+                                  whiteSpace: 'nowrap',
+                                  opacity: (isProvincialUser && user?.province !== prov && prov !== 'All') ? 0.4 : 1,
+                                  pointerEvents: (isProvincialUser && user?.province !== prov && prov !== 'All') ? 'none' : 'auto'
+                                }}
+                              >
+                                {prov.toUpperCase()}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
                       </div>
-                      <div style={{ height: '240px' }}>
-                        {Object.keys(result?.details?.byCity || {}).length > 0 ? (
-                          <ResponsiveContainer width="100%" height={300}>
-                            <BarChart data={Object.entries(result.details.byCity).sort((a, b) => b[1].persons - a[1].persons).slice(0, 4).map(([name, data]) => ({ name, persons: data.persons }))} margin={{ top: 10, right: 10, left: -20, bottom: 20 }}>
-                              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border-color)" />
-                              <XAxis dataKey="name" tick={{ fontSize: 9, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} interval={0} />
-                              <YAxis tick={{ fontSize: 9, fill: 'var(--text-muted)' }} axisLine={false} tickLine={false} tickFormatter={v => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : v} />
-                              <Tooltip contentStyle={{ fontSize: '11px', borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
-                              <Bar dataKey="persons" radius={[4, 4, 0, 0]}>
-                                {Object.entries(result.details.byCity).slice(0, 4).map((_, i) => (
-                                  <Cell key={i} fill={[T.indigo, T.rose, T.amber, T.indigo, T.teal][i % 5]} />
-                                ))}
-                              </Bar>
-                            </BarChart>
-                          </ResponsiveContainer>
+                      <div style={{ height: '300px', overflowY: 'auto', overflowX: 'hidden', paddingRight: '10px' }}>
+                        {sortedCityData.length > 0 ? (
+                          <div style={{ height: Math.max(300, sortedCityData.length * 60), width: '100%' }}>
+                            <ResponsiveContainer width="100%" height="100%">
+                              <BarChart key={currentEventId} layout="vertical" data={sortedCityData} margin={{ top: 25, right: 10, left: 0, bottom: 5 }}>
+                                <XAxis type="number" hide height={0} padding={{ left: 0, right: 0 }} />
+                                <YAxis dataKey="name" type="category" hide width={0} padding={{ top: 0, bottom: 0 }} />
+                                <Tooltip contentStyle={{ fontSize: '11px', borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }} />
+                                <Bar dataKey="persons" radius={[0, 4, 4, 0]} barSize={20} isAnimationActive={false}>
+                                  <LabelList
+                                    dataKey="persons"
+                                    content={(props) => {
+                                      const { y, value, index } = props;
+                                      const name = sortedCityData[index]?.name || '';
+                                      
+                                      return (
+                                        <g key={`label-${index}`}>
+                                          <text x="5" y={y - 10} fill="var(--text-main)" fontSize="10px" fontWeight={700} textAnchor="start">
+                                            {name}
+                                          </text>
+                                          <text x="98%" y={y - 10} fill="var(--text-muted)" fontSize="10px" fontWeight={700} textAnchor="end">
+                                            {value?.toLocaleString()}
+                                          </text>
+                                        </g>
+                                      );
+                                    }}
+                                  />
+                                  {sortedCityData.map((_, i) => (
+                                    <Cell key={i} fill={[T.indigo, T.rose, T.amber, T.indigo, T.teal][i % 5]} />
+                                  ))}
+                                </Bar>
+                              </BarChart>
+                            </ResponsiveContainer>
+                          </div>
                         ) : (
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#94a3b8' }}>No geographic data available</div>
                         )}
@@ -2464,57 +2540,61 @@ CHRONOLOGY OF EVENTS`;
                   )}
 
                   {/* Bottom Table: City/Municipality Summary */}
-                  <div className="premium-card">
-                    <div className="premium-card-header">
-                      <div className="premium-card-title">City/Municipality Summary</div>
-                      <span style={{ fontSize: '10px', color: 'var(--text-muted)', background: 'var(--bg-page)', padding: '2px 8px', borderRadius: '4px' }}>ALL AREAS</span>
+                    <div className="premium-card">
+                      <div className="premium-card-header">
+                        <div className="premium-card-title">City/Municipality Summary</div>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                          <span style={{ fontSize: '10px', color: 'var(--text-muted)', background: 'var(--bg-page)', padding: '2px 8px', borderRadius: '4px', fontWeight: 800 }}>{selectedProvinceFilter === 'All' ? 'ALL AREAS' : selectedProvinceFilter.toUpperCase()}</span>
+                        </div>
+                      </div>
+                      <div style={{ overflowX: 'auto' }}>
+                        <table className="premium-table">
+                          <thead>
+                            <tr>
+                              <th>Municipality</th>
+                              <th style={{ textAlign: 'left' }}>Brgys</th>
+                              <th style={{ textAlign: 'left' }}>Families</th>
+                              <th style={{ textAlign: 'left' }}>Persons</th>
+                              <th style={{ textAlign: 'left' }}>In ECs</th>
+                              <th style={{ textAlign: 'left' }}>Out ECs</th>
+                              <th style={{ textAlign: 'left' }}>Total Served</th>
+                              <th style={{ textAlign: 'left' }}>Active ECs</th>
+                              <th style={{ textAlign: 'left' }}>Dmg Houses</th>
+                              <th style={{ textAlign: 'left' }}>Calamity</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {Object.keys(result?.details?.byCity || {}).length > 0 ? (
+                              Object.entries(result.details.byCity)
+                                .filter(([city]) => selectedProvinceFilter === 'All' || getProvinceForCity(city) === selectedProvinceFilter)
+                                .map(([city, stats], i) => (
+                                  <tr key={city} className="trow">
+                                    <td>
+                                      <div style={{ fontWeight: 700, color: 'var(--text-main)', fontSize: '12px' }}>{city.toUpperCase()}</div>
+                                      <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{getProvinceForCity(city)}</div>
+                                    </td>
+                                    <td style={{ textAlign: 'left', fontFamily: 'DM Mono', fontSize: '11px' }}>{stats.brgys?.size || 0}</td>
+                                    <td style={{ textAlign: 'left', fontFamily: 'DM Mono', fontSize: '11px' }}>{stats.families.toLocaleString()}</td>
+                                    <td style={{ textAlign: 'left', fontFamily: 'DM Mono', fontSize: '11px', fontWeight: 700, color: stats.persons > 100000 ? T.rose : stats.persons > 10000 ? T.amber : 'var(--text-main)' }}>{stats.persons.toLocaleString()}</td>
+                                    <td style={{ textAlign: 'left', fontFamily: 'DM Mono', fontSize: '11px' }}>{stats.inside.toLocaleString()}</td>
+                                    <td style={{ textAlign: 'left', fontFamily: 'DM Mono', fontSize: '11px' }}>{stats.outside.toLocaleString()}</td>
+                                    <td style={{ textAlign: 'left', fontFamily: 'DM Mono', fontSize: '11px', color: T.teal, fontWeight: 700 }}>{stats.served.toLocaleString()}</td>
+                                    <td style={{ textAlign: 'left', fontFamily: 'DM Mono', fontSize: '11px' }}>{stats.ecs}</td>
+                                    <td style={{ textAlign: 'left', fontFamily: 'DM Mono', fontSize: '11px', color: stats.dmg > 0 ? T.amber : 'var(--text-muted)' }}>{stats.dmg > 0 ? stats.dmg.toLocaleString() : '—'}</td>
+                                    <td style={{ textAlign: 'left' }}>
+                                      {details.suspensions.find(s => s.city === city && s.type === 'stateOfCalamity') ? (
+                                        <span style={{ fontSize: '9px', fontWeight: 800, background: 'rgba(240,69,69,0.1)', color: T.rose, padding: '2px 6px', borderRadius: '4px' }}>DECLARED</span>
+                                      ) : <span style={{ color: '#94a3b8' }}>—</span>}
+                                    </td>
+                                  </tr>
+                                ))
+                            ) : (
+                              <tr><td colSpan="10" style={{ textAlign: 'left', color: '#94a3b8', padding: '2rem' }}>No municipality data aggregated yet</td></tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
                     </div>
-                    <div style={{ overflowX: 'auto' }}>
-                      <table className="premium-table">
-                        <thead>
-                          <tr>
-                            <th>Municipality</th>
-                            <th style={{ textAlign: 'left' }}>Brgys</th>
-                            <th style={{ textAlign: 'left' }}>Families</th>
-                            <th style={{ textAlign: 'left' }}>Persons</th>
-                            <th style={{ textAlign: 'left' }}>In ECs</th>
-                            <th style={{ textAlign: 'left' }}>Out ECs</th>
-                            <th style={{ textAlign: 'left' }}>Total Served</th>
-                            <th style={{ textAlign: 'left' }}>Active ECs</th>
-                            <th style={{ textAlign: 'left' }}>Dmg Houses</th>
-                            <th style={{ textAlign: 'left' }}>Calamity</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {Object.keys(result?.details?.byCity || {}).length > 0 ? (
-                            Object.entries(result.details.byCity).map(([city, stats], i) => (
-                              <tr key={city} className="trow">
-                                <td>
-                                  <div style={{ fontWeight: 700, color: 'var(--text-main)', fontSize: '12px' }}>{city.toUpperCase()}</div>
-                                  <div style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{getProvinceForCity(city)}</div>
-                                </td>
-                                <td style={{ textAlign: 'left', fontFamily: 'DM Mono', fontSize: '11px' }}>{stats.brgys?.size || 0}</td>
-                                <td style={{ textAlign: 'left', fontFamily: 'DM Mono', fontSize: '11px' }}>{stats.families.toLocaleString()}</td>
-                                <td style={{ textAlign: 'left', fontFamily: 'DM Mono', fontSize: '11px', fontWeight: 700, color: stats.persons > 100000 ? T.rose : stats.persons > 10000 ? T.amber : 'var(--text-main)' }}>{stats.persons.toLocaleString()}</td>
-                                <td style={{ textAlign: 'left', fontFamily: 'DM Mono', fontSize: '11px' }}>{stats.inside.toLocaleString()}</td>
-                                <td style={{ textAlign: 'left', fontFamily: 'DM Mono', fontSize: '11px' }}>{stats.outside.toLocaleString()}</td>
-                                <td style={{ textAlign: 'left', fontFamily: 'DM Mono', fontSize: '11px', color: T.teal, fontWeight: 700 }}>{stats.served.toLocaleString()}</td>
-                                <td style={{ textAlign: 'left', fontFamily: 'DM Mono', fontSize: '11px' }}>{stats.ecs}</td>
-                                <td style={{ textAlign: 'left', fontFamily: 'DM Mono', fontSize: '11px', color: stats.dmg > 0 ? T.amber : 'var(--text-muted)' }}>{stats.dmg > 0 ? stats.dmg.toLocaleString() : '—'}</td>
-                                <td style={{ textAlign: 'left' }}>
-                                  {details.suspensions.find(s => s.city === city && s.type === 'stateOfCalamity') ? (
-                                    <span style={{ fontSize: '9px', fontWeight: 800, background: 'rgba(240,69,69,0.1)', color: T.rose, padding: '2px 6px', borderRadius: '4px' }}>DECLARED</span>
-                                  ) : <span style={{ color: '#94a3b8' }}>—</span>}
-                                </td>
-                              </tr>
-                            ))
-                          ) : (
-                            <tr><td colSpan="10" style={{ textAlign: 'left', color: '#94a3b8', padding: '2rem' }}>No municipality data aggregated yet</td></tr>
-                          )}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
                 </div>
               ) : activeTab === 'Agriculture' ? (
                 <div className="category-viz-container">
