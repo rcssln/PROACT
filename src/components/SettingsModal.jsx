@@ -615,7 +615,7 @@ export default function SettingsModal({ isOpen, onClose, user, onLogout, onUserU
                                         />
                                     </div>
                                 </div>
-                                <div className="settings-hint" style={{ marginTop: '-10px', marginBottom: '15px' }}>
+                                <div className="settings-hint" style={{ marginTop: '1px', marginBottom: '5px' }}>
                                     Note: Most providers (Gmail/Outlook) will only respect these if they are verified aliases.
                                 </div>
 

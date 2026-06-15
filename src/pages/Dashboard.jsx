@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo, Fragment } from 'react'
 import LoadingSpinner from '../components/LoadingSpinner'
 import { createPortal } from 'react-dom'
 import { useOutletContext } from 'react-router-dom'
-import { ArrowsClockwise, DotsThree, ArrowRight, TrendUp, TrendDown, CaretLeft, CaretRight, Pencil, Warning, CloudRain, Pulse, Flame, Info, Check, Calendar, Bell, X, ChartBar as BarChartIcon, ChartPie as PieChartIcon, ChartLineUp as LineChartIcon, ShieldCheck, PaperPlaneRight, MagnifyingGlass, Hurricane, Drop, Waveform, Waves, CloudWarning, WarningCircle, CheckCircle, Thermometer, CloudSun, Sun, Cloud, CloudSnow, CloudLightning } from '@phosphor-icons/react'
+import { ArrowsClockwise, DotsThree, ArrowRight, TrendUp, TrendDown, CaretLeft, CaretRight, CaretDown, Pencil, Warning, CloudRain, Pulse, Flame, Info, Check, Calendar, Bell, X, ChartBar as BarChartIcon, ChartPie as PieChartIcon, ChartLineUp as LineChartIcon, ShieldCheck, PaperPlaneRight, MagnifyingGlass, Hurricane, Drop, Waveform, Waves, CloudWarning, WarningCircle, CheckCircle, Thermometer, CloudSun, Sun, Cloud, CloudSnow, CloudLightning } from '@phosphor-icons/react'
 import {
   ResponsiveContainer,
   BarChart,
@@ -342,6 +342,7 @@ export default function Dashboard() {
   const [eventDropdownOpen, setEventDropdownOpen] = useState(false)
   const [sitRepDropdownOpen, setSitRepDropdownOpen] = useState(false)
   const [showAffectedPersonsModal, setShowAffectedPersonsModal] = useState(false)
+  const [expandedCity, setExpandedCity] = useState(null)
   const eventDropdownRef = useRef(null)
   const sitRepDropdownRef = useRef(null)
   const tabsRef = useRef(null)
@@ -841,6 +842,7 @@ const handleNotificationClick = (notif) => {
       evacStatus: { inside: 0, outside: 0, total: 0 },
       byProvince: {}, // { 'Pangasinan': { persons: 0, families: 0, inside: 0, outside: 0, dmg: 0, served: 0, ecs: 0, powerInt: 0, powerRes: 0, roadsNotPassable: 0, roadsPassable: 0, brgys: Set } }
       byCity: {},
+      byBarangay: {},
       infrastructure: [],
       incidents: [],
       suspensions: [],
@@ -1067,6 +1069,14 @@ const handleNotificationClick = (notif) => {
             details.byCity[city].inside += inFam;
             details.byCity[city].outside += outFam;
             if (row.ecs_now > 0) details.byCity[city].ecs++;
+
+            // Update byBarangay stats
+            const bKey = `${city}|${row.barangay}`;
+            if (!details.byBarangay[bKey]) {
+              details.byBarangay[bKey] = { persons: 0, families: 0 };
+            }
+            details.byBarangay[bKey].persons += per;
+            details.byBarangay[bKey].families += fam;
 
             details.evacStatus.inside += inFam;
             details.evacStatus.outside += outFam;
@@ -2339,7 +2349,7 @@ CHRONOLOGY OF EVENTS`;
                             </ResponsiveContainer>
                           </div>
                         ) : (
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#94a3b8' }}>No geographic data available</div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#94a3b8' }}>No Data Available</div>
                         )}
                       </div>
                     </div>
@@ -3172,7 +3182,7 @@ CHRONOLOGY OF EVENTS`;
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
                     <div className="premium-card">
                       <div className="premium-card-header">
-                        <div className="premium-card-title">Suspension by City</div>
+                        <div className="premium-card-title">Suspension by LGU</div>
                       </div>
                       <div style={{ height: '270px', minWidth: 0 }}>
                         <ResponsiveContainer width="100%" height="100%">
@@ -3856,7 +3866,10 @@ CHRONOLOGY OF EVENTS`;
       
       <HeaderFooterModal
         isOpen={showAffectedPersonsModal}
-        onClose={() => setShowAffectedPersonsModal(false)}
+        onClose={() => {
+          setShowAffectedPersonsModal(false)
+          setExpandedCity(null)
+        }}
         title={
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
             <div style={{ background: 'rgba(59,130,246,0.1)', color: '#3b82f6', padding: '10px', borderRadius: '10px' }}>
@@ -3865,7 +3878,7 @@ CHRONOLOGY OF EVENTS`;
             <div>
               <div style={{ fontSize: '1.125rem', fontWeight: 800, color: '#1e293b' }}>Affected Persons</div>
               <div style={{ fontSize: '0.8125rem', color: '#64748b', fontWeight: 400 }}>
-                Who and where — by barangay and city
+                Who and where — click a city to view barangays
               </div>
             </div>
           </div>
@@ -3927,7 +3940,7 @@ CHRONOLOGY OF EVENTS`;
               {hasCityData && (
                 <div style={{ marginBottom: '20px' }}>
                   <div style={{ fontSize: '11px', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '10px' }}>
-                    By city / municipality
+                    By City / Municipality
                   </div>
                   <div style={{ border: '1px solid #e2e8f0', borderRadius: '10px', overflow: 'hidden' }}>
                     <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
@@ -3944,40 +3957,74 @@ CHRONOLOGY OF EVENTS`;
                           .filter(([_, s]) => s.persons > 0 || s.families > 0)
                           .sort((a, b) => b[1].persons - a[1].persons)
                           .map(([city, stats], i) => (
-                            <tr key={city} style={{ background: i % 2 === 0 ? 'white' : '#fafafa', borderBottom: '1px solid #f1f5f9' }}>
-                              <td style={{ padding: '9px 14px', fontWeight: 700, color: '#1e293b' }}>{city}</td>
-                              <td style={{ padding: '9px 14px', fontFamily: 'monospace', color: '#3b82f6', fontWeight: 700 }}>{stats.persons.toLocaleString()}</td>
-                              <td style={{ padding: '9px 14px', fontFamily: 'monospace', color: '#6366f1' }}>{stats.families.toLocaleString()}</td>
-                              <td style={{ padding: '9px 14px', color: '#64748b' }}>{stats.brgys?.size || 0}</td>
-                            </tr>
+                            <Fragment key={city}>
+                              <tr 
+                                style={{ 
+                                  background: i % 2 === 0 ? 'white' : '#fafafa', 
+                                  borderBottom: '1px solid #f1f5f9',
+                                  cursor: 'pointer',
+                                  transition: 'background 0.2s'
+                                }}
+                                onClick={() => setExpandedCity(expandedCity === city ? null : city)}
+                                onMouseEnter={(e) => e.currentTarget.style.background = '#f1f5f9'}
+                                onMouseLeave={(e) => e.currentTarget.style.background = i % 2 === 0 ? 'white' : '#fafafa'}
+                              >
+                                <td style={{ padding: '9px 14px', fontWeight: 700, color: '#1e293b', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <span style={{ color: '#94a3b8', display: 'flex' }}>
+                                    {expandedCity === city ? <CaretDown size={14} weight="bold" /> : <CaretRight size={14} weight="bold" />}
+                                  </span>
+                                  {city}
+                                </td>
+                                <td style={{ padding: '9px 14px', fontFamily: 'monospace', color: '#3b82f6', fontWeight: 700 }}>{stats.persons.toLocaleString()}</td>
+                                <td style={{ padding: '9px 14px', fontFamily: 'monospace', color: '#6366f1' }}>{stats.families.toLocaleString()}</td>
+                                <td style={{ padding: '9px 14px', color: '#64748b' }}>{stats.brgys?.size || 0}</td>
+                              </tr>
+                              {expandedCity === city && (
+                                <tr>
+                                  <td colSpan={4} style={{ padding: '0 14px 14px 14px', background: i % 2 === 0 ? 'white' : '#fafafa' }}>
+                                    <div style={{ 
+                                      background: '#f8fafc', 
+                                      borderRadius: '8px', 
+                                      padding: '12px',
+                                      border: '1px solid #e2e8f0',
+                                      boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.02)'
+                                    }}>
+                                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '11px' }}>
+                                        <thead>
+                                          {/* accordion */}
+                                          <tr style={{ borderBottom: '1px solid #e2e8f0' }}>
+                                            <th style={{ textAlign: 'center', padding: '6px 0', color: '#64748b', fontWeight: 700, letterSpacing: '0.5px' }}>Barangay</th>
+                                            <th style={{ textAlign: 'center', padding: '6px 0', color: '#64748b', fontWeight: 700, letterSpacing: '0.5px' }}>Persons</th>
+                                            <th style={{ textAlign: 'center', padding: '6px 0', color: '#64748b', fontWeight: 700, letterSpacing: '0.5px' }}>Families</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {Object.entries(result?.details?.byBarangay || {})
+                                            .filter(([key]) => key.startsWith(`${city}|`))
+                                            .sort((a, b) => b[1].persons - a[1].persons)
+                                            .map(([key, bStats], idx, filtered) => {
+                                              const barangayName = key.split('|')[1];
+                                              return (
+                                                <tr key={idx} style={{ borderBottom: idx === filtered.length - 1 ? 'none' : '1px solid #f1f5f9' }}>
+                                                  <td style={{ padding: '8px 0', textAlign: 'center', color: '#475569', fontWeight: 500 }}>{barangayName}</td>
+                                                  <td style={{ padding: '8px 0', textAlign: 'center', fontFamily: 'monospace', fontWeight: 'bold', color: '#3b82f6' }}>{bStats.persons.toLocaleString()}</td>
+                                                  <td style={{ padding: '8px 0', textAlign: 'center', fontFamily: 'monospace', color: '#6366f1' }}>{bStats.families.toLocaleString()}</td>
+                                                </tr>
+                                              );
+                                            })}
+                                          {Object.entries(result?.details?.byBarangay || {}).filter(([key]) => key.startsWith(`${city}|`)).length === 0 && (
+                                            <tr>
+                                              <td colSpan={3} style={{ padding: '10px 0', textAlign: 'center', color: '#94a3b8', fontStyle: 'italic' }}>No barangay-level data available for this city.</td>
+                                            </tr>
+                                          )}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </Fragment>
                           ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              {/* Barangay breakdown */}
-              {hasBarangayData && (
-                <div>
-                  <div style={{ fontSize: '11px', fontWeight: 800, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '10px' }}>
-                    By barangay
-                  </div>
-                  <div style={{ border: '1px solid #e2e8f0', borderRadius: '10px', overflow: 'hidden', maxHeight: '240px', overflowY: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '12px' }}>
-                      <thead>
-                        <tr style={{ background: '#f8fafc' }}>
-                          <th style={{ padding: '9px 14px', textAlign: 'left', fontWeight: 700, color: '#475569', borderBottom: '1px solid #e2e8f0', position: 'sticky', top: 0, background: '#f8fafc' }}>Barangay</th>
-                          <th style={{ padding: '9px 14px', textAlign: 'left', fontWeight: 700, color: '#475569', borderBottom: '1px solid #e2e8f0', position: 'sticky', top: 0, background: '#f8fafc' }}>Count</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {barangayRows.map((row, i) => (
-                          <tr key={i} style={{ background: i % 2 === 0 ? 'white' : '#fafafa', borderBottom: '1px solid #f1f5f9' }}>
-                            <td style={{ padding: '9px 14px', color: '#1e293b' }}>{row.name}</td>
-                            <td style={{ padding: '9px 14px', fontFamily: 'monospace', fontWeight: 700, color: '#3b82f6' }}>{row.value.toLocaleString()}</td>
-                          </tr>
-                        ))}
                       </tbody>
                     </table>
                   </div>
