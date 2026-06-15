@@ -2339,7 +2339,7 @@ CHRONOLOGY OF EVENTS`;
                             </ResponsiveContainer>
                           </div>
                         ) : (
-                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#94a3b8' }}>No geographic data available</div>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#94a3b8' }}>No Data Available</div>
                         )}
                       </div>
                     </div>
@@ -3172,7 +3172,7 @@ CHRONOLOGY OF EVENTS`;
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 14 }}>
                     <div className="premium-card">
                       <div className="premium-card-header">
-                        <div className="premium-card-title">Suspension by City</div>
+                        <div className="premium-card-title">Suspension by LGU</div>
                       </div>
                       <div style={{ height: '270px', minWidth: 0 }}>
                         <ResponsiveContainer width="100%" height="100%">
